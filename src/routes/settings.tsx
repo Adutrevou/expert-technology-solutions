@@ -44,7 +44,7 @@ function SettingsPage() {
         <p className="text-sm text-muted-foreground mt-1">Manage branding, targeting, clients, and integrations.</p>
       </header>
 
-      <BrandingCard clientId={client.id} initialName={client.companyName} initialColor={client.brandColor} initials={client.initials} onSave={updateClient} />
+      <BrandingCard clientId={client.id} initialName={client.companyName} initialColor={client.brandColor} initials={client.initials} initialLogoUrl={client.logoUrl} onSave={updateClient} />
 
       <TargetingCard clientId={client.id} targeting={client.targeting} onSave={updateTargeting} />
 
