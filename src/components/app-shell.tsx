@@ -73,30 +73,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-20 h-16 border-b border-border bg-background/80 backdrop-blur-xl">
           <div className="flex h-full items-center justify-between px-4 md:px-8 gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2 h-9">
-                    <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: client.brandColor }}>
-                      {client.initials}
-                    </span>
-                    <span className="hidden sm:inline truncate max-w-[160px]">{client.companyName}</span>
-                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>Switch client</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {clients.map((c) => (
-                    <DropdownMenuItem key={c.id} onClick={() => setClientId(c.id)} className="gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: c.brandColor }}>
-                        {c.initials}
+              {user?.role === "super_admin" ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="gap-2 h-9">
+                      <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: client.brandColor }}>
+                        {client.initials}
                       </span>
-                      {c.companyName}
-                      {c.id === client.id && <Badge variant="secondary" className="ml-auto text-[10px]">current</Badge>}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      <span className="hidden sm:inline truncate max-w-[160px]">{client.companyName}</span>
+                      <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel>Switch client</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {clients.map((c) => (
+                      <DropdownMenuItem key={c.id} onClick={() => setClientId(c.id)} className="gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: c.brandColor }}>
+                          {c.initials}
+                        </span>
+                        {c.companyName}
+                        {c.id === client.id && <Badge variant="secondary" className="ml-auto text-[10px]">current</Badge>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card">
+                  <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: client.brandColor }}>
+                    {client.initials}
+                  </span>
+                  <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">{client.companyName}</span>
+                </div>
+              )}
               <Badge variant="outline" className="hidden md:inline-flex gap-1 text-[10px]">
                 <Activity className="h-3 w-3" />
                 Live data
