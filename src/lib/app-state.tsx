@@ -1,13 +1,32 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { CLIENTS, type Client } from "./demo-data";
+import { CLIENTS as SEED_CLIENTS, type Client } from "./demo-data";
 
 type Role = "super_admin" | "client_user";
 
+export interface Targeting {
+  industries: string[];
+  countries: string[];
+  roles: string[];
+}
+
+export interface ClientWithTargeting extends Client {
+  targeting: Targeting;
+}
+
+const DEFAULT_TARGETING: Targeting = {
+  industries: ["Logistics", "Biotech", "Cloud", "Healthcare", "Manufacturing"],
+  countries: ["US", "UK", "Canada", "Germany"],
+  roles: ["CEO", "VP Sales", "COO", "Founder"],
+};
+
 interface AppState {
   user: { name: string; email: string; role: Role } | null;
-  client: Client;
+  client: ClientWithTargeting;
   setClientId: (id: string) => void;
-  clients: Client[];
+  clients: ClientWithTargeting[];
+  addClient: (input: { companyName: string; brandColor: string; initials: string }) => void;
+  updateClient: (id: string, patch: Partial<Omit<ClientWithTargeting, "id">>) => void;
+  updateTargeting: (id: string, targeting: Targeting) => void;
   login: (email: string) => void;
   logout: () => void;
   theme: "light" | "dark";
@@ -16,8 +35,14 @@ interface AppState {
 
 const Ctx = createContext<AppState | null>(null);
 
+const INITIAL_CLIENTS: ClientWithTargeting[] = SEED_CLIENTS.map((c) => ({
+  ...c,
+  targeting: { ...DEFAULT_TARGETING },
+}));
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [clientId, setClientIdState] = useState(CLIENTS[0].id);
+  const [clients, setClients] = useState<ClientWithTargeting[]>(INITIAL_CLIENTS);
+  const [clientId, setClientIdState] = useState(INITIAL_CLIENTS[0].id);
   const [user, setUser] = useState<AppState["user"]>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
@@ -28,21 +53,36 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const t = (localStorage.getItem("apollo-theme") as "light" | "dark") || "dark";
     setTheme(t);
     document.documentElement.classList.toggle("dark", t === "dark");
+    const storedClients = localStorage.getItem("apollo-clients");
+    if (storedClients) {
+      try {
+        const parsed = JSON.parse(storedClients) as ClientWithTargeting[];
+        if (Array.isArray(parsed) && parsed.length) setClients(parsed);
+      } catch {
+        // ignore
+      }
+    }
     const c = localStorage.getItem("apollo-client");
-    if (c && CLIENTS.find((x) => x.id === c)) setClientIdState(c);
+    if (c) setClientIdState(c);
   }, []);
+
+  const persistClients = (next: ClientWithTargeting[]) => {
+    setClients(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("apollo-clients", JSON.stringify(next));
+    }
+  };
 
   const login = (email: string) => {
     const role: Role = email.toLowerCase().includes("admin") ? "super_admin" : "client_user";
     const u = { name: email.split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase()), email, role };
     setUser(u);
     localStorage.setItem("apollo-user", JSON.stringify(u));
-    // Lock client users to a single client based on email domain match; fallback to first client.
     if (role === "client_user") {
       const domain = email.split("@")[1]?.toLowerCase() ?? "";
       const matched =
-        CLIENTS.find((c) => domain && (c.companyName.toLowerCase().includes(domain.split(".")[0]) || c.id.toLowerCase() === domain.split(".")[0])) ||
-        CLIENTS[0];
+        clients.find((c) => domain && (c.companyName.toLowerCase().includes(domain.split(".")[0]) || c.id.toLowerCase() === domain.split(".")[0])) ||
+        clients[0];
       setClientIdState(matched.id);
       localStorage.setItem("apollo-client", matched.id);
     }
@@ -62,10 +102,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("apollo-client", id);
   };
 
-  const client = CLIENTS.find((c) => c.id === clientId) || CLIENTS[0];
+  const addClient: AppState["addClient"] = ({ companyName, brandColor, initials }) => {
+    const id = `client-${Date.now()}`;
+    const next: ClientWithTargeting = {
+      id,
+      companyName,
+      brandColor,
+      initials: initials.slice(0, 3).toUpperCase(),
+      targeting: { ...DEFAULT_TARGETING },
+    };
+    persistClients([...clients, next]);
+  };
+
+  const updateClient: AppState["updateClient"] = (id, patch) => {
+    persistClients(clients.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  };
+
+  const updateTargeting: AppState["updateTargeting"] = (id, targeting) => {
+    persistClients(clients.map((c) => (c.id === id ? { ...c, targeting } : c)));
+  };
+
+  const client = clients.find((c) => c.id === clientId) || clients[0];
 
   return (
-    <Ctx.Provider value={{ user, client, setClientId, clients: CLIENTS, login, logout, theme, toggleTheme }}>
+    <Ctx.Provider value={{ user, client, setClientId, clients, addClient, updateClient, updateTargeting, login, logout, theme, toggleTheme }}>
       {children}
     </Ctx.Provider>
   );
