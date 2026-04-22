@@ -147,7 +147,7 @@ function EmailScriptsPage() {
           <TabsTrigger value="all">All templates</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="compare" className="space-y-6">
+        {isAdmin && <TabsContent value="compare" className="space-y-6">
           {groups.length === 0 && (
             <Card className="p-10 text-center text-sm text-muted-foreground shadow-card">
               No scripts yet. Click <strong>New script</strong> to add the first one.
@@ -201,20 +201,22 @@ function EmailScriptsPage() {
                         <span className="text-muted-foreground">{t.meetings} mtg</span>
                       </div>
                     </button>
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    {isAdmin && (
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </Card>
           ))}
-        </TabsContent>
+        </TabsContent>}
 
         <TabsContent value="leaderboard">
           <Card className="p-0 shadow-card overflow-hidden">
@@ -478,8 +480,8 @@ function TemplateDetail({
 }: {
   tpl: DecoratedTemplate;
   onBack: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -487,14 +489,20 @@ function TemplateDetail({
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" /> Back to scripts
         </Button>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onEdit} className="gap-2">
-            <Pencil className="h-4 w-4" /> Edit
-          </Button>
-          <Button variant="outline" size="sm" onClick={onDelete} className="gap-2 text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="flex gap-2">
+            {onEdit && (
+              <Button variant="outline" size="sm" onClick={onEdit} className="gap-2">
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="outline" size="sm" onClick={onDelete} className="gap-2 text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <Card className="p-6 shadow-card">
