@@ -13,11 +13,11 @@ const BASE_NAV = [
   { to: "/meetings", label: "Meetings", icon: Calendar },
   { to: "/progress", label: "Progress", icon: ListChecks },
   { to: "/reports", label: "Reports", icon: FileBarChart },
+  { to: "/email-scripts", label: "Email Scripts", icon: Mail },
   { to: "/updates", label: "Updates", icon: MessageSquare },
 ] as const;
 
 const ADMIN_NAV = [
-  { to: "/email-scripts", label: "Email Scripts", icon: Mail },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
