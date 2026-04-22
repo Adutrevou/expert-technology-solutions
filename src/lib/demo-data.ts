@@ -91,7 +91,7 @@ const LOCATIONS = ["San Francisco, CA", "New York, NY", "Austin, TX", "Boston, M
 const STATUSES: LeadStatus[] = ["new", "contacted", "replied", "interested", "meeting_booked"];
 
 export const CLIENTS: Client[] = [
-  { id: "client-1", companyName: "Helix Biotech", brandColor: "#7c3aed", initials: "HB" },
+  { id: "client-1", companyName: "Landsdowne Property Group", brandColor: "#0a4d3c", initials: "LP" },
   { id: "client-2", companyName: "Vertex Cloud", brandColor: "#0ea5e9", initials: "VC" },
   { id: "client-3", companyName: "Summit Energy", brandColor: "#16a34a", initials: "SE" },
 ];
