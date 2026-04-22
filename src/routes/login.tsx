@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import logo from "@/assets/landsdowne-logo.gif";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -32,14 +33,9 @@ function LoginPage() {
       <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full opacity-20 blur-3xl bg-primary-glow" />
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-            <Sparkles className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Apollo Vision</h1>
-            <p className="text-xs text-muted-foreground">Client Visibility Portal</p>
-          </div>
+        <div className="flex flex-col items-center justify-center mb-8">
+          <img src={logo} alt="Landsdowne Property Group" className="h-20 w-auto mb-3" />
+          <p className="text-xs text-muted-foreground">Client Visibility Portal</p>
         </div>
 
         <Card className="p-8 shadow-elegant border-border/50 backdrop-blur-xl bg-card/80">
