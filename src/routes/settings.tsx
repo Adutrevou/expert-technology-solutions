@@ -292,8 +292,8 @@ function ClientsCard({ clients, currentId, onAdd, onSwitch }: {
       <div className="grid gap-2 mb-6">
         {clients.map((c) => (
           <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold text-white" style={{ backgroundColor: c.brandColor }}>
-              {c.initials}
+            <span className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold text-white overflow-hidden" style={{ backgroundColor: c.logoUrl ? "transparent" : c.brandColor }}>
+              {c.logoUrl ? <img src={c.logoUrl} alt="" className="h-full w-full object-contain" /> : c.initials}
             </span>
             <span className="text-sm font-medium flex-1">{c.companyName}</span>
             {c.id === currentId ? (
