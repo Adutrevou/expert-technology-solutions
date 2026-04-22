@@ -77,8 +77,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="gap-2 h-9">
-                      <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: client.brandColor }}>
-                        {client.initials}
+                      <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
+                        {client.logoUrl ? (
+                          <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
+                        ) : client.initials}
                       </span>
                       <span className="hidden sm:inline truncate max-w-[160px]">{client.companyName}</span>
                       <ChevronDown className="h-3.5 w-3.5 opacity-60" />
@@ -89,8 +91,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <DropdownMenuSeparator />
                     {clients.map((c) => (
                       <DropdownMenuItem key={c.id} onClick={() => setClientId(c.id)} className="gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: c.brandColor }}>
-                          {c.initials}
+                        <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: c.logoUrl ? "transparent" : c.brandColor }}>
+                          {c.logoUrl ? (
+                            <img src={c.logoUrl} alt="" className="h-full w-full object-contain" />
+                          ) : c.initials}
                         </span>
                         {c.companyName}
                         {c.id === client.id && <Badge variant="secondary" className="ml-auto text-[10px]">current</Badge>}
@@ -100,8 +104,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenu>
               ) : (
                 <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card">
-                  <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: client.brandColor }}>
-                    {client.initials}
+                  <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
+                    {client.logoUrl ? (
+                      <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
+                    ) : client.initials}
                   </span>
                   <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">{client.companyName}</span>
                 </div>
