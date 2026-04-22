@@ -38,8 +38,12 @@ type ScriptInput = z.infer<typeof scriptSchema>;
 type DecoratedTemplate = EmailTemplate & { _clientName: string; _brand: string };
 
 function EmailScriptsPage() {
-  const { user, clients } = useApp();
-  const clientIds = useMemo(() => clients.map((c) => c.id), [clients]);
+  const { user, clients, client } = useApp();
+  const isAdmin = user?.role === "super_admin";
+  const clientIds = useMemo(
+    () => (isAdmin ? clients.map((c) => c.id) : [client.id]),
+    [isAdmin, clients, client.id],
+  );
   const { templates, addScript, updateScript, deleteScript } = useEmailScripts(clientIds);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -76,13 +80,13 @@ function EmailScriptsPage() {
     [all],
   );
 
-  if (user?.role !== "super_admin") {
+  if (!user) {
     return (
       <div className="max-w-xl mx-auto mt-20">
         <Card className="p-8 text-center shadow-card">
           <ShieldAlert className="h-10 w-10 mx-auto mb-3 text-destructive" />
           <h2 className="text-xl font-bold mb-2">Restricted</h2>
-          <p className="text-sm text-muted-foreground">Email Scripts are only visible to Super Admins.</p>
+          <p className="text-sm text-muted-foreground">Please sign in to view email scripts.</p>
         </Card>
       </div>
     );
@@ -95,8 +99,8 @@ function EmailScriptsPage() {
         <TemplateDetail
           tpl={tpl}
           onBack={() => setSelectedId(null)}
-          onEdit={() => setEditor({ mode: "edit", tpl })}
-          onDelete={() => setConfirmDeleteId(tpl.id)}
+          onEdit={isAdmin ? () => setEditor({ mode: "edit", tpl }) : undefined}
+          onDelete={isAdmin ? () => setConfirmDeleteId(tpl.id) : undefined}
         />
       );
     }
@@ -110,7 +114,9 @@ function EmailScriptsPage() {
         <div>
           <h1 className="text-3xl font-bold">Email Scripts</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Compare outreach copy across all {clients.length} clients · {all.length} templates tracked
+            {isAdmin
+              ? `Compare outreach copy across all ${clients.length} clients · ${all.length} templates tracked`
+              : `See which of your outreach emails are performing best · ${all.length} templates tracked`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -120,19 +126,23 @@ function EmailScriptsPage() {
               <div className="text-xs">
                 <div className="text-muted-foreground">Top performer</div>
                 <div className="font-semibold">{topPerformer.campaignName} · Step {topPerformer.step}</div>
-                <div className="text-muted-foreground">{topPerformer._clientName} · {replyRate(topPerformer).toFixed(1)}% reply</div>
+                <div className="text-muted-foreground">
+                  {isAdmin ? `${topPerformer._clientName} · ` : ""}{replyRate(topPerformer).toFixed(1)}% reply
+                </div>
               </div>
             </Card>
           )}
-          <Button onClick={() => setEditor({ mode: "add" })} className="gap-2">
-            <Plus className="h-4 w-4" /> New script
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setEditor({ mode: "add" })} className="gap-2">
+              <Plus className="h-4 w-4" /> New script
+            </Button>
+          )}
         </div>
       </header>
 
-      <Tabs defaultValue="compare" className="space-y-4">
+      <Tabs defaultValue={isAdmin ? "compare" : "leaderboard"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="compare">Side-by-side compare</TabsTrigger>
+          {isAdmin && <TabsTrigger value="compare">Side-by-side compare</TabsTrigger>}
           <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
           <TabsTrigger value="all">All templates</TabsTrigger>
         </TabsList>
