@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
