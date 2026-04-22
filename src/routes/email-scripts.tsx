@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { type EmailTemplate } from "@/lib/demo-data";
 import { useEmailScripts } from "@/lib/email-scripts-store";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
-import { Mail, TrendingUp, ShieldAlert, Trophy, ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
+import { Mail, TrendingUp, ShieldAlert, Trophy, ArrowLeft, Plus, Pencil, Trash2, Inbox } from "lucide-react";
+import { GmailLiveInbox } from "@/components/gmail-live-inbox";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -145,7 +146,14 @@ function EmailScriptsPage() {
           {isAdmin && <TabsTrigger value="compare">Side-by-side compare</TabsTrigger>}
           <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
           <TabsTrigger value="all">All templates</TabsTrigger>
+          {isAdmin && <TabsTrigger value="live" className="gap-1.5"><Inbox className="h-3.5 w-3.5" />Live Gmail</TabsTrigger>}
         </TabsList>
+
+        {isAdmin && (
+          <TabsContent value="live">
+            <GmailLiveInbox />
+          </TabsContent>
+        )}
 
         {isAdmin && <TabsContent value="compare" className="space-y-6">
           {groups.length === 0 && (
