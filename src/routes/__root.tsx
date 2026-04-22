@@ -31,8 +31,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Apollo Client Visibility Dashboard" },
-      { name: "description", content: "Premium agency dashboard for Apollo.io outreach campaigns — leads, replies, meetings, and progress at a glance." },
+      { title: "Landsdowne Leads" },
+      { name: "description", content: "Premium agency dashboard for Landsdowne outreach campaigns, leads, replies, meetings, and progress at a glance." },
+      { property: "og:title", content: "Landsdowne Leads" },
+      { name: "twitter:title", content: "Landsdowne Leads" },
+      { property: "og:description", content: "Premium agency dashboard for Landsdowne outreach campaigns, leads, replies, meetings, and progress at a glance." },
+      { name: "twitter:description", content: "Premium agency dashboard for Landsdowne outreach campaigns, leads, replies, meetings, and progress at a glance." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/DjVwXhIqtjVoOvd3jyZMC6PFkvw1/social-images/social-1776863784440-Screenshot_2026-04-22_at_15.15.41.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/DjVwXhIqtjVoOvd3jyZMC6PFkvw1/social-images/social-1776863784440-Screenshot_2026-04-22_at_15.15.41.webp" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
