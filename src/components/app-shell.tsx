@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sparkles, Sun, Moon, LogOut, ChevronDown, Activity, Mail } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown, Activity, Mail } from "lucide-react";
+import logo from "@/assets/landsdowne-logo.gif";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
@@ -31,14 +32,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside className="hidden lg:flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex h-16 items-center gap-2 px-6 border-b border-sidebar-border">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-sm font-bold">Apollo Vision</span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Client Portal</span>
-          </div>
+        <div className="flex h-20 items-center justify-center px-6 border-b border-sidebar-border">
+          <img src={logo} alt="Landsdowne Property Group" className="h-12 w-auto" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV.map(({ to, label, icon: Icon }) => {
