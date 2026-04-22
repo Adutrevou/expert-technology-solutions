@@ -37,6 +37,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const u = { name: email.split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase()), email, role };
     setUser(u);
     localStorage.setItem("apollo-user", JSON.stringify(u));
+    // Lock client users to a single client based on email domain match; fallback to first client.
+    if (role === "client_user") {
+      const domain = email.split("@")[1]?.toLowerCase() ?? "";
+      const matched =
+        CLIENTS.find((c) => domain && (c.companyName.toLowerCase().includes(domain.split(".")[0]) || c.id.toLowerCase() === domain.split(".")[0])) ||
+        CLIENTS[0];
+      setClientIdState(matched.id);
+      localStorage.setItem("apollo-client", matched.id);
+    }
   };
   const logout = () => {
     setUser(null);
