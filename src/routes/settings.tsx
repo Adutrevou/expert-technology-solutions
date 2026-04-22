@@ -76,19 +76,47 @@ function SettingsPage() {
   );
 }
 
-function BrandingCard({ clientId, initialName, initialColor, initials, onSave }: {
+function BrandingCard({ clientId, initialName, initialColor, initials, initialLogoUrl, onSave }: {
   clientId: string;
   initialName: string;
   initialColor: string;
   initials: string;
-  onSave: (id: string, patch: { companyName?: string; brandColor?: string }) => void;
+  initialLogoUrl?: string;
+  onSave: (id: string, patch: { companyName?: string; brandColor?: string; logoUrl?: string }) => void;
 }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(initialLogoUrl);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setName(initialName); setColor(initialColor); }, [clientId, initialName, initialColor]);
+  useEffect(() => {
+    setName(initialName);
+    setColor(initialColor);
+    setLogoUrl(initialLogoUrl);
+  }, [clientId, initialName, initialColor, initialLogoUrl]);
 
-  const dirty = name !== initialName || color !== initialColor;
+  const dirty = name !== initialName || color !== initialColor || logoUrl !== initialLogoUrl;
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be under 2 MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        setLogoUrl(result);
+        toast.success("Logo ready — click Save to apply");
+      }
+    };
+    reader.onerror = () => toast.error("Could not read file");
+    reader.readAsDataURL(file);
+  };
 
   return (
     <Card className="p-6 shadow-card">
@@ -98,7 +126,7 @@ function BrandingCard({ clientId, initialName, initialColor, initials, onSave }:
           <p className="text-xs text-muted-foreground">How {initialName} appears in the portal.</p>
         </div>
         {dirty && (
-          <Button size="sm" onClick={() => { onSave(clientId, { companyName: name.trim() || initialName, brandColor: color }); toast.success("Branding updated"); }}>
+          <Button size="sm" onClick={() => { onSave(clientId, { companyName: name.trim() || initialName, brandColor: color, logoUrl }); toast.success("Branding updated"); }}>
             Save
           </Button>
         )}
@@ -117,11 +145,37 @@ function BrandingCard({ clientId, initialName, initialColor, initials, onSave }:
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label>Logo</Label>
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg text-sm font-bold text-white" style={{ backgroundColor: color }}>
-              {initials}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-lg text-sm font-bold text-white overflow-hidden"
+              style={{ backgroundColor: logoUrl ? "transparent" : color }}
+            >
+              {logoUrl ? (
+                <img src={logoUrl} alt={`${name} logo`} className="h-full w-full object-contain" />
+              ) : (
+                initials
+              )}
             </div>
-            <Button variant="outline">Upload logo</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+                e.target.value = "";
+              }}
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+              {logoUrl ? "Replace logo" : "Upload logo"}
+            </Button>
+            {logoUrl && (
+              <Button variant="ghost" size="sm" onClick={() => { setLogoUrl(undefined); toast.message("Logo cleared — click Save to apply"); }}>
+                Remove
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground basis-full">PNG, JPG, GIF or SVG, up to 2 MB.</p>
           </div>
         </div>
       </div>
