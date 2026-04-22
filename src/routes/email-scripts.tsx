@@ -231,7 +231,7 @@ function EmailScriptsPage() {
                   <TableHead className="text-right">Open %</TableHead>
                   <TableHead className="text-right">Reply %</TableHead>
                   <TableHead className="text-right">Meetings</TableHead>
-                  <TableHead className="w-24 text-right">Actions</TableHead>
+                  {isAdmin && <TableHead className="w-24 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -252,16 +252,18 @@ function EmailScriptsPage() {
                     <TableCell className="text-right tabular-nums text-sm">{openRate(t).toFixed(1)}%</TableCell>
                     <TableCell className="text-right tabular-nums text-sm font-semibold text-success">{replyRate(t).toFixed(1)}%</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">{t.meetings}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -284,14 +286,16 @@ function EmailScriptsPage() {
                   <span className="text-success font-semibold">{replyRate(t).toFixed(1)}% reply</span>
                 </div>
               </button>
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              {isAdmin && (
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </TabsContent>
