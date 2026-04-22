@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sparkles, Sun, Moon, LogOut, ChevronDown, Activity } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sparkles, Sun, Moon, LogOut, ChevronDown, Activity, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,10 @@ const BASE_NAV = [
   { to: "/updates", label: "Updates", icon: MessageSquare },
 ] as const;
 
-const ADMIN_NAV = [{ to: "/settings", label: "Settings", icon: Settings }] as const;
+const ADMIN_NAV = [
+  { to: "/email-scripts", label: "Email Scripts", icon: Mail },
+  { to: "/settings", label: "Settings", icon: Settings },
+] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, client, clients, setClientId, logout, theme, toggleTheme } = useApp();

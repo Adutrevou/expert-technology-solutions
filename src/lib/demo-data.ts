@@ -185,6 +185,77 @@ export function generateActivity(clientId: string): Activity[] {
   }));
 }
 
+export interface EmailTemplate {
+  id: string;
+  clientId: string;
+  campaignName: string;
+  step: number; // 1 = initial, 2+ = follow-up
+  subject: string;
+  body: string;
+  sent: number;
+  opens: number;
+  replies: number;
+  meetings: number;
+  lastEditedAt: string;
+  author: string;
+}
+
+const TEMPLATE_LIBRARY: Omit<EmailTemplate, "id" | "clientId" | "sent" | "opens" | "replies" | "meetings" | "lastEditedAt" | "author">[] = [
+  {
+    campaignName: "Q4 Enterprise Push",
+    step: 1,
+    subject: "Quick question about {{company}}'s pipeline",
+    body: "Hi {{firstName}},\n\nI noticed {{company}} has been scaling the {{department}} team — congrats on the recent growth.\n\nWe help teams like yours cut outbound research time by ~40% while doubling qualified replies. Worth a 15-min look next week?\n\n— {{senderName}}",
+  },
+  {
+    campaignName: "Q4 Enterprise Push",
+    step: 2,
+    subject: "Re: Quick question about {{company}}'s pipeline",
+    body: "Hi {{firstName}},\n\nBumping this up — happy to send over a 2-min Loom showing how {{competitor}} added 32 meetings in their first month.\n\nWorth a quick chat?\n\n— {{senderName}}",
+  },
+  {
+    campaignName: "SMB Cold Outreach",
+    step: 1,
+    subject: "{{firstName}}, 3 ideas for {{company}}",
+    body: "Hi {{firstName}},\n\nSpent 10 min on {{company}}'s site. Three quick ideas to lift your pipeline:\n\n1. Tighter ICP filters on Apollo\n2. A 4-step sequence with LinkedIn touch\n3. Reply-rate benchmarking by persona\n\nWorth a 15-min chat?\n\n— {{senderName}}",
+  },
+  {
+    campaignName: "ICP Refresh",
+    step: 1,
+    subject: "Re-targeting {{industry}} accounts",
+    body: "Hi {{firstName}},\n\nWe just refreshed our targeting model for {{industry}} and pulled 240 new ICP-matched accounts that look like a strong fit for {{company}}.\n\nCan I share the list and our 3 best-performing subject lines from this segment?\n\n— {{senderName}}",
+  },
+  {
+    campaignName: "Webinar Follow-up",
+    step: 1,
+    subject: "Thanks for joining — your replay + bonus",
+    body: "Hi {{firstName}},\n\nThanks for joining the session on outbound at scale. Here's the replay plus the ICP worksheet I promised.\n\nIf any of it sparked questions about your own pipeline, I'm around for a quick call this week.\n\n— {{senderName}}",
+  },
+];
+
+export function generateEmailTemplates(clientId: string): EmailTemplate[] {
+  const rand = seedRand(clientId.length * 1100);
+  const authors = ["Mira (Copy)", "Alex (Strategy)", "Jordan (CSM)"];
+  return TEMPLATE_LIBRARY.map((t, i) => {
+    const sent = 400 + Math.floor(rand() * 2200);
+    const openRate = 0.32 + rand() * 0.32;
+    const replyRate = 0.03 + rand() * 0.13;
+    const opens = Math.floor(sent * openRate);
+    const replies = Math.floor(sent * replyRate);
+    return {
+      ...t,
+      id: `tpl-${clientId}-${i}`,
+      clientId,
+      sent,
+      opens,
+      replies,
+      meetings: Math.floor(replies * (0.18 + rand() * 0.25)),
+      lastEditedAt: new Date(Date.now() - Math.floor(rand() * 30) * 86400000).toISOString(),
+      author: authors[Math.floor(rand() * authors.length)],
+    };
+  });
+}
+
 export function generateLeadsTimeseries(clientId: string) {
   const rand = seedRand(clientId.length * 200);
   const days = 30;
