@@ -27,23 +27,6 @@ function EmailScriptsPage() {
     );
   }, [clients]);
 
-  if (user?.role !== "super_admin") {
-    return (
-      <div className="max-w-xl mx-auto mt-20">
-        <Card className="p-8 text-center shadow-card">
-          <ShieldAlert className="h-10 w-10 mx-auto mb-3 text-destructive" />
-          <h2 className="text-xl font-bold mb-2">Restricted</h2>
-          <p className="text-sm text-muted-foreground">Email Scripts are only visible to Super Admins.</p>
-        </Card>
-      </div>
-    );
-  }
-
-  if (selectedId) {
-    const tpl = all.find((t) => t.id === selectedId);
-    if (tpl) return <TemplateDetail tpl={tpl} onBack={() => setSelectedId(null)} />;
-  }
-
   // Group by campaign+step for cross-company comparison
   const groups = useMemo(() => {
     const map = new Map<string, typeof all>();
@@ -61,6 +44,23 @@ function EmailScriptsPage() {
   }, [all]);
 
   const topPerformer = useMemo(() => [...all].sort((a, b) => replyRate(b) - replyRate(a))[0], [all]);
+
+  if (user?.role !== "super_admin") {
+    return (
+      <div className="max-w-xl mx-auto mt-20">
+        <Card className="p-8 text-center shadow-card">
+          <ShieldAlert className="h-10 w-10 mx-auto mb-3 text-destructive" />
+          <h2 className="text-xl font-bold mb-2">Restricted</h2>
+          <p className="text-sm text-muted-foreground">Email Scripts are only visible to Super Admins.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (selectedId) {
+    const tpl = all.find((t) => t.id === selectedId);
+    if (tpl) return <TemplateDetail tpl={tpl} onBack={() => setSelectedId(null)} />;
+  }
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
