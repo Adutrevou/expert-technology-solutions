@@ -71,6 +71,7 @@ export interface Client {
   companyName: string;
   brandColor: string;
   initials: string;
+  logoUrl?: string;
 }
 
 const seedRand = (seed: number) => {
