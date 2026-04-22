@@ -259,7 +259,7 @@ function TagEditor({ label, placeholder, values, onChange }: {
 }
 
 function ClientsCard({ clients, currentId, onAdd, onSwitch }: {
-  clients: { id: string; companyName: string; brandColor: string; initials: string }[];
+  clients: { id: string; companyName: string; brandColor: string; initials: string; logoUrl?: string }[];
   currentId: string;
   onAdd: (input: { companyName: string; brandColor: string; initials: string }) => void;
   onSwitch: (id: string) => void;
