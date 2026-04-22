@@ -32,7 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside className="hidden lg:flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex h-20 items-center justify-center px-6 border-b border-sidebar-border">
+        <div className="flex h-20 items-center justify-center px-6 border-b border-sidebar-border bg-white">
           <img src={logo} alt="Landsdowne Property Group" className="h-12 w-auto" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
