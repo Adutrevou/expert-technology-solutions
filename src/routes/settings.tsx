@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Key, Shield, Plus, X, UserPlus, Lock } from "lucide-react";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
@@ -44,7 +44,7 @@ function SettingsPage() {
         <p className="text-sm text-muted-foreground mt-1">Manage branding, targeting, clients, and integrations.</p>
       </header>
 
-      <BrandingCard clientId={client.id} initialName={client.companyName} initialColor={client.brandColor} initials={client.initials} onSave={updateClient} />
+      <BrandingCard clientId={client.id} initialName={client.companyName} initialColor={client.brandColor} initials={client.initials} initialLogoUrl={client.logoUrl} onSave={updateClient} />
 
       <TargetingCard clientId={client.id} targeting={client.targeting} onSave={updateTargeting} />
 
@@ -76,19 +76,47 @@ function SettingsPage() {
   );
 }
 
-function BrandingCard({ clientId, initialName, initialColor, initials, onSave }: {
+function BrandingCard({ clientId, initialName, initialColor, initials, initialLogoUrl, onSave }: {
   clientId: string;
   initialName: string;
   initialColor: string;
   initials: string;
-  onSave: (id: string, patch: { companyName?: string; brandColor?: string }) => void;
+  initialLogoUrl?: string;
+  onSave: (id: string, patch: { companyName?: string; brandColor?: string; logoUrl?: string }) => void;
 }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(initialLogoUrl);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setName(initialName); setColor(initialColor); }, [clientId, initialName, initialColor]);
+  useEffect(() => {
+    setName(initialName);
+    setColor(initialColor);
+    setLogoUrl(initialLogoUrl);
+  }, [clientId, initialName, initialColor, initialLogoUrl]);
 
-  const dirty = name !== initialName || color !== initialColor;
+  const dirty = name !== initialName || color !== initialColor || logoUrl !== initialLogoUrl;
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be under 2 MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        setLogoUrl(result);
+        toast.success("Logo ready — click Save to apply");
+      }
+    };
+    reader.onerror = () => toast.error("Could not read file");
+    reader.readAsDataURL(file);
+  };
 
   return (
     <Card className="p-6 shadow-card">
@@ -98,7 +126,7 @@ function BrandingCard({ clientId, initialName, initialColor, initials, onSave }:
           <p className="text-xs text-muted-foreground">How {initialName} appears in the portal.</p>
         </div>
         {dirty && (
-          <Button size="sm" onClick={() => { onSave(clientId, { companyName: name.trim() || initialName, brandColor: color }); toast.success("Branding updated"); }}>
+          <Button size="sm" onClick={() => { onSave(clientId, { companyName: name.trim() || initialName, brandColor: color, logoUrl }); toast.success("Branding updated"); }}>
             Save
           </Button>
         )}
@@ -117,11 +145,37 @@ function BrandingCard({ clientId, initialName, initialColor, initials, onSave }:
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label>Logo</Label>
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg text-sm font-bold text-white" style={{ backgroundColor: color }}>
-              {initials}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-lg text-sm font-bold text-white overflow-hidden"
+              style={{ backgroundColor: logoUrl ? "transparent" : color }}
+            >
+              {logoUrl ? (
+                <img src={logoUrl} alt={`${name} logo`} className="h-full w-full object-contain" />
+              ) : (
+                initials
+              )}
             </div>
-            <Button variant="outline">Upload logo</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+                e.target.value = "";
+              }}
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+              {logoUrl ? "Replace logo" : "Upload logo"}
+            </Button>
+            {logoUrl && (
+              <Button variant="ghost" size="sm" onClick={() => { setLogoUrl(undefined); toast.message("Logo cleared — click Save to apply"); }}>
+                Remove
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground basis-full">PNG, JPG, GIF or SVG, up to 2 MB.</p>
           </div>
         </div>
       </div>
@@ -205,7 +259,7 @@ function TagEditor({ label, placeholder, values, onChange }: {
 }
 
 function ClientsCard({ clients, currentId, onAdd, onSwitch }: {
-  clients: { id: string; companyName: string; brandColor: string; initials: string }[];
+  clients: { id: string; companyName: string; brandColor: string; initials: string; logoUrl?: string }[];
   currentId: string;
   onAdd: (input: { companyName: string; brandColor: string; initials: string }) => void;
   onSwitch: (id: string) => void;
@@ -238,8 +292,8 @@ function ClientsCard({ clients, currentId, onAdd, onSwitch }: {
       <div className="grid gap-2 mb-6">
         {clients.map((c) => (
           <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold text-white" style={{ backgroundColor: c.brandColor }}>
-              {c.initials}
+            <span className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold text-white overflow-hidden" style={{ backgroundColor: c.logoUrl ? "transparent" : c.brandColor }}>
+              {c.logoUrl ? <img src={c.logoUrl} alt="" className="h-full w-full object-contain" /> : c.initials}
             </span>
             <span className="text-sm font-medium flex-1">{c.companyName}</span>
             {c.id === currentId ? (
