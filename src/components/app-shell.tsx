@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 
-const NAV = [
+const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
@@ -14,13 +14,15 @@ const NAV = [
   { to: "/progress", label: "Progress", icon: ListChecks },
   { to: "/reports", label: "Reports", icon: FileBarChart },
   { to: "/updates", label: "Updates", icon: MessageSquare },
-  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
+const ADMIN_NAV = [{ to: "/settings", label: "Settings", icon: Settings }] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, client, clients, setClientId, logout, theme, toggleTheme } = useApp();
   const router = useRouterState();
   const path = router.location.pathname;
+  const NAV = user?.role === "super_admin" ? [...BASE_NAV, ...ADMIN_NAV] : BASE_NAV;
 
   return (
     <div className="flex min-h-screen bg-background">
