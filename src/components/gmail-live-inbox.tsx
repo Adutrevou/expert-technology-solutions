@@ -39,11 +39,17 @@ export function GmailLiveInbox() {
     setError(null);
     try {
       const res = await fetch(`/api/gmail/messages?box=${which}&max=12`);
-      const json = await res.json();
+      const text = await res.text();
+      let json: any = null;
+      try { json = text ? JSON.parse(text) : null; } catch { /* non-JSON (e.g. 502 HTML) */ }
       if (!res.ok) {
-        throw new Error(json?.error || `Request failed (${res.status})`);
+        const detail = json?.details?.message || json?.error;
+        if (res.status === 401 || /credential not found/i.test(detail ?? "")) {
+          throw new Error("The shared demo Gmail account hasn't finished signing in yet. Ask an admin to reconnect Gmail in Workspace → Connectors.");
+        }
+        throw new Error(detail || `Gmail request failed (${res.status}). Try again in a moment.`);
       }
-      setMessages(json.messages ?? []);
+      setMessages(json?.messages ?? []);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load Gmail messages");
       setMessages([]);
