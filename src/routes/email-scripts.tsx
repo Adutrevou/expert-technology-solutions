@@ -4,32 +4,60 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { generateEmailTemplates, type EmailTemplate } from "@/lib/demo-data";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { type EmailTemplate } from "@/lib/demo-data";
+import { useEmailScripts } from "@/lib/email-scripts-store";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
-import { Mail, TrendingUp, ShieldAlert, Trophy, ArrowLeft } from "lucide-react";
+import { Mail, TrendingUp, ShieldAlert, Trophy, ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
+import { z } from "zod";
 
 export const Route = createFileRoute("/email-scripts")({
   head: () => ({ meta: [{ title: "Email Scripts — Apollo Vision" }] }),
   component: EmailScriptsPage,
 });
 
+const scriptSchema = z.object({
+  clientId: z.string().min(1, "Choose a client"),
+  campaignName: z.string().trim().min(1, "Campaign required").max(80),
+  step: z.coerce.number().int().min(1, "Step must be ≥ 1").max(10, "Step must be ≤ 10"),
+  subject: z.string().trim().min(1, "Subject required").max(160),
+  body: z.string().trim().min(1, "Body required").max(4000),
+});
+
+type ScriptInput = z.infer<typeof scriptSchema>;
+
+type DecoratedTemplate = EmailTemplate & { _clientName: string; _brand: string };
+
 function EmailScriptsPage() {
   const { user, clients } = useApp();
+  const clientIds = useMemo(() => clients.map((c) => c.id), [clients]);
+  const { templates, addScript, updateScript, deleteScript } = useEmailScripts(clientIds);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{ mode: "add" | "edit"; tpl?: EmailTemplate } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Build all templates across all clients
-  const all = useMemo(() => {
-    return clients.flatMap((c) =>
-      generateEmailTemplates(c.id).map((t) => ({ ...t, _clientName: c.companyName, _brand: c.brandColor })),
-    );
-  }, [clients]);
+  const all = useMemo<DecoratedTemplate[]>(() => {
+    const byId = new Map(clients.map((c) => [c.id, c]));
+    return templates
+      .map((t) => {
+        const c = byId.get(t.clientId);
+        return c ? { ...t, _clientName: c.companyName, _brand: c.brandColor } : null;
+      })
+      .filter((t): t is DecoratedTemplate => t !== null);
+  }, [templates, clients]);
 
-  // Group by campaign+step for cross-company comparison
   const groups = useMemo(() => {
-    const map = new Map<string, typeof all>();
+    const map = new Map<string, DecoratedTemplate[]>();
     for (const t of all) {
       const key = `${t.campaignName}__${t.step}`;
       const arr = map.get(key) || [];
@@ -43,7 +71,10 @@ function EmailScriptsPage() {
     });
   }, [all]);
 
-  const topPerformer = useMemo(() => [...all].sort((a, b) => replyRate(b) - replyRate(a))[0], [all]);
+  const topPerformer = useMemo(
+    () => [...all].filter((t) => t.sent > 0).sort((a, b) => replyRate(b) - replyRate(a))[0],
+    [all],
+  );
 
   if (user?.role !== "super_admin") {
     return (
@@ -59,8 +90,19 @@ function EmailScriptsPage() {
 
   if (selectedId) {
     const tpl = all.find((t) => t.id === selectedId);
-    if (tpl) return <TemplateDetail tpl={tpl} onBack={() => setSelectedId(null)} />;
+    if (tpl) {
+      return (
+        <TemplateDetail
+          tpl={tpl}
+          onBack={() => setSelectedId(null)}
+          onEdit={() => setEditor({ mode: "edit", tpl })}
+          onDelete={() => setConfirmDeleteId(tpl.id)}
+        />
+      );
+    }
   }
+
+  const confirmDeleteTpl = confirmDeleteId ? all.find((t) => t.id === confirmDeleteId) : null;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -71,16 +113,21 @@ function EmailScriptsPage() {
             Compare outreach copy across all {clients.length} clients · {all.length} templates tracked
           </p>
         </div>
-        {topPerformer && (
-          <Card className="px-4 py-3 shadow-card flex items-center gap-3 bg-gradient-to-br from-primary/10 to-transparent">
-            <Trophy className="h-5 w-5 text-primary" />
-            <div className="text-xs">
-              <div className="text-muted-foreground">Top performer</div>
-              <div className="font-semibold">{topPerformer.campaignName} · Step {topPerformer.step}</div>
-              <div className="text-muted-foreground">{topPerformer._clientName} · {replyRate(topPerformer).toFixed(1)}% reply</div>
-            </div>
-          </Card>
-        )}
+        <div className="flex items-center gap-3">
+          {topPerformer && (
+            <Card className="px-4 py-3 shadow-card hidden md:flex items-center gap-3 bg-gradient-to-br from-primary/10 to-transparent">
+              <Trophy className="h-5 w-5 text-primary" />
+              <div className="text-xs">
+                <div className="text-muted-foreground">Top performer</div>
+                <div className="font-semibold">{topPerformer.campaignName} · Step {topPerformer.step}</div>
+                <div className="text-muted-foreground">{topPerformer._clientName} · {replyRate(topPerformer).toFixed(1)}% reply</div>
+              </div>
+            </Card>
+          )}
+          <Button onClick={() => setEditor({ mode: "add" })} className="gap-2">
+            <Plus className="h-4 w-4" /> New script
+          </Button>
+        </div>
       </header>
 
       <Tabs defaultValue="compare" className="space-y-4">
@@ -91,6 +138,11 @@ function EmailScriptsPage() {
         </TabsList>
 
         <TabsContent value="compare" className="space-y-6">
+          {groups.length === 0 && (
+            <Card className="p-10 text-center text-sm text-muted-foreground shadow-card">
+              No scripts yet. Click <strong>New script</strong> to add the first one.
+            </Card>
+          )}
           {groups.map((g) => (
             <Card key={`${g.campaignName}-${g.step}`} className="p-5 shadow-card">
               <div className="flex items-center justify-between mb-4">
@@ -117,28 +169,37 @@ function EmailScriptsPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {g.items.map((t, idx) => (
-                  <button
+                  <div
                     key={t.id}
-                    onClick={() => setSelectedId(t.id)}
-                    className="text-left p-3 rounded-lg border border-border bg-card hover:border-primary hover:shadow-glow transition-smooth group"
+                    className="relative p-3 rounded-lg border border-border bg-card hover:border-primary hover:shadow-glow transition-smooth group"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: t._brand }}>
-                          {t._clientName.slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="text-xs font-medium truncate">{t._clientName}</span>
+                    <button onClick={() => setSelectedId(t.id)} className="text-left w-full">
+                      <div className="flex items-center justify-between mb-2 pr-16">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-5 w-5 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: t._brand }}>
+                            {t._clientName.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span className="text-xs font-medium truncate">{t._clientName}</span>
+                        </div>
+                        {idx === 0 && t.sent > 0 && <Badge variant="secondary" className="text-[9px] gap-1"><Trophy className="h-2.5 w-2.5" />Best</Badge>}
                       </div>
-                      {idx === 0 && <Badge variant="secondary" className="text-[9px] gap-1"><Trophy className="h-2.5 w-2.5" />Best</Badge>}
+                      <div className="text-sm font-semibold mb-1 line-clamp-1 group-hover:text-primary transition-smooth">{t.subject}</div>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{t.body}</p>
+                      <div className="flex items-center gap-3 text-[11px] tabular-nums">
+                        <span className="text-muted-foreground">{t.sent.toLocaleString()} sent</span>
+                        <span className="text-success">{replyRate(t).toFixed(1)}% reply</span>
+                        <span className="text-muted-foreground">{t.meetings} mtg</span>
+                      </div>
+                    </button>
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <div className="text-sm font-semibold mb-1 line-clamp-1 group-hover:text-primary transition-smooth">{t.subject}</div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{t.body}</p>
-                    <div className="flex items-center gap-3 text-[11px] tabular-nums">
-                      <span className="text-muted-foreground">{t.sent.toLocaleString()} sent</span>
-                      <span className="text-success">{replyRate(t).toFixed(1)}% reply</span>
-                      <span className="text-muted-foreground">{t.meetings} mtg</span>
-                    </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </Card>
@@ -158,11 +219,12 @@ function EmailScriptsPage() {
                   <TableHead className="text-right">Open %</TableHead>
                   <TableHead className="text-right">Reply %</TableHead>
                   <TableHead className="text-right">Meetings</TableHead>
+                  <TableHead className="w-24 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {[...all].sort((a, b) => replyRate(b) - replyRate(a)).map((t, i) => (
-                  <TableRow key={t.id} onClick={() => setSelectedId(t.id)} className="cursor-pointer">
+                  <TableRow key={t.id}>
                     <TableCell className="font-semibold tabular-nums">{i + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -173,11 +235,21 @@ function EmailScriptsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs">{t.campaignName} · {t.step}</TableCell>
-                    <TableCell className="max-w-[280px] truncate text-sm">{t.subject}</TableCell>
+                    <TableCell className="max-w-[280px] truncate text-sm cursor-pointer" onClick={() => setSelectedId(t.id)}>{t.subject}</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">{t.sent.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">{openRate(t).toFixed(1)}%</TableCell>
                     <TableCell className="text-right tabular-nums text-sm font-semibold text-success">{replyRate(t).toFixed(1)}%</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">{t.meetings}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -187,9 +259,9 @@ function EmailScriptsPage() {
 
         <TabsContent value="all" className="grid gap-3 md:grid-cols-2">
           {all.map((t) => (
-            <button key={t.id} onClick={() => setSelectedId(t.id)} className="text-left">
-              <Card className="p-4 shadow-card hover:shadow-glow hover:-translate-y-0.5 transition-smooth h-full">
-                <div className="flex items-center justify-between mb-2">
+            <Card key={t.id} className="p-4 shadow-card hover:shadow-glow hover:-translate-y-0.5 transition-smooth h-full relative group">
+              <button onClick={() => setSelectedId(t.id)} className="text-left w-full">
+                <div className="flex items-center justify-between mb-2 pr-16">
                   <Badge variant="outline" className="text-[10px]">{t.campaignName} · Step {t.step}</Badge>
                   <span className="text-[10px] text-muted-foreground" style={{ color: t._brand }}>{t._clientName}</span>
                 </div>
@@ -199,21 +271,221 @@ function EmailScriptsPage() {
                   <span>{t.sent.toLocaleString()} sent</span>
                   <span className="text-success font-semibold">{replyRate(t).toFixed(1)}% reply</span>
                 </div>
-              </Card>
-            </button>
+              </button>
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditor({ mode: "edit", tpl: t })}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(t.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </Card>
           ))}
         </TabsContent>
       </Tabs>
+
+      {editor && (
+        <ScriptEditorDialog
+          mode={editor.mode}
+          initial={editor.tpl}
+          clients={clients}
+          onClose={() => setEditor(null)}
+          onSubmit={(values) => {
+            if (editor.mode === "add") {
+              addScript(values);
+              toast.success("Script created");
+            } else if (editor.tpl) {
+              updateScript(editor.tpl.id, values);
+              toast.success("Script updated");
+            }
+            setEditor(null);
+          }}
+        />
+      )}
+
+      <AlertDialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this script?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDeleteTpl ? (
+                <>
+                  <strong>{confirmDeleteTpl.subject}</strong> ({confirmDeleteTpl.campaignName} · Step {confirmDeleteTpl.step}) for{" "}
+                  {confirmDeleteTpl._clientName}. This cannot be undone.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (confirmDeleteId) {
+                  deleteScript(confirmDeleteId);
+                  toast.success("Script deleted");
+                  if (selectedId === confirmDeleteId) setSelectedId(null);
+                }
+                setConfirmDeleteId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function TemplateDetail({ tpl, onBack }: { tpl: EmailTemplate & { _clientName: string; _brand: string }; onBack: () => void }) {
+function ScriptEditorDialog({
+  mode,
+  initial,
+  clients,
+  onClose,
+  onSubmit,
+}: {
+  mode: "add" | "edit";
+  initial?: EmailTemplate;
+  clients: { id: string; companyName: string }[];
+  onClose: () => void;
+  onSubmit: (values: ScriptInput) => void;
+}) {
+  const [form, setForm] = useState<ScriptInput>({
+    clientId: initial?.clientId ?? clients[0]?.id ?? "",
+    campaignName: initial?.campaignName ?? "",
+    step: initial?.step ?? 1,
+    subject: initial?.subject ?? "",
+    body: initial?.body ?? "",
+  });
+  const [errors, setErrors] = useState<Partial<Record<keyof ScriptInput, string>>>({});
+
+  const handleSubmit = () => {
+    const result = scriptSchema.safeParse(form);
+    if (!result.success) {
+      const e: Partial<Record<keyof ScriptInput, string>> = {};
+      for (const issue of result.error.issues) {
+        const k = issue.path[0] as keyof ScriptInput;
+        if (!e[k]) e[k] = issue.message;
+      }
+      setErrors(e);
+      return;
+    }
+    onSubmit(result.data);
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{mode === "add" ? "New email script" : "Edit email script"}</DialogTitle>
+          <DialogDescription>
+            Use placeholders like <code>{`{{firstName}}`}</code>, <code>{`{{company}}`}</code>, <code>{`{{senderName}}`}</code>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Client</Label>
+              <Select value={form.clientId} onValueChange={(v) => setForm({ ...form, clientId: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.clientId && <p className="text-xs text-destructive">{errors.clientId}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Step</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={form.step}
+                onChange={(e) => setForm({ ...form, step: Number(e.target.value) })}
+              />
+              {errors.step && <p className="text-xs text-destructive">{errors.step}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Campaign name</Label>
+            <Input
+              value={form.campaignName}
+              maxLength={80}
+              onChange={(e) => setForm({ ...form, campaignName: e.target.value })}
+              placeholder="e.g. Q4 Enterprise Push"
+            />
+            {errors.campaignName && <p className="text-xs text-destructive">{errors.campaignName}</p>}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Subject line</Label>
+            <Input
+              value={form.subject}
+              maxLength={160}
+              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              placeholder="Quick question about {{company}}"
+            />
+            {errors.subject && <p className="text-xs text-destructive">{errors.subject}</p>}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Email body</Label>
+            <Textarea
+              value={form.body}
+              maxLength={4000}
+              rows={10}
+              onChange={(e) => setForm({ ...form, body: e.target.value })}
+              placeholder="Hi {{firstName}}, ..."
+              className="font-mono text-sm"
+            />
+            <div className="flex justify-between text-[11px] text-muted-foreground">
+              <span>{errors.body ?? " "}</span>
+              <span className="tabular-nums">{form.body.length}/4000</span>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit}>{mode === "add" ? "Create script" : "Save changes"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TemplateDetail({
+  tpl,
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  tpl: DecoratedTemplate;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <Button variant="ghost" size="sm" onClick={onBack} className="gap-2">
-        <ArrowLeft className="h-4 w-4" /> Back to scripts
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="ghost" size="sm" onClick={onBack} className="gap-2">
+          <ArrowLeft className="h-4 w-4" /> Back to scripts
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onEdit} className="gap-2">
+            <Pencil className="h-4 w-4" /> Edit
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDelete} className="gap-2 text-destructive hover:text-destructive">
+            <Trash2 className="h-4 w-4" /> Delete
+          </Button>
+        </div>
+      </div>
 
       <Card className="p-6 shadow-card">
         <div className="flex items-start justify-between mb-4 gap-4">
