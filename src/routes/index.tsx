@@ -10,7 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Dashboard — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — Expert Technology Solutions" }] }),
   component: Dashboard,
 });
 
