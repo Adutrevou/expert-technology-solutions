@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import appCss from "../styles.css?url";
 import { AppStateProvider, useApp } from "@/lib/app-state";
 import { AppShell } from "@/components/app-shell";
+import { AppQueryProvider } from "@/lib/query-provider";
 
 function NotFoundComponent() {
   return (
@@ -70,9 +71,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <AppStateProvider>
-      <Gate />
-    </AppStateProvider>
+    <AppQueryProvider>
+      <AppStateProvider>
+        <Gate />
+      </AppStateProvider>
+    </AppQueryProvider>
   );
 }
 

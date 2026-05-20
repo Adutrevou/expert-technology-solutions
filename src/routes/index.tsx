@@ -1,13 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useApp } from "@/lib/app-state";
-import { useMemo } from "react";
+import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { KpiCard } from "@/components/kpi-card";
-import { Users, Send, MessageSquare, Calendar, TrendingUp, ArrowRight } from "lucide-react";
-import { generateActivity, generateLeadsTimeseries, getFunnel, getKPIs } from "@/lib/demo-data";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from "recharts";
+import { useDashboardQuery } from "@/lib/leads-api-hooks";
+import { normalizeLead, normalizePendingApproval } from "@/lib/leads-api";
+import { Users, Megaphone, Clock3, Building2, ArrowRight, RefreshCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { LeadStatusBadge, ApprovalStatusBadge } from "@/components/status-badges";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Expert Technology Solutions" }] }),
@@ -15,119 +16,196 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { client, user } = useApp();
-  const kpi = useMemo(() => getKPIs(client.id), [client.id]);
-  const funnel = useMemo(() => getFunnel(client.id), [client.id]);
-  const series = useMemo(() => generateLeadsTimeseries(client.id), [client.id]);
-  const activity = useMemo(() => generateActivity(client.id), [client.id]);
+  const dashboardQuery = useDashboardQuery();
+
+  if (dashboardQuery.isLoading) {
+    return <DashboardLoadingState />;
+  }
+
+  if (dashboardQuery.isError || !dashboardQuery.data) {
+    return (
+      <CenteredState
+        title="Dashboard unavailable"
+        description="We couldn’t load the live Intergrai dashboard right now."
+        action={<Button onClick={() => dashboardQuery.refetch()} variant="outline"><RefreshCcw className="h-4 w-4 mr-2" />Try again</Button>}
+      />
+    );
+  }
+
+  const { client, campaign_counts: campaignCounts, lead_counts: leadCounts } = dashboardQuery.data;
+  const recentLeads = dashboardQuery.data.recent_leads.map(normalizeLead);
+  const pendingApprovals = dashboardQuery.data.pending_approvals.map(normalizePendingApproval);
+  const qualificationBreakdown = [
+    { label: "Hot", value: leadCounts.hot, tone: "bg-success" },
+    { label: "Warm", value: leadCounts.warm, tone: "bg-warning" },
+    { label: "Review", value: leadCounts.review, tone: "bg-muted-foreground" },
+    { label: "Not qualified", value: leadCounts.not_qualified, tone: "bg-destructive" },
+  ];
 
   return (
     <div className="space-y-8 max-w-[1400px] mx-auto">
       <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{client.companyName}</p>
-          <h1 className="text-3xl md:text-4xl font-bold mt-1">
-            Welcome back, <span className="text-gradient-primary">{user?.name}</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2">Here's how your outreach is performing this week.</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Intergrai Leads API</p>
+          <h1 className="text-3xl md:text-4xl font-bold mt-1">{client.name}</h1>
+          <p className="text-sm text-muted-foreground mt-2">
+            Live overview for {client.domain || client.slug}.
+          </p>
         </div>
+        <Link to="/campaigns" className="text-sm font-semibold text-primary inline-flex items-center gap-1">
+          Review campaigns <ArrowRight className="h-4 w-4" />
+        </Link>
       </header>
 
-      {/* Weekly banner */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-xl border border-border bg-gradient-primary p-5 shadow-glow">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_50%,white,transparent_50%)]" />
-        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-3 text-primary-foreground">
-            <TrendingUp className="h-5 w-5" />
-            <p className="text-sm font-medium">
-              <span className="font-bold">This week:</span> +{kpi.weekDelta.leads} leads, +{kpi.weekDelta.replies} replies, +{kpi.weekDelta.meetings} meetings booked
-            </p>
-          </div>
-          <Link to="/reports" className="text-xs font-semibold text-primary-foreground/90 hover:text-primary-foreground inline-flex items-center gap-1">
-            View weekly report <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </motion.div>
-
-      {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Total Leads" value={kpi.totalLeads} delta={`${kpi.weekDelta.leads} this week`} icon={Users} accent="primary" />
-        <KpiCard label="Emails Sent" value={kpi.emailsSent} delta="8.2% vs last week" icon={Send} accent="info" />
-        <KpiCard label="Replies" value={kpi.replies} delta={`${kpi.weekDelta.replies} this week`} icon={MessageSquare} accent="warning" />
-        <KpiCard label="Meetings Booked" value={kpi.meetingsBooked} delta={`${kpi.weekDelta.meetings} this week`} icon={Calendar} accent="success" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Client" value={1} delta={client.status || "active"} icon={Building2} accent="info" />
+        <KpiCard label="Campaigns" value={campaignCounts.total} delta={`${campaignCounts.draft} draft`} icon={Megaphone} accent="primary" />
+        <KpiCard label="Leads" value={leadCounts.total} delta={`${leadCounts.hot} hot`} icon={Users} accent="success" />
+        <KpiCard label="Pending Approvals" value={pendingApprovals.length} delta={pendingApprovals.length ? "needs review" : "all clear"} icon={Clock3} accent="warning" />
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 p-6 shadow-card">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <Card className="p-6 shadow-card">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="font-semibold">Leads growth</h3>
-              <p className="text-xs text-muted-foreground">Last 30 days</p>
+              <h2 className="font-semibold">Recent leads</h2>
+              <p className="text-xs text-muted-foreground">Latest live records from the shared leads API</p>
             </div>
           </div>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={series} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="leadGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Line type="monotone" dataKey="leads" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="replies" stroke="var(--chart-3)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+
+          {recentLeads.length === 0 ? (
+            <EmptyPanel
+              title="No recent leads yet"
+              description="The API is connected, but this client does not have any synced leads yet."
+            />
+          ) : (
+            <div className="space-y-3">
+              {recentLeads.map((lead) => (
+                <div key={lead.id} className="rounded-lg border border-border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{lead.name}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {lead.company} · {lead.title}
+                      </p>
+                    </div>
+                    <LeadStatusBadge status={lead.qualification} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>{lead.location}</span>
+                    <span>{lead.campaignName}</span>
+                    {lead.createdAt && <span>{formatDistanceToNow(new Date(lead.createdAt), { addSuffix: true })}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <Card className="p-6 shadow-card">
-          <h3 className="font-semibold">Performance funnel</h3>
-          <p className="text-xs text-muted-foreground mb-4">Leads → Meetings</p>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={funnel} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="stage" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} width={75} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                  {funnel.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <h2 className="font-semibold">Qualification breakdown</h2>
+          <p className="text-xs text-muted-foreground mb-5">Current live counts by qualification stage</p>
+          <div className="space-y-4">
+            {qualificationBreakdown.map((item) => {
+              const width = leadCounts.total > 0 ? `${(item.value / leadCounts.total) * 100}%` : "0%";
+              return (
+                <div key={item.label}>
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span>{item.label}</span>
+                    <span className="font-medium tabular-nums">{item.value.toLocaleString()}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted">
+                    <div className={`h-2 rounded-full ${item.tone}`} style={{ width }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       </div>
 
-      {/* Activity */}
       <Card className="p-6 shadow-card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="font-semibold">Recent activity</h3>
-            <p className="text-xs text-muted-foreground">Latest from your campaigns</p>
+            <h2 className="font-semibold">Pending approvals</h2>
+            <p className="text-xs text-muted-foreground">Requests returned by the live dashboard endpoint</p>
           </div>
         </div>
-        <div className="space-y-3">
-          {activity.map((a) => (
-            <div key={a.id} className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-smooth hover:bg-muted/50">
-              <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${
-                a.type === "lead" ? "bg-primary" :
-                a.type === "reply" ? "bg-warning" :
-                a.type === "meeting" ? "bg-success" :
-                a.type === "email" ? "bg-info" : "bg-muted-foreground"
-              }`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm">{a.message}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}</p>
+
+        {pendingApprovals.length === 0 ? (
+          <EmptyPanel
+            title="No approvals pending"
+            description="There are no campaign or lead actions waiting for review."
+          />
+        ) : (
+          <div className="space-y-3">
+            {pendingApprovals.map((item) => (
+              <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-border p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-muted-foreground">{item.summary}</p>
+                  {item.createdAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Raised {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                    </p>
+                  )}
+                </div>
+                <ApprovalStatusBadge status={item.status} />
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function DashboardLoadingState() {
+  return (
+    <div className="space-y-8 max-w-[1400px] mx-auto">
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-10 w-80" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-32" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <Skeleton className="h-96" />
+        <Skeleton className="h-96" />
+      </div>
+      <Skeleton className="h-72" />
+    </div>
+  );
+}
+
+function EmptyPanel({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
+      <p className="font-medium">{title}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function CenteredState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="max-w-[1400px] mx-auto">
+      <Card className="p-10 text-center shadow-card">
+        <h1 className="text-2xl font-semibold">{title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        {action ? <div className="mt-6 flex justify-center">{action}</div> : null}
       </Card>
     </div>
   );

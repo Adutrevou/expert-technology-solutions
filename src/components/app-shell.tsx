@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-            Data source pending
+            Live API connected
           </div>
           <div className="mt-1 text-[11px] text-muted-foreground">
             Portal reviewed {format(new Date(), "PP 'at' p")}
