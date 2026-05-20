@@ -66,9 +66,12 @@ function header(payload: GmailPayload | undefined, name: string): string {
 }
 
 export const Route = createFileRoute("/api/gmail/messages")({
+  // `server` is accepted by the router plugin at build time but missing from
+  // this version's option types — cast to silence the type-only error.
   server: {
     handlers: {
-      GET: async ({ request }) => {
+      GET: async ({ request }: { request: Request }) => {
+
         const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
         if (!LOVABLE_API_KEY) {
           return Response.json({ error: "LOVABLE_API_KEY is not configured" }, { status: 500 });
@@ -150,4 +153,4 @@ export const Route = createFileRoute("/api/gmail/messages")({
       },
     },
   },
-});
+} as any);
