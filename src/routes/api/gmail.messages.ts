@@ -153,5 +153,5 @@ export const Route = createFileRoute("/api/gmail/messages")({
         }
       },
     },
-  },
+  } as any),
 });
