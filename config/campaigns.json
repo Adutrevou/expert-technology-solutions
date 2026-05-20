@@ -1,0 +1,17 @@
+{
+  "client_name": "Expert Technology Solutions",
+  "client_slug": "expert-technology-solutions",
+  "default_status": "draft",
+  "campaigns": [
+    {
+      "name": "TBD Campaign 1",
+      "status": "draft",
+      "channel": "email",
+      "goal": "TBD",
+      "target_industry": "TBD",
+      "target_location": "TBD",
+      "owner": "TBD",
+      "notes": "Replace placeholder values before launch."
+    }
+  ]
+}

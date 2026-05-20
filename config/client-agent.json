@@ -1,0 +1,22 @@
+{
+  "client_name": "Expert Technology Solutions",
+  "client_slug": "expert-technology-solutions",
+  "domain": "experttechnologysolutions.intergrai.co.za",
+  "repo_url": "https://github.com/Adutrevou/expert-technology-solutions",
+  "lovable_url": "https://apollo-pulse-84.lovable.app",
+  "client_agent_name": "Expert Technology Solutions Lead Agent",
+  "mode": "standalone-leads-system",
+  "status": "pre-onboarding",
+  "notes": [
+    "Placeholder config prepared for client onboarding.",
+    "Do not store secrets in this file.",
+    "Current app still uses demo auth and demo/local data."
+  ],
+  "placeholders": {
+    "primary_contact_name": "TBD",
+    "primary_contact_email": "TBD",
+    "support_owner": "TBD",
+    "auth_provider": "TBD",
+    "data_source": "TBD"
+  }
+}

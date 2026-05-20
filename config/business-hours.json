@@ -1,0 +1,17 @@
+{
+  "client_name": "Expert Technology Solutions",
+  "client_slug": "expert-technology-solutions",
+  "timezone": "Africa/Johannesburg",
+  "timezone_label": "SAST",
+  "business_hours": [
+    {
+      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "start": "08:00",
+      "end": "17:00"
+    }
+  ],
+  "notes": [
+    "Default placeholder based on handover requirements.",
+    "Confirm holiday handling and after-hours policy with Alan."
+  ]
+}

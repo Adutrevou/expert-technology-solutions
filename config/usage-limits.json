@@ -1,0 +1,14 @@
+{
+  "client_name": "Expert Technology Solutions",
+  "client_slug": "expert-technology-solutions",
+  "apollo_monthly_cap": 2000,
+  "limits": {
+    "apollo_monthly_cap": 2000,
+    "gmail_messages_route_enabled": true,
+    "max_gmail_messages_per_request": 25
+  },
+  "notes": [
+    "Apollo cap is a planning placeholder only.",
+    "No Apollo backend integration is implemented yet."
+  ]
+}
