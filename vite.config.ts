@@ -6,4 +6,38 @@
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-export default defineConfig();
+const isStaticBuild = process.env.BUILD_STATIC === "1";
+
+export default defineConfig({
+  cloudflare: isStaticBuild ? false : undefined,
+  tanstackStart: isStaticBuild
+    ? {
+        spa: {
+          enabled: true,
+          maskPath: "/",
+          prerender: {
+            outputPath: "/index",
+          },
+        },
+      }
+    : undefined,
+  vite: isStaticBuild
+    ? {
+        build: {
+          outDir: "dist",
+        },
+        environments: {
+          client: {
+            build: {
+              outDir: "dist",
+            },
+          },
+          server: {
+            build: {
+              outDir: "dist/server",
+            },
+          },
+        },
+      }
+    : undefined,
+});

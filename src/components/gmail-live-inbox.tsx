@@ -28,6 +28,7 @@ function parseAddr(raw: string): { name: string; email: string } {
 }
 
 export function GmailLiveInbox() {
+  const isStaticBuild = import.meta.env.VITE_STATIC_BUILD === "true";
   const [box, setBox] = useState<"inbox" | "sent">("inbox");
   const [messages, setMessages] = useState<GmailMessageDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,8 +60,40 @@ export function GmailLiveInbox() {
   };
 
   useEffect(() => {
+    if (isStaticBuild) return;
     load(box);
-  }, [box]);
+  }, [box, isStaticBuild]);
+
+  if (isStaticBuild) {
+    return (
+      <Card className="shadow-card overflow-hidden">
+        <div className="p-5 border-b border-border bg-gradient-to-br from-primary/5 to-transparent">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+              <Mail className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                Live Gmail
+                <Badge variant="secondary" className="text-[10px] uppercase">Server-only</Badge>
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Static VPS builds do not include the `/api/gmail/messages` endpoint used by this panel.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-5">
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-border bg-muted/30 text-sm">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+            <div className="text-muted-foreground">
+              Deploy a Start server build if you need live Gmail data in this dashboard.
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="shadow-card overflow-hidden">
