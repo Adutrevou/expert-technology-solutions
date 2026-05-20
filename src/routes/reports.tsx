@@ -10,7 +10,7 @@ import { Download, FileText } from "lucide-react";
 import { format } from "date-fns";
 
 export const Route = createFileRoute("/reports")({
-  head: () => ({ meta: [{ title: "Reports — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Reports — Expert Technology Solutions" }] }),
   component: ReportsPage,
 });
 

@@ -6,7 +6,7 @@ import { MessageSquare } from "lucide-react";
 import { useMemo } from "react";
 
 export const Route = createFileRoute("/updates")({
-  head: () => ({ meta: [{ title: "Updates — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Updates — Expert Technology Solutions" }] }),
   component: UpdatesPage,
 });
 

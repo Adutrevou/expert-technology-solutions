@@ -8,7 +8,7 @@ import { format, isFuture } from "date-fns";
 import { Calendar, Clock, Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/meetings")({
-  head: () => ({ meta: [{ title: "Meetings — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Meetings — Expert Technology Solutions" }] }),
   component: MeetingsPage,
 });
 

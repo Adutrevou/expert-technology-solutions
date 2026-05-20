@@ -16,8 +16,8 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@experttechnologysolutions.com");
-  const [password, setPassword] = useState("demo");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +57,7 @@ function LoginPage() {
           </form>
 
           <div className="mt-6 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-            <strong className="text-foreground">Demo mode.</strong> Use <code className="font-mono text-primary">admin@…</code> for super admin or any email for client view.
+            Authentication is still in onboarding mode for this client portal. Replace this screen with the approved production sign-in flow before client go-live.
           </div>
         </Card>
       </motion.div>

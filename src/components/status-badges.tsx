@@ -2,11 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import type { LeadStatus, CampaignStatus, MeetingStatus } from "@/lib/demo-data";
 
 const LEAD: Record<LeadStatus, { label: string; cls: string }> = {
-  new: { label: "New", cls: "bg-muted text-muted-foreground" },
-  contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
-  replied: { label: "Replied", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
-  interested: { label: "Interested", cls: "bg-primary/15 text-primary border-primary/30" },
-  meeting_booked: { label: "Meeting", cls: "bg-success/15 text-success border-success/30" },
+  new: { label: "Review", cls: "bg-muted text-muted-foreground" },
+  contacted: { label: "Warm", cls: "bg-info/15 text-info border-info/30" },
+  replied: { label: "Warm", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  interested: { label: "Hot", cls: "bg-primary/15 text-primary border-primary/30" },
+  meeting_booked: { label: "Hot", cls: "bg-success/15 text-success border-success/30" },
 };
 const CAMP: Record<CampaignStatus, { label: string; cls: string }> = {
   active: { label: "Active", cls: "bg-success/15 text-success border-success/30" },

@@ -6,7 +6,7 @@ import { Check, Circle } from "lucide-react";
 import { useMemo } from "react";
 
 export const Route = createFileRoute("/progress")({
-  head: () => ({ meta: [{ title: "Progress — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Progress — Expert Technology Solutions" }] }),
   component: ProgressPage,
 });
 

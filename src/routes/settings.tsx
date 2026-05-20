@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Key, Shield, Plus, X, UserPlus, Lock } from "lucide-react";
+import { Key, Plus, X, UserPlus, Lock } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 
@@ -56,19 +56,13 @@ function SettingsPage() {
             <Key className="h-5 w-5 text-primary-foreground" />
           </div>
           <div className="flex-1">
-            <h2 className="font-semibold">Apollo.io integration</h2>
+            <h2 className="font-semibold">Data source connection</h2>
             <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Currently using <span className="font-mono text-foreground">demo data</span>. Connect Apollo to sync live leads, campaigns, and replies every 6 hours.
+              This portal is still using <span className="font-mono text-foreground">demo/local data</span>. Confirm the production data source, auth flow, and sync owner before onboarding the client.
             </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input placeholder="Paste your Apollo API key…" className="font-mono text-xs" />
-              <Button className="bg-gradient-primary shadow-glow gap-2">
-                <Sparkles className="h-4 w-4" /> Connect
-              </Button>
+            <div className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
+              No production connector is configured in this repo. Keep secrets out of the frontend and wire any API keys through the chosen backend or server runtime only.
             </div>
-            <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
-              <Shield className="h-3 w-3" /> Keys are stored securely and never shared with clients.
-            </p>
           </div>
         </div>
       </Card>

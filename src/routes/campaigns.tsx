@@ -23,7 +23,7 @@ import { Megaphone, Mail, MessageSquare, Calendar, Plus, Check, X, Clock } from 
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/campaigns")({
-  head: () => ({ meta: [{ title: "Campaigns — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Campaigns — Expert Technology Solutions" }] }),
   component: CampaignsPage,
 });
 

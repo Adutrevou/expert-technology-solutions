@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 export const Route = createFileRoute("/email-scripts")({
-  head: () => ({ meta: [{ title: "Email Scripts — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Email Scripts — Expert Technology Solutions" }] }),
   component: EmailScriptsPage,
 });
 

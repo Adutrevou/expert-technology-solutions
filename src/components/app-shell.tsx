@@ -60,10 +60,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-            Apollo sync healthy
+            Data source pending
           </div>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            Last updated {format(new Date(), "PP 'at' p")}
+            Portal reviewed {format(new Date(), "PP 'at' p")}
           </div>
         </div>
       </aside>
@@ -114,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
               <Badge variant="outline" className="hidden md:inline-flex gap-1 text-[10px]">
                 <Activity className="h-3 w-3" />
-                Live data
+                Setup review
               </Badge>
             </div>
 

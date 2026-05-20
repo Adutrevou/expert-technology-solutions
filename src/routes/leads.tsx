@@ -11,7 +11,7 @@ import { generateLeads, type LeadStatus } from "@/lib/demo-data";
 import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/leads")({
-  head: () => ({ meta: [{ title: "Leads — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Leads — Expert Technology Solutions" }] }),
   component: LeadsPage,
 });
 
@@ -83,11 +83,11 @@ function LeadsPage() {
             <SelectTrigger className="w-full md:w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="new">New</SelectItem>
-              <SelectItem value="contacted">Contacted</SelectItem>
-              <SelectItem value="replied">Replied</SelectItem>
-              <SelectItem value="interested">Interested</SelectItem>
-              <SelectItem value="meeting_booked">Meeting Booked</SelectItem>
+              <SelectItem value="new">Review</SelectItem>
+              <SelectItem value="contacted">Warm</SelectItem>
+              <SelectItem value="replied">Warm (Replied)</SelectItem>
+              <SelectItem value="interested">Hot</SelectItem>
+              <SelectItem value="meeting_booked">Hot (Meeting Booked)</SelectItem>
             </SelectContent>
           </Select>
           <Select value={campaign} onValueChange={(v) => { setCampaign(v); setPage(1); }}>
