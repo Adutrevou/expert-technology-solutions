@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [{ title: "Settings — Apollo Vision" }] }),
+  head: () => ({ meta: [{ title: "Settings — Expert Technology Solutions" }] }),
   component: SettingsPage,
 });
 

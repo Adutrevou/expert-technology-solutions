@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
 import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown, Activity, Mail } from "lucide-react";
-import logo from "@/assets/landsdowne-logo.gif";
+import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="hidden lg:flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="flex h-20 items-center justify-center px-6 border-b border-sidebar-border bg-white">
-          <img src={logo} alt="Landsdowne Property Group" className="h-12 w-auto" />
+          <img src={logo} alt="Expert Technology Solutions" className="h-12 w-auto" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV.map(({ to, label, icon: Icon }) => {

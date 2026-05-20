@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
-import logo from "@/assets/landsdowne-logo.gif";
+import logo from "@/assets/expert-technology-logo.webp";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@apollo-vision.com");
+  const [email, setEmail] = useState("admin@experttechnologysolutions.com");
   const [password, setPassword] = useState("demo");
 
   const submit = (e: React.FormEvent) => {
@@ -34,7 +34,7 @@ function LoginPage() {
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative w-full max-w-md">
         <div className="flex flex-col items-center justify-center mb-8">
-          <img src={logo} alt="Landsdowne Property Group" className="h-20 w-auto mb-3" />
+          <img src={logo} alt="Expert Technology Solutions" className="h-20 w-auto mb-3" />
           <p className="text-xs text-muted-foreground">Client Visibility Portal</p>
         </div>
 
