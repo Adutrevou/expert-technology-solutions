@@ -66,7 +66,10 @@ function header(payload: GmailPayload | undefined, name: string): string {
 }
 
 export const Route = createFileRoute("/api/gmail/messages")({
-  server: {
+  // Server route handler — `server` key isn't in this version's option types yet,
+  // but the router plugin understands it at build time.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  server: ({
     handlers: {
       GET: async ({ request }: { request: Request }) => {
 
