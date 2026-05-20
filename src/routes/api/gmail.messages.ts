@@ -68,7 +68,8 @@ function header(payload: GmailPayload | undefined, name: string): string {
 export const Route = createFileRoute("/api/gmail/messages")({
   server: {
     handlers: {
-      GET: async ({ request }) => {
+      GET: async ({ request }: { request: Request }) => {
+
         const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
         if (!LOVABLE_API_KEY) {
           return Response.json({ error: "LOVABLE_API_KEY is not configured" }, { status: 500 });
