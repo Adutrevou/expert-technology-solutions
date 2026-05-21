@@ -1,5 +1,11 @@
-export const LEADS_API_BASE_URL = (import.meta.env.VITE_LEADS_API_BASE_URL || "https://api.intergrai.co.za").replace(/\/+$/, "");
+// If VITE_LEADS_API_BASE_URL is provided (e.g. the static VPS build sets it to
+// https://api.intergrai.co.za), call the upstream directly. Otherwise route
+// through the same-origin server proxy at `/api/leads` so the browser is
+// never blocked by CORS on preview/published Lovable origins.
+const ENV_BASE_URL = (import.meta.env.VITE_LEADS_API_BASE_URL || "").replace(/\/+$/, "");
+export const LEADS_API_BASE_URL = ENV_BASE_URL || "/api/leads";
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
+const IS_DEV = Boolean(import.meta.env?.DEV);
 
 export interface ApiClientSummary {
   id: string;
