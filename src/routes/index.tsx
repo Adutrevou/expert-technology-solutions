@@ -23,10 +23,11 @@ function Dashboard() {
   }
 
   if (dashboardQuery.isError || !dashboardQuery.data) {
+    const errMsg = (dashboardQuery.error as Error | undefined)?.message;
     return (
       <CenteredState
         title="Dashboard unavailable"
-        description="We couldn’t load the live Intergrai dashboard right now."
+        description={errMsg || "We couldn’t load the live Intergrai dashboard right now."}
         action={<Button onClick={() => dashboardQuery.refetch()} variant="outline"><RefreshCcw className="h-4 w-4 mr-2" />Try again</Button>}
       />
     );
