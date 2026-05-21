@@ -90,14 +90,22 @@ export interface PendingApprovalRecord {
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${LEADS_API_BASE_URL}${path}`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const url = `${LEADS_API_BASE_URL}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { Accept: "application/json" } });
+  } catch (e: any) {
+    const msg = `Leads API network error at ${url}: ${e?.message ?? String(e)}`;
+    if (IS_DEV) console.error(msg, e);
+    throw new Error(msg);
+  }
 
   if (!response.ok) {
-    throw new Error(`API request failed (${response.status})`);
+    let detail = "";
+    try { detail = (await response.text()).slice(0, 500); } catch { /* ignore */ }
+    const msg = `Leads API ${response.status} at ${url}${detail ? ` — ${detail}` : ""}`;
+    if (IS_DEV) console.error(msg);
+    throw new Error(msg);
   }
 
   return response.json() as Promise<T>;
