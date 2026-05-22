@@ -3,9 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCampaignsQuery } from "@/lib/leads-api-hooks";
-import { normalizeCampaign } from "@/lib/leads-api";
+import { normalizeCampaign, type CampaignLifecycleStatus } from "@/lib/leads-api";
 import { ApprovalStatusBadge, CampaignStatusBadge } from "@/components/status-badges";
-import type { CampaignStatus } from "@/lib/demo-data";
 import { RefreshCcw, Megaphone, Clock3, CheckCircle2, FileText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -77,25 +76,25 @@ function CampaignsPage() {
                 <div className="min-w-0">
                   <h2 className="font-semibold truncate">{campaign.name}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {campaign.targetNiche} · {campaign.targetLocation}
+                    Audience: {campaign.targetNiche} · Market: {campaign.targetLocation}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <CampaignStatusBadge status={campaign.status as CampaignStatus} />
+                  <CampaignStatusBadge status={campaign.status as CampaignLifecycleStatus} />
                   {campaign.approvalStatus !== "none" ? <ApprovalStatusBadge status={campaign.approvalStatus} /> : null}
                 </div>
               </div>
 
               <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Objective</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Campaign brief</p>
                 <p className="mt-2 text-sm">{campaign.objective}</p>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <InfoBlock label="Created" value={campaign.createdAt ? formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true }) : "Unknown"} />
                 <InfoBlock label="Last updated" value={campaign.updatedAt ? formatDistanceToNow(new Date(campaign.updatedAt), { addSuffix: true }) : "Unknown"} />
-                <InfoBlock label="Target niche" value={campaign.targetNiche} />
-                <InfoBlock label="Target location" value={campaign.targetLocation} />
+                <InfoBlock label="Audience" value={campaign.targetNiche} />
+                <InfoBlock label="Market" value={campaign.targetLocation} />
               </div>
             </Card>
           ))}

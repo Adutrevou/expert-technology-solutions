@@ -40,6 +40,13 @@ const INITIAL_CLIENTS: ClientWithTargeting[] = SEED_CLIENTS.map((c) => ({
   targeting: { ...DEFAULT_TARGETING },
 }));
 
+const STORAGE_KEYS = {
+  user: "intergrai-user",
+  theme: "intergrai-theme",
+  clients: "intergrai-clients",
+  client: "intergrai-client",
+} as const;
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useState<ClientWithTargeting[]>(INITIAL_CLIENTS);
   const [clientId, setClientIdState] = useState(INITIAL_CLIENTS[0].id);
@@ -48,12 +55,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("apollo-user");
+    const stored = localStorage.getItem(STORAGE_KEYS.user);
     if (stored) setUser(JSON.parse(stored));
-    const t = (localStorage.getItem("apollo-theme") as "light" | "dark") || "dark";
+    const t = (localStorage.getItem(STORAGE_KEYS.theme) as "light" | "dark") || "dark";
     setTheme(t);
     document.documentElement.classList.toggle("dark", t === "dark");
-    const storedClients = localStorage.getItem("apollo-clients");
+    const storedClients = localStorage.getItem(STORAGE_KEYS.clients);
     if (storedClients) {
       try {
         const parsed = JSON.parse(storedClients) as ClientWithTargeting[];
@@ -62,14 +69,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-    const c = localStorage.getItem("apollo-client");
+    const c = localStorage.getItem(STORAGE_KEYS.client);
     if (c) setClientIdState(c);
   }, []);
 
   const persistClients = (next: ClientWithTargeting[]) => {
     setClients(next);
     if (typeof window !== "undefined") {
-      localStorage.setItem("apollo-clients", JSON.stringify(next));
+      localStorage.setItem(STORAGE_KEYS.clients, JSON.stringify(next));
     }
   };
 
@@ -77,29 +84,29 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const role: Role = email.toLowerCase().includes("admin") ? "super_admin" : "client_user";
     const u = { name: email.split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase()), email, role };
     setUser(u);
-    localStorage.setItem("apollo-user", JSON.stringify(u));
+    localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(u));
     if (role === "client_user") {
       const domain = email.split("@")[1]?.toLowerCase() ?? "";
       const matched =
         clients.find((c) => domain && (c.companyName.toLowerCase().includes(domain.split(".")[0]) || c.id.toLowerCase() === domain.split(".")[0])) ||
         clients[0];
       setClientIdState(matched.id);
-      localStorage.setItem("apollo-client", matched.id);
+      localStorage.setItem(STORAGE_KEYS.client, matched.id);
     }
   };
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("apollo-user");
+    localStorage.removeItem(STORAGE_KEYS.user);
   };
   const toggleTheme = () => {
     const t = theme === "dark" ? "light" : "dark";
     setTheme(t);
     document.documentElement.classList.toggle("dark", t === "dark");
-    localStorage.setItem("apollo-theme", t);
+    localStorage.setItem(STORAGE_KEYS.theme, t);
   };
   const setClientId = (id: string) => {
     setClientIdState(id);
-    localStorage.setItem("apollo-client", id);
+    localStorage.setItem(STORAGE_KEYS.client, id);
   };
 
   const addClient: AppState["addClient"] = ({ companyName, brandColor, initials }) => {

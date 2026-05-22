@@ -17,7 +17,6 @@ function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,25 +38,23 @@ function LoginPage() {
         </div>
 
         <Card className="p-8 shadow-elegant border-border/50 backdrop-blur-xl bg-card/80">
-          <h2 className="text-2xl font-bold mb-1">Welcome back</h2>
-          <p className="text-sm text-muted-foreground mb-6">Sign in to view your campaign performance.</p>
+          <h2 className="text-2xl font-bold mb-1">Portal access</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Production authentication is still being finalized. Use your email to open this client portal session.
+          </p>
 
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pw">Password</Label>
-              <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
             <Button type="submit" className="w-full bg-gradient-primary shadow-glow hover:opacity-90 transition-smooth h-11">
-              Sign in <ArrowRight className="ml-1 h-4 w-4" />
+              Continue to portal <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </form>
 
           <div className="mt-6 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-            Authentication is still in onboarding mode for this client portal. Replace this screen with the approved production sign-in flow before client go-live.
+            This is a temporary access gate only. No demo credentials are provided here, and production sign-in should replace this flow before long-term client rollout.
           </div>
         </Card>
       </motion.div>

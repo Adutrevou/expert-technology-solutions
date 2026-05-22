@@ -62,7 +62,7 @@ function LeadsPage() {
         <div>
           <h1 className="text-3xl font-bold">Leads</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filtered.length.toLocaleString()} leads · {all.length.toLocaleString()} total
+            Live lead records for Expert Technology Solutions
           </p>
         </div>
         <div className="flex gap-2">
@@ -76,6 +76,12 @@ function LeadsPage() {
       </header>
 
       <Card className="p-4 shadow-card">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryStat label="Total leads" value={all.length} />
+          <SummaryStat label="Hot" value={all.filter((lead) => lead.qualification === "hot").length} />
+          <SummaryStat label="Warm" value={all.filter((lead) => lead.qualification === "warm").length} />
+          <SummaryStat label="Review" value={all.filter((lead) => lead.qualification === "review").length} />
+        </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -120,8 +126,41 @@ function LeadsPage() {
         </Card>
       ) : (
         <Card className="overflow-hidden shadow-card">
+          <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
+            Showing {filtered.length.toLocaleString()} of {all.length.toLocaleString()} synced leads
+          </div>
+          <div className="grid gap-3 p-4 md:hidden">
+            {all.length === 0 ? (
+              <EmptyState
+                title="No leads synced yet"
+                description="The live leads endpoint is connected, but this client does not have any leads yet."
+              />
+            ) : paged.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                No leads match your filters.
+              </div>
+            ) : (
+              paged.map((lead) => (
+                <article key={lead.id} className="rounded-2xl border border-border bg-card p-4 shadow-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate font-semibold">{lead.name}</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">{lead.company}</p>
+                    </div>
+                    <LeadStatusBadge status={lead.qualification} />
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <LeadField label="Title" value={lead.title} />
+                    <LeadField label="Industry" value={lead.industry} />
+                    <LeadField label="Location" value={lead.location} />
+                    <LeadField label="Campaign" value={lead.campaignName} />
+                  </dl>
+                </article>
+              ))
+            )}
+          </div>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="hidden md:table">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
@@ -197,6 +236,24 @@ function EmptyState({ title, description }: { title: string; description: string
     <div className="mx-auto max-w-md text-center">
       <p className="font-medium">{title}</p>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/10 px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums">{value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function LeadField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm">{value}</dd>
     </div>
   );
 }

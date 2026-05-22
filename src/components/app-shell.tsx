@@ -1,21 +1,19 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown, Activity, Mail } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown, Activity } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
-  { to: "/meetings", label: "Meetings", icon: Calendar },
-  { to: "/progress", label: "Progress", icon: ListChecks },
+  { to: "/meetings", label: "Approvals", icon: Calendar },
+  { to: "/progress", label: "Requests", icon: ListChecks },
   { to: "/reports", label: "Reports", icon: FileBarChart },
-  { to: "/email-scripts", label: "Email Scripts", icon: Mail },
-  { to: "/updates", label: "Updates", icon: MessageSquare },
+  { to: "/updates", label: "Agent Chat", icon: MessageSquare },
 ] as const;
 
 const ADMIN_NAV = [
@@ -60,10 +58,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-            Live API connected
+            Live leads data connected
           </div>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            Portal reviewed {format(new Date(), "PP 'at' p")}
+            Workflow tools continue through Intergrai
           </div>
         </div>
       </aside>
@@ -114,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
               <Badge variant="outline" className="hidden md:inline-flex gap-1 text-[10px]">
                 <Activity className="h-3 w-3" />
-                Setup review
+                Intergrai portal
               </Badge>
             </div>
 

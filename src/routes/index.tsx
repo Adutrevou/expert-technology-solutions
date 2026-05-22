@@ -50,7 +50,7 @@ function Dashboard() {
           <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Intergrai Leads API</p>
           <h1 className="text-3xl md:text-4xl font-bold mt-1">{client.name}</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Live overview for {client.domain || client.slug}.
+            Live overview powered by Intergrai for {client.domain || client.slug}.
           </p>
         </div>
         <Link to="/campaigns" className="text-sm font-semibold text-primary inline-flex items-center gap-1">
@@ -59,10 +59,10 @@ function Dashboard() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Client" value={1} delta={client.status || "active"} icon={Building2} accent="info" />
-        <KpiCard label="Campaigns" value={campaignCounts.total} delta={`${campaignCounts.draft} draft`} icon={Megaphone} accent="primary" />
-        <KpiCard label="Leads" value={leadCounts.total} delta={`${leadCounts.hot} hot`} icon={Users} accent="success" />
-        <KpiCard label="Pending Approvals" value={pendingApprovals.length} delta={pendingApprovals.length ? "needs review" : "all clear"} icon={Clock3} accent="warning" />
+        <KpiCard label="Client status" value={client.status === "active" ? "Active" : client.status || "Unknown"} delta={client.domain || client.slug} icon={Building2} accent="info" />
+        <KpiCard label="Campaigns" value={campaignCounts.total} delta={campaignCounts.total === 1 ? "1 live campaign record" : `${campaignCounts.total} live campaign records`} icon={Megaphone} accent="primary" />
+        <KpiCard label="Leads" value={leadCounts.total} delta={leadCounts.total === 0 ? "No synced leads yet" : `${leadCounts.warm} warm · ${leadCounts.review} review`} icon={Users} accent="success" />
+        <KpiCard label="Pending approvals" value={pendingApprovals.length} delta={pendingApprovals.length ? "Waiting on review" : "Nothing waiting"} icon={Clock3} accent="warning" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
@@ -87,7 +87,8 @@ function Dashboard() {
                     <div className="min-w-0">
                       <p className="font-medium truncate">{lead.name}</p>
                       <p className="text-sm text-muted-foreground truncate">
-                        {lead.company} · {lead.title}
+                        {lead.company}
+                        {lead.title !== "Unknown title" ? ` · ${lead.title}` : ""}
                       </p>
                     </div>
                     <LeadStatusBadge status={lead.qualification} />

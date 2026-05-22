@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 
 export function KpiCard({ label, value, delta, icon: Icon, accent = "primary" }: {
   label: string;
-  value: number;
+  value: number | string;
   delta?: string;
   icon: LucideIcon;
   accent?: "primary" | "success" | "warning" | "info";
 }) {
   const [display, setDisplay] = useState(0);
   useEffect(() => {
+    if (typeof value !== "number") return;
     const start = performance.now();
     const dur = 900;
     let raf = 0;
@@ -45,10 +46,10 @@ export function KpiCard({ label, value, delta, icon: Icon, accent = "primary" }:
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
             <p className="mt-2 font-display text-3xl font-bold tabular-nums">
-              {display.toLocaleString()}
+              {typeof value === "number" ? display.toLocaleString() : value}
             </p>
             {delta && (
-              <p className="mt-1 text-xs font-medium text-success">↑ {delta}</p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">{delta}</p>
             )}
           </div>
           <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accentBg} shadow-glow`}>

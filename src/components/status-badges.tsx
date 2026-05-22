@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { LeadStatus, CampaignStatus, MeetingStatus } from "@/lib/demo-data";
-import type { CampaignApprovalStatus, LeadQualification } from "@/lib/leads-api";
+import type { CampaignApprovalStatus, CampaignLifecycleStatus, LeadQualification } from "@/lib/leads-api";
 
 const LEAD: Record<LeadStatus | LeadQualification, { label: string; cls: string }> = {
   new: { label: "Review", cls: "bg-muted text-muted-foreground" },
@@ -36,7 +36,7 @@ export function LeadStatusBadge({ status }: { status: LeadStatus | LeadQualifica
   const s = LEAD[status];
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
-export function CampaignStatusBadge({ status }: { status: CampaignStatus }) {
+export function CampaignStatusBadge({ status }: { status: CampaignStatus | CampaignLifecycleStatus }) {
   const s = CAMP[status];
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }

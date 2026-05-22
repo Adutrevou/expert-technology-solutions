@@ -1,41 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Card } from "@/components/ui/card";
-import { generateUpdates } from "@/lib/demo-data";
-import { formatDistanceToNow } from "date-fns";
-import { MessageSquare } from "lucide-react";
-import { useMemo } from "react";
+import { BotMessageSquare } from "lucide-react";
+import { ClientReadyPlaceholder } from "@/components/client-ready-placeholder";
 
 export const Route = createFileRoute("/updates")({
-  head: () => ({ meta: [{ title: "Updates — Expert Technology Solutions" }] }),
-  component: UpdatesPage,
+  head: () => ({ meta: [{ title: "Agent Chat — Expert Technology Solutions" }] }),
+  component: AgentChatPage,
 });
 
-function UpdatesPage() {
-  const updates = useMemo(() => generateUpdates(), []);
+function AgentChatPage() {
   return (
-    <div className="space-y-6 max-w-[800px] mx-auto">
+    <div className="space-y-6 max-w-[1200px] mx-auto">
       <header>
-        <h1 className="text-3xl font-bold">Strategy updates</h1>
-        <p className="text-sm text-muted-foreground mt-1">Latest notes and strategy changes from your account team.</p>
+        <h1 className="text-3xl font-bold">Agent Chat</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Direct client-to-agent chat is not enabled in this frontend yet.
+        </p>
       </header>
 
-      <ol className="relative border-l border-border ml-3 space-y-6">
-        {updates.map((u) => (
-          <li key={u.id} className="ml-6">
-            <span className="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-primary shadow-glow">
-              <MessageSquare className="h-3 w-3 text-primary-foreground" />
-            </span>
-            <Card className="p-5 shadow-card">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <h3 className="font-semibold">{u.title}</h3>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}</span>
-              </div>
-              <p className="text-sm text-muted-foreground">{u.body}</p>
-              <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">— {u.author}</p>
-            </Card>
-          </li>
-        ))}
-      </ol>
+      <ClientReadyPlaceholder
+        icon={BotMessageSquare}
+        eyebrow="Messaging Onboarding"
+        title="Agent chat is coming soon"
+        description="This portal does not currently provide a live chat channel with the Intergrai agent. That prevents unfinished messaging features from appearing live."
+        note="Questions and requests should still be routed through Intergrai until the chat workflow is connected and audited."
+      />
     </div>
   );
 }

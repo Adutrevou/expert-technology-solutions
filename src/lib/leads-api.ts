@@ -51,6 +51,13 @@ export interface CampaignsResponse {
   campaigns: unknown[];
 }
 
+export interface ReportsResponse {
+  ok: boolean;
+  client: ApiClientSummary;
+  count: number;
+  reports: unknown[];
+}
+
 export type LeadQualification = "review" | "warm" | "hot" | "not_qualified";
 export type CampaignLifecycleStatus = "active" | "paused" | "completed" | "draft";
 export type CampaignApprovalStatus = "pending" | "approved" | "rejected" | "none";
@@ -89,6 +96,13 @@ export interface PendingApprovalRecord {
   createdAt?: string;
 }
 
+export interface ReportRecord {
+  id: string;
+  title: string;
+  summary: string;
+  createdAt?: string;
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   const url = `${LEADS_API_BASE_URL}${path}`;
   let response: Response;
@@ -121,6 +135,10 @@ export function getLeads() {
 
 export function getCampaigns() {
   return apiGet<CampaignsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`);
+}
+
+export function getReports() {
+  return apiGet<ReportsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -194,7 +212,7 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const firstName = pickString(record, ["first_name", "firstName"]);
   const lastName = pickString(record, ["last_name", "lastName"]);
   const name =
-    pickString(record, ["name", "full_name", "fullName"]) ||
+    pickString(record, ["name", "full_name", "fullName", "contact_name", "contactName"]) ||
     [firstName, lastName].filter(Boolean).join(" ").trim() ||
     "Unnamed lead";
 
@@ -244,5 +262,17 @@ export function normalizePendingApproval(value: unknown, index = 0): PendingAppr
     summary: `${campaign.targetNiche} in ${campaign.targetLocation}`,
     status: campaign.approvalStatus,
     createdAt: campaign.createdAt,
+  };
+}
+
+export function normalizeReport(value: unknown, index = 0): ReportRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `report-${index}`,
+    title: pickString(record, ["title", "name"]) || "Performance report",
+    summary:
+      pickString(record, ["summary", "description"]) ||
+      "A live report is available for this client.",
+    createdAt: pickString(record, ["created_at", "createdAt"]),
   };
 }
