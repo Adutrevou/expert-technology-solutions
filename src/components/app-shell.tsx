@@ -17,6 +17,7 @@ const BASE_NAV = [
 ] as const;
 
 const ADMIN_NAV = [
+  { to: "/agent", label: "Lead Agent", icon: MessageSquare },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

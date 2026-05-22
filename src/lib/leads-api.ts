@@ -6,6 +6,21 @@ const ENV_BASE_URL = (import.meta.env.VITE_LEADS_API_BASE_URL || "").replace(/\/
 export const LEADS_API_BASE_URL = ENV_BASE_URL || "/api/leads";
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
 const IS_DEV = Boolean(import.meta.env?.DEV);
+export const REQUEST_CATEGORIES = [
+  "new_campaign",
+  "campaign_change",
+  "lead_question",
+  "outreach_draft",
+  "support_issue",
+] as const;
+export const CLIENT_VISIBLE_REQUEST_STATUSES = [
+  "submitted",
+  "under_review",
+  "in_progress",
+  "waiting_on_you",
+  "completed",
+  "rejected",
+] as const;
 
 export interface ApiClientSummary {
   id: string;
@@ -61,6 +76,8 @@ export interface ReportsResponse {
 export type LeadQualification = "review" | "warm" | "hot" | "not_qualified";
 export type CampaignLifecycleStatus = "active" | "paused" | "completed" | "draft";
 export type CampaignApprovalStatus = "pending" | "approved" | "rejected" | "none";
+export type RequestCategory = (typeof REQUEST_CATEGORIES)[number];
+export type ClientVisibleRequestStatus = (typeof CLIENT_VISIBLE_REQUEST_STATUSES)[number];
 
 export interface LeadRecord {
   id: string;
@@ -103,11 +120,69 @@ export interface ReportRecord {
   createdAt?: string;
 }
 
-async function apiGet<T>(path: string): Promise<T> {
+export interface AgentRequestRecord {
+  id: string;
+  category: RequestCategory;
+  title: string;
+  message: string;
+  status: ClientVisibleRequestStatus;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  createdByEmail?: string;
+  createdByRole?: string;
+  latestReply?: string;
+  relatedLeadId?: string;
+  relatedCampaignId?: string;
+  replies: AgentRequestReplyRecord[];
+}
+
+export interface AgentRequestReplyRecord {
+  id: string;
+  message: string;
+  createdAt?: string;
+  authorName?: string;
+  authorRole?: string;
+}
+
+export interface RequestsResponse {
+  ok: boolean;
+  client: ApiClientSummary;
+  count: number;
+  requests: unknown[];
+}
+
+export interface RequestDetailResponse {
+  ok: boolean;
+  client: ApiClientSummary;
+  request: unknown;
+}
+
+export interface CreateRequestInput {
+  category: RequestCategory;
+  message: string;
+  related_lead_id?: string;
+  related_campaign_id?: string;
+  created_by_name: string;
+  created_by_email: string;
+  created_by_role: string;
+}
+
+async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${LEADS_API_BASE_URL}${path}`;
   let response: Response;
+  const headers = new Headers(init?.headers);
+  headers.set("Accept", "application/json");
+
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   try {
-    response = await fetch(url, { headers: { Accept: "application/json" } });
+    response = await fetch(url, {
+      ...init,
+      headers,
+    });
   } catch (e: any) {
     const msg = `Leads API network error at ${url}: ${e?.message ?? String(e)}`;
     if (IS_DEV) console.error(msg, e);
@@ -125,6 +200,17 @@ async function apiGet<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function apiGet<T>(path: string): Promise<T> {
+  return apiRequest<T>(path);
+}
+
+async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function getDashboard() {
   return apiGet<DashboardResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`);
 }
@@ -139,6 +225,18 @@ export function getCampaigns() {
 
 export function getReports() {
   return apiGet<ReportsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`);
+}
+
+export function getRequests() {
+  return apiGet<RequestsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`);
+}
+
+export function getRequestDetail(requestId: string) {
+  return apiGet<RequestDetailResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests/${requestId}`);
+}
+
+export function createRequest(input: CreateRequestInput) {
+  return apiPost<RequestDetailResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`, input);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -207,6 +305,33 @@ function mapApprovalStatus(value?: string): CampaignApprovalStatus {
   }
 }
 
+function mapRequestCategory(value?: string): RequestCategory {
+  switch ((value || "").toLowerCase()) {
+    case "new_campaign":
+    case "campaign_change":
+    case "lead_question":
+    case "outreach_draft":
+    case "support_issue":
+      return value!.toLowerCase() as RequestCategory;
+    default:
+      return "lead_question";
+  }
+}
+
+function mapRequestStatus(value?: string): ClientVisibleRequestStatus {
+  switch ((value || "").toLowerCase()) {
+    case "submitted":
+    case "under_review":
+    case "in_progress":
+    case "waiting_on_you":
+    case "completed":
+    case "rejected":
+      return value!.toLowerCase() as ClientVisibleRequestStatus;
+    default:
+      return "submitted";
+  }
+}
+
 export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const record = asRecord(value);
   const firstName = pickString(record, ["first_name", "firstName"]);
@@ -262,6 +387,52 @@ export function normalizePendingApproval(value: unknown, index = 0): PendingAppr
     summary: `${campaign.targetNiche} in ${campaign.targetLocation}`,
     status: campaign.approvalStatus,
     createdAt: campaign.createdAt,
+  };
+}
+
+export function normalizeRequestReply(value: unknown, index = 0): AgentRequestReplyRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `reply-${index}`,
+    message:
+      pickString(record, ["message", "body", "content", "reply_text", "replyText"]) ||
+      "No reply message available.",
+    createdAt: pickString(record, ["created_at", "createdAt"]),
+    authorName: pickString(record, ["author_name", "authorName", "created_by_name", "createdByName"]),
+    authorRole: pickString(record, ["author_role", "authorRole", "created_by_role", "createdByRole"]),
+  };
+}
+
+export function normalizeRequest(value: unknown, index = 0): AgentRequestRecord {
+  const record = asRecord(value);
+  const repliesRaw = record.replies;
+  const replies = Array.isArray(repliesRaw) ? repliesRaw.map(normalizeRequestReply) : [];
+  const latestReplyRecord =
+    replies[0] ||
+    (Array.isArray(record.latest_reply) ? normalizeRequestReply(record.latest_reply[0], 0) : undefined);
+  const category = mapRequestCategory(pickString(record, ["category", "request_type", "requestType"]));
+  const message =
+    pickString(record, ["message", "details", "description", "body", "content"]) ||
+    "No request details provided.";
+
+  return {
+    id: pickString(record, ["id", "_id", "request_id", "requestId"]) || `request-${index}`,
+    category,
+    title:
+      pickString(record, ["title", "subject"]) ||
+      message.slice(0, 72).trim() ||
+      category.replace(/_/g, " "),
+    message,
+    status: mapRequestStatus(pickString(record, ["client_visible_status", "status", "clientStatus"])),
+    createdAt: pickString(record, ["created_at", "createdAt"]),
+    updatedAt: pickString(record, ["updated_at", "updatedAt"]),
+    createdByName: pickString(record, ["created_by_name", "createdByName"]),
+    createdByEmail: pickString(record, ["created_by_email", "createdByEmail"]),
+    createdByRole: pickString(record, ["created_by_role", "createdByRole"]),
+    latestReply: latestReplyRecord?.message || pickString(record, ["latest_reply_text", "latestReplyText"]),
+    relatedLeadId: pickString(record, ["related_lead_id", "relatedLeadId", "lead_id", "leadId"]),
+    relatedCampaignId: pickString(record, ["related_campaign_id", "relatedCampaignId", "campaign_id", "campaignId"]),
+    replies,
   };
 }
 

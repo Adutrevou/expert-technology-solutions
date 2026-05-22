@@ -10,28 +10,43 @@ export const Route = createFileRoute("/api/leads/$")({
   server: {
     handlers: {
       GET: async ({ request, params }: { request: Request; params: { _splat?: string } }) => {
-        const path = params._splat ?? "";
-        const search = new URL(request.url).search;
-        const target = `${UPSTREAM}/${path}${search}`;
-        try {
-          const upstream = await fetch(target, {
-            headers: { Accept: "application/json" },
-          });
-          const body = await upstream.text();
-          return new Response(body, {
-            status: upstream.status,
-            headers: {
-              "Content-Type": upstream.headers.get("content-type") ?? "application/json",
-              "Cache-Control": "no-store",
-            },
-          });
-        } catch (e: any) {
-          return Response.json(
-            { ok: false, error: "Upstream request failed", target, message: e?.message ?? String(e) },
-            { status: 502 },
-          );
-        }
+        return forwardRequest(request, params);
+      },
+      POST: async ({ request, params }: { request: Request; params: { _splat?: string } }) => {
+        return forwardRequest(request, params);
       },
     },
   },
 } as any);
+
+async function forwardRequest(request: Request, params: { _splat?: string }) {
+  const path = params._splat ?? "";
+  const search = new URL(request.url).search;
+  const target = `${UPSTREAM}/${path}${search}`;
+
+  try {
+    const requestBody =
+      request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
+    const upstream = await fetch(target, {
+      method: request.method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": request.headers.get("content-type") ?? "application/json",
+      },
+      body: requestBody,
+    });
+    const responseBody = await upstream.text();
+    return new Response(responseBody, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (e: any) {
+    return Response.json(
+      { ok: false, error: "Upstream request failed", target, message: e?.message ?? String(e) },
+      { status: 502 },
+    );
+  }
+}

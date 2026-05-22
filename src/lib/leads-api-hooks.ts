@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getCampaigns, getDashboard, getLeads, getReports } from "@/lib/leads-api";
+import { getCampaigns, getDashboard, getLeads, getReports, getRequestDetail, getRequests } from "@/lib/leads-api";
 
 const isBrowser = typeof window !== "undefined";
 
@@ -35,6 +35,24 @@ export function useReportsQuery() {
     queryKey: ["intergrai", "reports"],
     queryFn: getReports,
     enabled: isBrowser,
+    retry: 1,
+  });
+}
+
+export function useRequestsQuery() {
+  return useQuery({
+    queryKey: ["intergrai", "requests"],
+    queryFn: getRequests,
+    enabled: isBrowser,
+    retry: 1,
+  });
+}
+
+export function useRequestDetailQuery(requestId: string | null) {
+  return useQuery({
+    queryKey: ["intergrai", "requests", requestId],
+    queryFn: () => getRequestDetail(requestId!),
+    enabled: isBrowser && Boolean(requestId),
     retry: 1,
   });
 }
