@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
-import { Bot, CheckCircle2, RefreshCcw, Send, ShieldAlert } from "lucide-react";
+import { Bot, CheckCircle2, Inbox, RefreshCcw, Send, ShieldAlert, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,11 +58,13 @@ function AgentRequestsPage() {
 }
 
 function AgentRequestsAdminView() {
+  const { user } = useApp();
   const queryClient = useQueryClient();
   const requestsQuery = useRequestsQuery();
   const leadsQuery = useLeadsQuery();
   const campaignsQuery = useCampaignsQuery();
   const [category, setCategory] = useState<RequestCategory>("lead_question");
+  const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [relatedLeadId, setRelatedLeadId] = useState("none");
   const [relatedCampaignId, setRelatedCampaignId] = useState("none");
@@ -83,19 +86,27 @@ function AgentRequestsAdminView() {
     return requests.find((request) => request.id === selectedRequestId) || requests[0] || null;
   }, [detailQuery.data?.request, requests, selectedRequestId]);
 
+  useEffect(() => {
+    if (!selectedRequestId && requests[0]?.id) {
+      setSelectedRequestId(requests[0].id);
+    }
+  }, [requests, selectedRequestId]);
+
   const submitMutation = useMutation({
     mutationFn: () =>
       createRequest({
         category,
+        title: title.trim() || undefined,
         message: message.trim(),
         related_lead_id: relatedLeadId !== "none" ? relatedLeadId : undefined,
         related_campaign_id: relatedCampaignId !== "none" ? relatedCampaignId : undefined,
-        created_by_name: "Intergrai Admin Preview",
-        created_by_email: "admin@intergrai.co.za",
-        created_by_role: "intergrai_admin",
+        created_by_name: user?.name || "Intergrai Admin Preview",
+        created_by_email: user?.email || "admin@intergrai.co.za",
+        created_by_role: user?.role || "intergrai_admin",
       }),
     onSuccess: async (response) => {
       const createdRequest = normalizeRequest(response.request);
+      setTitle("");
       setMessage("");
       setRelatedLeadId("none");
       setRelatedCampaignId("none");
@@ -118,8 +129,10 @@ function AgentRequestsAdminView() {
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{PREVIEW_COPY}</p>
           </div>
           <div className="rounded-2xl border border-border bg-background/85 px-4 py-3 text-sm shadow-card">
-            <p className="font-medium">Admin preview metadata</p>
-            <p className="mt-1 text-muted-foreground">Requests are submitted as Intergrai Admin Preview.</p>
+            <p className="font-medium">Internal preview notice</p>
+            <p className="mt-1 text-muted-foreground">
+              Hidden from normal client navigation. Requests submit against the live Intergrai client queue.
+            </p>
           </div>
         </div>
       </header>
@@ -150,6 +163,12 @@ function AgentRequestsAdminView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="grid gap-4 rounded-3xl border border-border bg-background/70 p-4 md:grid-cols-3">
+              <PreviewMetric label="API target" value="api.intergrai.co.za" />
+              <PreviewMetric label="Client slug" value="expert-technology-solutions" />
+              <PreviewMetric label="Preview actor" value={user?.name || "Intergrai Admin Preview"} />
+            </div>
+
             <FieldBlock label="Request category">
               <Select value={category} onValueChange={(value) => setCategory(value as RequestCategory)}>
                 <SelectTrigger>
@@ -163,6 +182,14 @@ function AgentRequestsAdminView() {
                   ))}
                 </SelectContent>
               </Select>
+            </FieldBlock>
+
+            <FieldBlock label="Request title" hint="Optional but recommended">
+              <Input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Short summary of the request"
+              />
             </FieldBlock>
 
             <FieldBlock label="Message or details">
@@ -217,7 +244,11 @@ function AgentRequestsAdminView() {
             <div className="rounded-2xl border border-border bg-muted/20 p-4 text-sm">
               <p className="font-medium">Submission identity</p>
               <p className="mt-1 text-muted-foreground">
-                Intergrai Admin Preview · admin@intergrai.co.za · intergrai_admin
+                {(user?.name || "Intergrai Admin Preview") +
+                  " · " +
+                  (user?.email || "admin@intergrai.co.za") +
+                  " · " +
+                  (user?.role || "intergrai_admin")}
               </p>
             </div>
 
@@ -268,6 +299,7 @@ function AgentRequestsAdminView() {
                 <div className="space-y-3">
                   {requests.map((request) => {
                     const active = request.id === (selectedRequestId || selectedRequest?.id);
+                    const replyCount = request.replies.length;
                     return (
                       <button
                         key={request.id}
@@ -286,6 +318,10 @@ function AgentRequestsAdminView() {
                             </p>
                             <h2 className="mt-2 line-clamp-1 font-semibold">{request.title}</h2>
                             <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{request.latestReply || request.message}</p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span>{replyCount} {replyCount === 1 ? "reply" : "replies"}</span>
+                              {request.createdByName ? <span>Submitted by {request.createdByName}</span> : null}
+                            </div>
                           </div>
                           <div className="flex flex-col items-start gap-2 sm:items-end">
                             <RequestStatusBadge status={request.status} />
@@ -342,13 +378,27 @@ function AgentRequestsAdminView() {
                     />
                   </div>
 
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <DetailPanel label="Submitted by" value={selectedRequest.createdByName || "Unknown"} />
+                    <DetailPanel label="Email" value={selectedRequest.createdByEmail || "Not provided"} />
+                    <DetailPanel
+                      label="Role"
+                      value={selectedRequest.createdByRole ? selectedRequest.createdByRole.replace(/_/g, " ") : "Not provided"}
+                    />
+                  </div>
+
                   <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Replies</p>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+                        Intergrai replies and client-visible updates
+                      </p>
+                    </div>
                     {selectedRequest.replies.length === 0 ? (
                       <EmptyState title="No replies yet" description="This request has not received a reply from the central queue." compact />
                     ) : (
                       selectedRequest.replies.map((reply) => (
-                        <div key={reply.id} className="rounded-2xl border border-border p-4">
+                        <div key={reply.id} className="rounded-2xl border border-border bg-background/80 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-medium">{reply.authorName || "Intergrai"}</p>
                             <p className="text-xs text-muted-foreground">{formatRequestDate(reply.createdAt)}</p>
@@ -393,6 +443,15 @@ function FieldBlock({
   );
 }
 
+function PreviewMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/20 p-4">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
 function DetailPanel({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border p-4">
@@ -413,6 +472,7 @@ function EmptyState({
 }) {
   return (
     <div className={`rounded-2xl border border-dashed border-border bg-muted/15 text-center ${compact ? "px-4 py-8" : "px-6 py-10"}`}>
+      <Inbox className="mx-auto mb-3 h-5 w-5 text-muted-foreground" />
       <p className="font-medium">{title}</p>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
     </div>

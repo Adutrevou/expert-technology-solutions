@@ -1,9 +1,7 @@
-// If VITE_LEADS_API_BASE_URL is provided (e.g. the static VPS build sets it to
-// https://api.intergrai.co.za), call the upstream directly. Otherwise route
-// through the same-origin server proxy at `/api/leads` so the browser is
-// never blocked by CORS on preview/published Lovable origins.
+// Default to the public Intergrai API directly so the client preview does not
+// rely on internal same-origin routes.
 const ENV_BASE_URL = (import.meta.env.VITE_LEADS_API_BASE_URL || "").replace(/\/+$/, "");
-export const LEADS_API_BASE_URL = ENV_BASE_URL || "/api/leads";
+export const LEADS_API_BASE_URL = ENV_BASE_URL || "https://api.intergrai.co.za";
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
 const IS_DEV = Boolean(import.meta.env?.DEV);
 export const REQUEST_CATEGORIES = [
@@ -160,6 +158,7 @@ export interface RequestDetailResponse {
 
 export interface CreateRequestInput {
   category: RequestCategory;
+  title?: string;
   message: string;
   related_lead_id?: string;
   related_campaign_id?: string;
@@ -403,13 +402,46 @@ export function normalizeRequestReply(value: unknown, index = 0): AgentRequestRe
   };
 }
 
+function collectReplyCandidates(record: Record<string, unknown>) {
+  const candidateKeys = [
+    "replies",
+    "reply_history",
+    "client_visible_replies",
+    "client_visible_updates",
+    "updates",
+    "messages",
+    "public_updates",
+    "timeline",
+    "acknowledgements",
+  ] as const;
+
+  const items: unknown[] = [];
+  for (const key of candidateKeys) {
+    const value = record[key];
+    if (Array.isArray(value)) items.push(...value);
+  }
+
+  const latestReply = record.latest_reply;
+  if (Array.isArray(latestReply)) items.push(...latestReply);
+  else if (latestReply) items.push(latestReply);
+
+  const acknowledgement =
+    record.acknowledgement || record.acknowledgment || record.auto_acknowledgement || record.auto_acknowledgment;
+  if (Array.isArray(acknowledgement)) items.push(...acknowledgement);
+  else if (acknowledgement) items.push(acknowledgement);
+
+  return items;
+}
+
 export function normalizeRequest(value: unknown, index = 0): AgentRequestRecord {
   const record = asRecord(value);
-  const repliesRaw = record.replies;
-  const replies = Array.isArray(repliesRaw) ? repliesRaw.map(normalizeRequestReply) : [];
-  const latestReplyRecord =
-    replies[0] ||
-    (Array.isArray(record.latest_reply) ? normalizeRequestReply(record.latest_reply[0], 0) : undefined);
+  const replies = collectReplyCandidates(record)
+    .map((reply, replyIndex) => normalizeRequestReply(reply, replyIndex))
+    .filter((reply, replyIndex, collection) => {
+      const key = `${reply.id}:${reply.message}:${reply.createdAt || ""}`;
+      return collection.findIndex((candidate) => `${candidate.id}:${candidate.message}:${candidate.createdAt || ""}` === key) === replyIndex;
+    });
+  const latestReplyRecord = replies[0];
   const category = mapRequestCategory(pickString(record, ["category", "request_type", "requestType"]));
   const message =
     pickString(record, ["message", "details", "description", "body", "content"]) ||
@@ -419,7 +451,7 @@ export function normalizeRequest(value: unknown, index = 0): AgentRequestRecord 
     id: pickString(record, ["id", "_id", "request_id", "requestId"]) || `request-${index}`,
     category,
     title:
-      pickString(record, ["title", "subject"]) ||
+      pickString(record, ["title", "subject", "request_title", "requestTitle"]) ||
       message.slice(0, 72).trim() ||
       category.replace(/_/g, " "),
     message,
