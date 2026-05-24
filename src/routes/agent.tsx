@@ -39,25 +39,11 @@ const PREVIEW_COPY =
 
 function AgentRequestsPage() {
   const { user } = useApp();
-
-  if (user?.role !== "super_admin") {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <Card className="p-10 text-center shadow-card">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning/15 text-warning-foreground">
-            <ShieldAlert className="h-7 w-7" />
-          </div>
-          <h1 className="mt-5 text-2xl font-semibold">Admin preview only</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{PREVIEW_COPY}</p>
-        </Card>
-      </div>
-    );
-  }
-
-  return <AgentRequestsAdminView />;
+  const isSuperAdmin = user?.role === "super_admin";
+  return <AgentRequestsAdminView isSuperAdmin={isSuperAdmin} />;
 }
 
-function AgentRequestsAdminView() {
+function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const { user } = useApp();
   const queryClient = useQueryClient();
   const requestsQuery = useRequestsQuery();
@@ -129,13 +115,29 @@ function AgentRequestsAdminView() {
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{PREVIEW_COPY}</p>
           </div>
           <div className="rounded-2xl border border-border bg-background/85 px-4 py-3 text-sm shadow-card">
-            <p className="font-medium">Internal preview notice</p>
+            <p className="font-medium">{isSuperAdmin ? "Internal preview notice" : "Admin preview notice"}</p>
             <p className="mt-1 text-muted-foreground">
-              Hidden from normal client navigation. Requests submit against the live Intergrai client queue.
+              {isSuperAdmin
+                ? "Hidden from normal client navigation. Requests submit against the live Intergrai client queue."
+                : "You are viewing the internal preview without super admin navigation access. Requests still submit against the live Intergrai client queue."}
             </p>
           </div>
         </div>
       </header>
+
+      {!isSuperAdmin ? (
+        <Card className="border-warning/30 bg-warning/10 shadow-card">
+          <CardContent className="flex items-start gap-3 p-4">
+            <ShieldAlert className="mt-0.5 h-5 w-5 text-warning-foreground" />
+            <div className="space-y-1 text-sm">
+              <p className="font-medium">Internal preview mode</p>
+              <p className="text-muted-foreground">
+                This route is intentionally hidden from standard client navigation until production auth is finalized.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {submitMutation.isSuccess ? (
         <Card className="border-success/30 bg-success/10 shadow-card">

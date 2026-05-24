@@ -10,19 +10,23 @@ import { motion } from "framer-motion";
 import logo from "@/assets/expert-technology-logo.webp";
 
 export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   component: LoginPage,
 });
 
 function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
+  const { redirect } = Route.useSearch();
   const [email, setEmail] = useState("");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
     login(email);
-    navigate({ to: "/" });
+    navigate({ to: redirect || "/" });
   };
 
   return (

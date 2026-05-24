@@ -84,11 +84,18 @@ function Gate() {
   const router = useRouterState();
   const navigate = useNavigate();
   const path = router.location.pathname;
+  const search = router.location.search;
 
   useEffect(() => {
-    if (!user && path !== "/login") navigate({ to: "/login" });
+    if (!user && path !== "/login") {
+      const redirect = `${path}${search}`;
+      navigate({
+        to: "/login",
+        search: { redirect: redirect !== "/" ? redirect : undefined },
+      });
+    }
     if (user && path === "/login") navigate({ to: "/" });
-  }, [user, path, navigate]);
+  }, [user, path, search, navigate]);
 
   if (path === "/login") return <Outlet />;
   if (!user) return null;
