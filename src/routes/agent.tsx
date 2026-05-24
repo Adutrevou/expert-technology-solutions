@@ -34,6 +34,9 @@ const CATEGORY_LABELS: Record<RequestCategory, string> = {
   support_issue: "Support issue",
 };
 
+const REQUEST_CATEGORY_DEFAULT: RequestCategory = "lead_question";
+const NONE_OPTION = "none";
+
 const PREVIEW_COPY =
   "Internal preview — this feature will be enabled for Expert users after login is active.";
 
@@ -49,11 +52,11 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const requestsQuery = useRequestsQuery();
   const leadsQuery = useLeadsQuery();
   const campaignsQuery = useCampaignsQuery();
-  const [category, setCategory] = useState<RequestCategory>("lead_question");
+  const [category, setCategory] = useState<RequestCategory>(REQUEST_CATEGORY_DEFAULT);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [relatedLeadId, setRelatedLeadId] = useState("none");
-  const [relatedCampaignId, setRelatedCampaignId] = useState("none");
+  const [relatedLeadId, setRelatedLeadId] = useState(NONE_OPTION);
+  const [relatedCampaignId, setRelatedCampaignId] = useState(NONE_OPTION);
   const requests = useMemo(
     () => (requestsQuery.data?.requests || []).map(normalizeRequest),
     [requestsQuery.data?.requests],
@@ -65,6 +68,14 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     () => (campaignsQuery.data?.campaigns || []).map(normalizeCampaign),
     [campaignsQuery.data?.campaigns],
   );
+  const leadOptions = useMemo(() => [NONE_OPTION, ...leads.map((lead) => lead.id).filter(Boolean)], [leads]);
+  const campaignOptions = useMemo(
+    () => [NONE_OPTION, ...campaigns.map((campaign) => campaign.id).filter(Boolean)],
+    [campaigns],
+  );
+  const safeCategory = sanitizeRequestCategory(category);
+  const safeLeadId = sanitizeSelectValue(relatedLeadId, leadOptions, NONE_OPTION);
+  const safeCampaignId = sanitizeSelectValue(relatedCampaignId, campaignOptions, NONE_OPTION);
 
   const selectedRequest = useMemo(() => {
     const detailRequest = detailQuery.data?.request ? normalizeRequest(detailQuery.data.request) : null;
@@ -78,14 +89,32 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     }
   }, [requests, selectedRequestId]);
 
+  useEffect(() => {
+    if (category !== safeCategory) {
+      setCategory(safeCategory);
+    }
+  }, [category, safeCategory]);
+
+  useEffect(() => {
+    if (relatedLeadId !== safeLeadId) {
+      setRelatedLeadId(safeLeadId);
+    }
+  }, [relatedLeadId, safeLeadId]);
+
+  useEffect(() => {
+    if (relatedCampaignId !== safeCampaignId) {
+      setRelatedCampaignId(safeCampaignId);
+    }
+  }, [relatedCampaignId, safeCampaignId]);
+
   const submitMutation = useMutation({
     mutationFn: () =>
       createRequest({
-        category,
+        category: safeCategory,
         title: title.trim() || undefined,
         message: message.trim(),
-        related_lead_id: relatedLeadId !== "none" ? relatedLeadId : undefined,
-        related_campaign_id: relatedCampaignId !== "none" ? relatedCampaignId : undefined,
+        related_lead_id: safeLeadId !== NONE_OPTION ? safeLeadId : undefined,
+        related_campaign_id: safeCampaignId !== NONE_OPTION ? safeCampaignId : undefined,
         created_by_name: user?.name || "Intergrai Admin Preview",
         created_by_email: user?.email || "admin@intergrai.co.za",
         created_by_role: user?.role || "intergrai_admin",
@@ -94,8 +123,9 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       const createdRequest = normalizeRequest(response.request);
       setTitle("");
       setMessage("");
-      setRelatedLeadId("none");
-      setRelatedCampaignId("none");
+      setCategory(REQUEST_CATEGORY_DEFAULT);
+      setRelatedLeadId(NONE_OPTION);
+      setRelatedCampaignId(NONE_OPTION);
       setSelectedRequestId(createdRequest.id);
       await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests"] });
       await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests", createdRequest.id] });
@@ -172,14 +202,14 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </div>
 
             <FieldBlock label="Request category">
-              <Select value={category} onValueChange={(value) => setCategory(value as RequestCategory)}>
+              <Select value={safeCategory} onValueChange={(value) => setCategory(sanitizeRequestCategory(value))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a category" />
                 </SelectTrigger>
                 <SelectContent>
                   {REQUEST_CATEGORIES.map((item) => (
                     <SelectItem key={item} value={item}>
-                      {CATEGORY_LABELS[item]}
+                      {getCategoryLabel(item)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -208,12 +238,12 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 label="Related lead"
                 hint={leadsQuery.isError ? "Lead selector unavailable right now." : "Optional"}
               >
-                <Select value={relatedLeadId} onValueChange={setRelatedLeadId}>
+                <Select value={safeLeadId} onValueChange={(value) => setRelatedLeadId(sanitizeSelectValue(value, leadOptions, NONE_OPTION))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a lead" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No related lead</SelectItem>
+                    <SelectItem value={NONE_OPTION}>No related lead</SelectItem>
                     {leads.map((lead) => (
                       <SelectItem key={lead.id} value={lead.id}>
                         {lead.name} · {lead.company}
@@ -227,12 +257,15 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 label="Related campaign"
                 hint={campaignsQuery.isError ? "Campaign selector unavailable right now." : "Optional"}
               >
-                <Select value={relatedCampaignId} onValueChange={setRelatedCampaignId}>
+                <Select
+                  value={safeCampaignId}
+                  onValueChange={(value) => setRelatedCampaignId(sanitizeSelectValue(value, campaignOptions, NONE_OPTION))}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a campaign" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No related campaign</SelectItem>
+                    <SelectItem value={NONE_OPTION}>No related campaign</SelectItem>
                     {campaigns.map((campaign) => (
                       <SelectItem key={campaign.id} value={campaign.id}>
                         {campaign.name}
@@ -316,7 +349,7 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
                             <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                              {CATEGORY_LABELS[request.category]}
+                              {getCategoryLabel(request.category)}
                             </p>
                             <h2 className="mt-2 line-clamp-1 font-semibold">{request.title}</h2>
                             <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{request.latestReply || request.message}</p>
@@ -350,14 +383,26 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <Skeleton className="h-24 rounded-xl" />
                   <Skeleton className="h-24 rounded-xl" />
                 </div>
+              ) : selectedRequestId && detailQuery.isError && !selectedRequest ? (
+                <EmptyState
+                  title="Request details unavailable"
+                  description="The selected request could not be loaded. Pick another item or refresh history."
+                />
               ) : !selectedRequest ? (
                 <EmptyState title="No request selected" description="Pick a request from history to inspect its full details." />
               ) : (
                 <div className="space-y-5">
+                  {selectedRequestId && detailQuery.isError ? (
+                    <Card className="border-warning/30 bg-warning/10 shadow-none">
+                      <CardContent className="p-4 text-sm text-warning-foreground">
+                        Showing cached request data because the latest detail response could not be loaded.
+                      </CardContent>
+                    </Card>
+                  ) : null}
                   <div className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/15 p-5 md:flex-row md:items-start md:justify-between">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                        {CATEGORY_LABELS[selectedRequest.category]}
+                        {getCategoryLabel(selectedRequest.category)}
                       </p>
                       <h2 className="mt-2 text-xl font-semibold">{selectedRequest.title}</h2>
                       <p className="mt-2 text-sm text-muted-foreground">
@@ -396,10 +441,10 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                         Intergrai replies and client-visible updates
                       </p>
                     </div>
-                    {selectedRequest.replies.length === 0 ? (
+                    {(selectedRequest.replies || []).length === 0 ? (
                       <EmptyState title="No replies yet" description="This request has not received a reply from the central queue." compact />
                     ) : (
-                      selectedRequest.replies.map((reply) => (
+                      (selectedRequest.replies || []).map((reply) => (
                         <div key={reply.id} className="rounded-2xl border border-border bg-background/80 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-medium">{reply.authorName || "Intergrai"}</p>
@@ -500,4 +545,21 @@ function findCampaignLabel(campaigns: Array<{ id: string; name: string }>, campa
   if (!campaignId) return null;
   const match = campaigns.find((campaign) => campaign.id === campaignId);
   return match ? match.name : campaignId;
+}
+
+function sanitizeRequestCategory(value: string | null | undefined): RequestCategory {
+  if (typeof value !== "string") return REQUEST_CATEGORY_DEFAULT;
+  return REQUEST_CATEGORIES.includes(value as RequestCategory)
+    ? (value as RequestCategory)
+    : REQUEST_CATEGORY_DEFAULT;
+}
+
+function sanitizeSelectValue(value: string | null | undefined, allowedValues: string[], fallback: string) {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  return allowedValues.includes(value) ? value : fallback;
+}
+
+function getCategoryLabel(value: string | null | undefined) {
+  const category = sanitizeRequestCategory(value);
+  return CATEGORY_LABELS[category] || CATEGORY_LABELS[REQUEST_CATEGORY_DEFAULT];
 }

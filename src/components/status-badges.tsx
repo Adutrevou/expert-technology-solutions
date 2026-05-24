@@ -45,23 +45,25 @@ const REQUEST: Record<ClientVisibleRequestStatus, { label: string; cls: string }
   rejected: { label: "Rejected", cls: "bg-destructive/15 text-destructive border-destructive/30" },
 };
 
+const FALLBACK = { label: "Unknown", cls: "bg-muted text-muted-foreground" };
+
 export function LeadStatusBadge({ status }: { status: LeadStatus | LeadQualification }) {
-  const s = LEAD[status];
+  const s = LEAD[status] || FALLBACK;
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
 export function CampaignStatusBadge({ status }: { status: CampaignStatus | CampaignLifecycleStatus }) {
-  const s = CAMP[status];
+  const s = CAMP[status] || FALLBACK;
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
 export function ApprovalStatusBadge({ status }: { status: CampaignApprovalStatus }) {
-  const s = APPROVAL[status];
+  const s = APPROVAL[status] || FALLBACK;
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
 export function MeetingStatusBadge({ status }: { status: MeetingStatus }) {
-  const s = MEET[status];
+  const s = MEET[status] || FALLBACK;
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
 export function RequestStatusBadge({ status }: { status: ClientVisibleRequestStatus }) {
-  const s = REQUEST[status];
+  const s = REQUEST[status] || FALLBACK;
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }

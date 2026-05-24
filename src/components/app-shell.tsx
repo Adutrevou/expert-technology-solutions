@@ -16,10 +16,7 @@ const BASE_NAV = [
   { to: "/updates", label: "Agent Chat", icon: MessageSquare },
 ] as const;
 
-const ADMIN_NAV = [
-  { to: "/agent", label: "Lead Agent", icon: MessageSquare },
-  { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+const ADMIN_NAV = [{ to: "/settings", label: "Settings", icon: Settings }] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, client, clients, setClientId, logout, theme, toggleTheme } = useApp();
