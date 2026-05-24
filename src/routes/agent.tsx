@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { ErrorInfo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { Bot, CheckCircle2, Inbox, RefreshCcw, Send, ShieldAlert, Sparkles } from "lucide-react";
@@ -18,6 +19,9 @@ import {
   normalizeLead,
   normalizeRequest,
   REQUEST_CATEGORIES,
+  type AgentRequestRecord,
+  type CampaignRecord,
+  type LeadRecord,
   type RequestCategory,
 } from "@/lib/leads-api";
 
@@ -43,7 +47,11 @@ const PREVIEW_COPY =
 function AgentRequestsPage() {
   const { user } = useApp();
   const isSuperAdmin = user?.role === "super_admin";
-  return <AgentRequestsAdminView isSuperAdmin={isSuperAdmin} />;
+  return (
+    <AgentRouteErrorBoundary>
+      <AgentRequestsAdminView isSuperAdmin={isSuperAdmin} />
+    </AgentRouteErrorBoundary>
+  );
 }
 
 function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
@@ -57,20 +65,14 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [message, setMessage] = useState("");
   const [relatedLeadId, setRelatedLeadId] = useState(NONE_OPTION);
   const [relatedCampaignId, setRelatedCampaignId] = useState(NONE_OPTION);
-  const requests = useMemo(
-    () => (requestsQuery.data?.requests || []).map(normalizeRequest),
-    [requestsQuery.data?.requests],
-  );
+  const requests = useMemo(() => safeNormalizeRequests(requestsQuery.data?.requests), [requestsQuery.data?.requests]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const detailQuery = useRequestDetailQuery(selectedRequestId);
-  const leads = useMemo(() => (leadsQuery.data?.leads || []).map(normalizeLead), [leadsQuery.data?.leads]);
-  const campaigns = useMemo(
-    () => (campaignsQuery.data?.campaigns || []).map(normalizeCampaign),
-    [campaignsQuery.data?.campaigns],
-  );
-  const leadOptions = useMemo(() => [NONE_OPTION, ...leads.map((lead) => lead.id).filter(Boolean)], [leads]);
+  const leads = useMemo(() => safeNormalizeLeads(leadsQuery.data?.leads), [leadsQuery.data?.leads]);
+  const campaigns = useMemo(() => safeNormalizeCampaigns(campaignsQuery.data?.campaigns), [campaignsQuery.data?.campaigns]);
+  const leadOptions = useMemo(() => [NONE_OPTION, ...leads.map((lead) => lead.id)], [leads]);
   const campaignOptions = useMemo(
-    () => [NONE_OPTION, ...campaigns.map((campaign) => campaign.id).filter(Boolean)],
+    () => [NONE_OPTION, ...campaigns.map((campaign) => campaign.id)],
     [campaigns],
   );
   const safeCategory = sanitizeRequestCategory(category);
@@ -78,7 +80,7 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const safeCampaignId = sanitizeSelectValue(relatedCampaignId, campaignOptions, NONE_OPTION);
 
   const selectedRequest = useMemo(() => {
-    const detailRequest = detailQuery.data?.request ? normalizeRequest(detailQuery.data.request) : null;
+    const detailRequest = detailQuery.data?.request ? safeNormalizeRequest(detailQuery.data.request) : null;
     if (detailRequest) return detailRequest;
     return requests.find((request) => request.id === selectedRequestId) || requests[0] || null;
   }, [detailQuery.data?.request, requests, selectedRequestId]);
@@ -120,15 +122,19 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         created_by_role: user?.role || "intergrai_admin",
       }),
     onSuccess: async (response) => {
-      const createdRequest = normalizeRequest(response.request);
+      const createdRequest = safeNormalizeRequest(response.request);
       setTitle("");
       setMessage("");
       setCategory(REQUEST_CATEGORY_DEFAULT);
       setRelatedLeadId(NONE_OPTION);
       setRelatedCampaignId(NONE_OPTION);
-      setSelectedRequestId(createdRequest.id);
+      if (createdRequest?.id) {
+        setSelectedRequestId(createdRequest.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests"] });
-      await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests", createdRequest.id] });
+      if (createdRequest?.id) {
+        await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests", createdRequest.id] });
+      }
     },
   });
 
@@ -202,7 +208,11 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </div>
 
             <FieldBlock label="Request category">
-              <Select value={safeCategory} onValueChange={(value) => setCategory(sanitizeRequestCategory(value))}>
+              <Select
+                value={safeCategory}
+                defaultValue={REQUEST_CATEGORY_DEFAULT}
+                onValueChange={(value) => setCategory(sanitizeRequestCategory(value))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a category" />
                 </SelectTrigger>
@@ -238,7 +248,11 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 label="Related lead"
                 hint={leadsQuery.isError ? "Lead selector unavailable right now." : "Optional"}
               >
-                <Select value={safeLeadId} onValueChange={(value) => setRelatedLeadId(sanitizeSelectValue(value, leadOptions, NONE_OPTION))}>
+                <Select
+                  value={safeLeadId}
+                  defaultValue={NONE_OPTION}
+                  onValueChange={(value) => setRelatedLeadId(sanitizeSelectValue(value, leadOptions, NONE_OPTION))}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a lead" />
                   </SelectTrigger>
@@ -259,6 +273,7 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               >
                 <Select
                   value={safeCampaignId}
+                  defaultValue={NONE_OPTION}
                   onValueChange={(value) => setRelatedCampaignId(sanitizeSelectValue(value, campaignOptions, NONE_OPTION))}
                 >
                   <SelectTrigger>
@@ -334,7 +349,7 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 <div className="space-y-3">
                   {requests.map((request) => {
                     const active = request.id === (selectedRequestId || selectedRequest?.id);
-                    const replyCount = request.replies.length;
+                    const replyCount = (request.replies || []).length;
                     return (
                       <button
                         key={request.id}
@@ -412,7 +427,7 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     <RequestStatusBadge status={selectedRequest.status} />
                   </div>
 
-                  <DetailPanel label="Request message" value={selectedRequest.message} />
+                  <DetailPanel label="Request message" value={selectedRequest.message || "No request details provided."} />
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <DetailPanel
@@ -562,4 +577,107 @@ function sanitizeSelectValue(value: string | null | undefined, allowedValues: st
 function getCategoryLabel(value: string | null | undefined) {
   const category = sanitizeRequestCategory(value);
   return CATEGORY_LABELS[category] || CATEGORY_LABELS[REQUEST_CATEGORY_DEFAULT];
+}
+
+function safeNormalizeRequest(value: unknown, index = 0): AgentRequestRecord | null {
+  try {
+    const request = normalizeRequest(value, index);
+    return {
+      ...request,
+      category: sanitizeRequestCategory(request.category),
+      title: request.title || "Untitled request",
+      message: request.message || "No request details provided.",
+      replies: Array.isArray(request.replies) ? request.replies : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function safeNormalizeRequests(values: unknown): AgentRequestRecord[] {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value, index) => safeNormalizeRequest(value, index))
+    .filter((value): value is AgentRequestRecord => Boolean(value));
+}
+
+function safeNormalizeLeads(values: unknown): LeadRecord[] {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value, index) => {
+      try {
+        const lead = normalizeLead(value, index);
+        if (!lead.id || lead.id === NONE_OPTION) return null;
+        return {
+          ...lead,
+          id: lead.id.trim(),
+          name: lead.name || "Unnamed lead",
+          company: lead.company || "Unknown company",
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((value): value is LeadRecord => Boolean(value));
+}
+
+function safeNormalizeCampaigns(values: unknown): CampaignRecord[] {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value, index) => {
+      try {
+        const campaign = normalizeCampaign(value, index);
+        if (!campaign.id || campaign.id === NONE_OPTION) return null;
+        return {
+          ...campaign,
+          id: campaign.id.trim(),
+          name: campaign.name || "Untitled campaign",
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((value): value is CampaignRecord => Boolean(value));
+}
+
+class AgentRouteErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return {
+      hasError: true,
+      message: error?.message || "The agent page could not be rendered.",
+    };
+  }
+
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {}
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="mx-auto max-w-[1440px]">
+          <Card className="border-warning/30 bg-warning/10 shadow-card">
+            <CardHeader>
+              <CardTitle>Agent preview unavailable</CardTitle>
+              <CardDescription>
+                A bad response or render error was contained inside `/agent` so the rest of the app stays usable.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-warning-foreground">{this.state.message}</p>
+              <p className="text-muted-foreground">Refresh the page after the upstream request payload is corrected.</p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
