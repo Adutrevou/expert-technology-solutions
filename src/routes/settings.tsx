@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings, ShieldCheck } from "lucide-react";
 import { ClientReadyPlaceholder, PlaceholderAction } from "@/components/client-ready-placeholder";
+import { useApp } from "@/lib/app-state";
+import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — Expert Technology Solutions" }] }),
@@ -8,6 +10,21 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
+  const { user } = useApp();
+
+  if (user?.role !== "intergrai_admin") {
+    return (
+      <div className="max-w-[900px] mx-auto">
+        <Card className="p-10 text-center shadow-card">
+          <h1 className="text-2xl font-semibold">Restricted area</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Settings are limited to Intergrai administrators in version 1.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto">
       <header>

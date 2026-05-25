@@ -80,21 +80,44 @@ function RootComponent() {
 }
 
 function Gate() {
-  const { user } = useApp();
+  const { authStatus, isAuthenticated } = useApp();
   const router = useRouterState();
   const navigate = useNavigate();
   const path = router.location.pathname;
 
   useEffect(() => {
-    if (!user && path !== "/login") navigate({ to: "/login" });
-    if (user && path === "/login") navigate({ to: "/" });
-  }, [user, path, navigate]);
+    if (authStatus === "loading") return;
+    if (!isAuthenticated && path !== "/login") navigate({ to: "/login", replace: true });
+    if (isAuthenticated && path === "/login") navigate({ to: "/", replace: true });
+  }, [authStatus, isAuthenticated, path, navigate]);
+
+  if (authStatus === "loading") {
+    return <LoadingGate />;
+  }
+
+  if (isAuthenticated && path === "/login") {
+    return <LoadingGate />;
+  }
 
   if (path === "/login") return <Outlet />;
-  if (!user) return null;
+  if (!isAuthenticated) return <LoadingGate />;
   return (
     <AppShell>
       <Outlet />
     </AppShell>
+  );
+}
+
+function LoadingGate() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card/80 p-8 text-center shadow-card backdrop-blur">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+        <h1 className="mt-5 text-xl font-semibold">Checking your portal session</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Loading Expert Technology Solutions access.
+        </p>
+      </div>
+    </div>
   );
 }

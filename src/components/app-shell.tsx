@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, Calendar, ListChecks, FileBarChart, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown, Activity } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -10,10 +10,7 @@ const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
-  { to: "/meetings", label: "Approvals", icon: Calendar },
-  { to: "/progress", label: "Requests", icon: ListChecks },
   { to: "/reports", label: "Reports", icon: FileBarChart },
-  { to: "/updates", label: "Agent Chat", icon: MessageSquare },
 ] as const;
 
 const ADMIN_NAV = [
@@ -21,10 +18,11 @@ const ADMIN_NAV = [
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, client, clients, setClientId, logout, theme, toggleTheme } = useApp();
+  const { user, client, logout, theme, toggleTheme } = useApp();
   const router = useRouterState();
   const path = router.location.pathname;
-  const NAV = user?.role === "super_admin" ? [...BASE_NAV, ...ADMIN_NAV] : BASE_NAV;
+  const isIntergraiAdmin = user?.role === "intergrai_admin";
+  const navItems = isIntergraiAdmin ? [...BASE_NAV, ...ADMIN_NAV] : BASE_NAV;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -34,7 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <img src={logo} alt="Expert Technology Solutions" className="h-12 w-auto" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map(({ to, label, icon: Icon }) => {
+          {navItems.map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? path === "/" : path.startsWith(to);
             return (
               <Link
@@ -71,49 +69,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-20 h-16 border-b border-border bg-background/80 backdrop-blur-xl">
           <div className="flex h-full items-center justify-between px-4 md:px-8 gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              {user?.role === "super_admin" ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2 h-9">
-                      <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
-                        {client.logoUrl ? (
-                          <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
-                        ) : client.initials}
-                      </span>
-                      <span className="hidden sm:inline truncate max-w-[160px]">{client.companyName}</span>
-                      <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
-                    <DropdownMenuLabel>Switch client</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {clients.map((c) => (
-                      <DropdownMenuItem key={c.id} onClick={() => setClientId(c.id)} className="gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: c.logoUrl ? "transparent" : c.brandColor }}>
-                          {c.logoUrl ? (
-                            <img src={c.logoUrl} alt="" className="h-full w-full object-contain" />
-                          ) : c.initials}
-                        </span>
-                        {c.companyName}
-                        {c.id === client.id && <Badge variant="secondary" className="ml-auto text-[10px]">current</Badge>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card">
-                  <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
-                    {client.logoUrl ? (
-                      <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
-                    ) : client.initials}
-                  </span>
-                  <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">{client.companyName}</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card">
+                <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
+                  {client.logoUrl ? (
+                    <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
+                  ) : client.initials}
+                </span>
+                <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">{client.companyName}</span>
+              </div>
               <Badge variant="outline" className="hidden md:inline-flex gap-1 text-[10px]">
                 <Activity className="h-3 w-3" />
                 Intergrai portal
               </Badge>
+              {isIntergraiAdmin ? (
+                <Badge variant="secondary" className="hidden md:inline-flex gap-1 text-[10px]">
+                  <ShieldCheck className="h-3 w-3" />
+                  Intergrai admin
+                </Badge>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2">
@@ -129,7 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="hidden md:flex flex-col leading-tight items-start">
                       <span className="text-xs font-medium">{user?.name}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        {user?.role === "super_admin" ? "Super Admin" : "Client"}
+                        {formatRoleLabel(user?.role)}
                       </span>
                     </div>
                   </Button>
@@ -148,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile nav */}
         <nav className="lg:hidden flex overflow-x-auto gap-1 px-4 py-2 border-b border-border bg-background/60">
-          {NAV.map(({ to, label, icon: Icon }) => {
+          {navItems.map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? path === "/" : path.startsWith(to);
             return (
               <Link key={to} to={to} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-smooth ${active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}>
@@ -163,4 +136,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+function formatRoleLabel(role?: string) {
+  switch (role) {
+    case "client_owner":
+      return "Client owner";
+    case "manager":
+      return "Manager";
+    case "sales_user":
+      return "Sales user";
+    case "viewer":
+      return "Viewer";
+    case "intergrai_admin":
+      return "Intergrai admin";
+    case "system_agent":
+      return "System agent";
+    default:
+      return "Portal user";
+  }
 }
