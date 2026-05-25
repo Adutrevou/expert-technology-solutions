@@ -56,6 +56,13 @@ export interface ReportsResponse {
   reports: unknown[];
 }
 
+export interface RequestsResponse {
+  ok: boolean;
+  client: ApiClientSummary;
+  count: number;
+  requests: unknown[];
+}
+
 export type LeadQualification = "review" | "warm" | "hot" | "not_qualified";
 export type LeadWorkflowStatus =
   | "new"
@@ -69,6 +76,19 @@ export type LeadWorkflowStatus =
   | "rejected";
 export type CampaignLifecycleStatus = "active" | "paused" | "completed" | "draft";
 export type CampaignApprovalStatus = "pending" | "approved" | "rejected" | "none";
+export type RequestCategory =
+  | "new_campaign"
+  | "campaign_change"
+  | "lead_question"
+  | "outreach_draft"
+  | "support_issue";
+export type RequestVisibleStatus =
+  | "submitted"
+  | "under_review"
+  | "in_progress"
+  | "waiting_on_you"
+  | "completed"
+  | "rejected";
 
 export interface LeadUserSummary {
   name: string;
@@ -135,6 +155,35 @@ export interface ReportRecord {
   createdAt?: string;
 }
 
+export interface RequestReplyRecord {
+  id: string;
+  type: "message" | "reply" | "status_update" | "activity";
+  message: string;
+  createdAt?: string;
+  authorName?: string;
+  authorEmail?: string;
+  authorRole?: string;
+  status?: string;
+}
+
+export interface RequestHistoryRecord {
+  id: string;
+  category: string;
+  title: string;
+  message: string;
+  clientVisibleStatus: string;
+  createdAt?: string;
+  createdByName?: string;
+  createdByEmail?: string;
+  createdByRole?: string;
+  latestReply: string | null;
+  latestReplyAt?: string;
+}
+
+export interface RequestDetailRecord extends RequestHistoryRecord {
+  replies: RequestReplyRecord[];
+}
+
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = buildApiUrl(path);
   let response: Response;
@@ -199,6 +248,28 @@ export function getCampaigns() {
 
 export function getReports() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`).then(normalizeReportsResponse);
+}
+
+export function getRequests() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`).then(normalizeRequestsResponse);
+}
+
+export function getRequestDetail(requestId: string) {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests/${encodeURIComponent(requestId)}`).then(normalizeRequestDetail);
+}
+
+export function createRequest(input: {
+  category: string;
+  title: string;
+  message: string;
+  created_by_name: string;
+  created_by_email: string;
+  created_by_role: string;
+}) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then(normalizeRequestDetail);
 }
 
 export function updateLeadStatus(leadId: string, status: LeadWorkflowStatus, user: LeadUserSummary) {
@@ -435,6 +506,33 @@ function normalizeReportsResponse(value: unknown): ReportsResponse {
   };
 }
 
+function normalizeRequestsResponse(value: unknown): RequestsResponse {
+  if (Array.isArray(value)) {
+    return {
+      ok: true,
+      client: normalizeClientSummary({}),
+      count: value.length,
+      requests: value,
+    };
+  }
+
+  const record = asRecord(value);
+  const nestedData = asRecord(record.data);
+  const requests =
+    asArray(record.requests).length ? asArray(record.requests) :
+    asArray(record.items).length ? asArray(record.items) :
+    asArray(record.results).length ? asArray(record.results) :
+    asArray(nestedData.requests).length ? asArray(nestedData.requests) :
+    asArray(record.data);
+
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client ?? nestedData.client),
+    count: normalizeCount(record.count) || requests.length,
+    requests,
+  };
+}
+
 function mapQualification(value?: string): LeadQualification {
   switch ((value || "").toLowerCase()) {
     case "hot":
@@ -565,6 +663,104 @@ export function normalizeReport(value: unknown, index = 0): ReportRecord {
   };
 }
 
+export function normalizeRequestHistory(value: unknown, index = 0): RequestHistoryRecord {
+  const record = asRecord(value);
+  const replies = normalizeRequestReplies(
+    record.replies ?? record.client_visible_replies ?? record.clientVisibleReplies ?? record.timeline ?? record.updates,
+  );
+  const latestReplyRecord = replies.length ? replies[replies.length - 1] : null;
+
+  return {
+    id: pickString(record, ["id", "_id", "request_id", "requestId"]) || `request-${index}`,
+    category: normalizeRequestCategory(
+      pickString(record, ["category", "request_category", "requestCategory", "type"]),
+    ),
+    title: pickString(record, ["title", "subject", "name"]) || "Untitled request",
+    message: pickString(record, ["message", "details", "body", "description"]) || "",
+    clientVisibleStatus: normalizeRequestVisibleStatus(
+      pickString(record, ["client_visible_status", "clientVisibleStatus", "status"]),
+    ),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
+    createdByName: getRequestAuthor(record).name,
+    createdByEmail: getRequestAuthor(record).email,
+    createdByRole: getRequestAuthor(record).role,
+    latestReply:
+      pickString(record, [
+        "latest_client_visible_reply",
+        "latestClientVisibleReply",
+        "latest_reply",
+        "latestReply",
+        "reply_preview",
+        "replyPreview",
+      ]) ||
+      latestReplyRecord?.message ||
+      null,
+    latestReplyAt:
+      normalizeTimestamp(
+        record.latest_reply_at ?? record.latestReplyAt ?? record.last_reply_at ?? record.lastReplyAt,
+      ) || latestReplyRecord?.createdAt,
+  };
+}
+
+export function normalizeRequestDetail(value: unknown, index = 0): RequestDetailRecord {
+  const record = asRecord(value);
+  const nested =
+    asRecord(record.request).id || asRecord(record.request)._id ? asRecord(record.request) :
+    asRecord(asRecord(record.data).request).id || asRecord(asRecord(record.data).request)._id ? asRecord(asRecord(record.data).request) :
+    asRecord(record.data).id || asRecord(record.data)._id ? asRecord(record.data) :
+    record;
+  const base = normalizeRequestHistory(nested, index);
+  const replies = normalizeRequestReplies(
+    nested.replies ??
+      nested.client_visible_replies ??
+      nested.clientVisibleReplies ??
+      nested.timeline ??
+      nested.updates ??
+      record.replies ??
+      record.client_visible_replies ??
+      record.clientVisibleReplies ??
+      asRecord(record.data).replies,
+  );
+
+  return {
+    ...base,
+    replies,
+  };
+}
+
+export function normalizeRequestReply(value: unknown, index = 0): RequestReplyRecord {
+  const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
+  const explicitType = pickString(record, ["type", "event_type", "eventType", "kind"]);
+  const status = normalizeRequestVisibleStatus(
+    pickString(record, ["status", "client_visible_status", "clientVisibleStatus", "to_status", "toStatus"]) ||
+      pickString(metadata, ["status", "client_visible_status", "clientVisibleStatus", "to_status", "toStatus"]),
+  );
+  const message =
+    pickString(record, ["message", "body", "reply", "comment", "details", "description", "summary"]) ||
+    pickString(metadata, ["message", "body", "reply"]) ||
+    (status ? `Status updated to ${formatRequestLabel(status)}.` : "Request updated.");
+  const author = getRequestAuthor(record);
+
+  return {
+    id: pickString(record, ["id", "_id", "reply_id", "replyId"]) || `request-reply-${index}`,
+    type: normalizeRequestReplyType(explicitType, Boolean(status), message),
+    message,
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
+    authorName: author.name,
+    authorEmail: author.email,
+    authorRole: author.role,
+    status,
+  };
+}
+
+export function normalizeRequestReplies(value: unknown): RequestReplyRecord[] {
+  return asArray(value)
+    .filter(isClientVisibleRequestReplyValue)
+    .map((item, index) => normalizeRequestReply(item, index))
+    .filter((reply) => isClientVisibleRequestReply(reply));
+}
+
 function normalizeLeadActivityResponse(value: unknown): LeadActivityRecord[] {
   if (Array.isArray(value)) {
     return value.map(normalizeLeadActivityRecord).filter(Boolean);
@@ -612,6 +808,89 @@ function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRec
     userEmail,
     userRole,
   };
+}
+
+function getRequestAuthor(record: Record<string, unknown>) {
+  const userRecord = asRecord(record.user ?? record.actor ?? record.author ?? record.created_by ?? record.createdBy);
+  return {
+    name:
+      pickString(userRecord, ["name", "full_name", "fullName"]) ||
+      pickString(record, ["created_by_name", "createdByName", "author_name", "authorName"]),
+    email:
+      pickString(userRecord, ["email"]) ||
+      pickString(record, ["created_by_email", "createdByEmail", "author_email", "authorEmail"]),
+    role:
+      pickString(userRecord, ["role"]) ||
+      pickString(record, ["created_by_role", "createdByRole", "author_role", "authorRole"]),
+  };
+}
+
+function normalizeRequestCategory(value?: string) {
+  switch ((value || "").trim().toLowerCase()) {
+    case "new_campaign":
+    case "campaign_change":
+    case "lead_question":
+    case "outreach_draft":
+    case "support_issue":
+      return value!.trim().toLowerCase();
+    default:
+      return (value || "support_issue").trim() || "support_issue";
+  }
+}
+
+function normalizeRequestVisibleStatus(value?: string) {
+  switch ((value || "").trim().toLowerCase()) {
+    case "submitted":
+    case "under_review":
+    case "in_progress":
+    case "waiting_on_you":
+    case "completed":
+    case "rejected":
+      return value!.trim().toLowerCase();
+    default:
+      return (value || "submitted").trim() || "submitted";
+  }
+}
+
+function normalizeRequestReplyType(value: string | undefined, hasStatus: boolean, message: string): RequestReplyRecord["type"] {
+  switch ((value || "").toLowerCase()) {
+    case "message":
+      return "message";
+    case "reply":
+    case "comment":
+      return "reply";
+    case "status":
+    case "status_update":
+    case "status_changed":
+      return "status_update";
+    default:
+      if (hasStatus) return "status_update";
+      return message ? "reply" : "activity";
+  }
+}
+
+function isClientVisibleRequestReply(reply: RequestReplyRecord) {
+  return Boolean(reply.message || reply.status);
+}
+
+function isClientVisibleRequestReplyValue(value: unknown) {
+  const record = asRecord(value);
+  const visibility = pickString(record, ["visibility", "reply_visibility", "replyVisibility", "audience"]);
+  const clientVisible = pickBoolean(record, ["client_visible", "clientVisible", "is_client_visible", "isClientVisible"]);
+  const internalOnly = pickBoolean(record, ["internal", "is_internal", "isInternal", "private", "is_private", "isPrivate"]);
+
+  if (internalOnly === true) return false;
+  if (clientVisible === false) return false;
+  if (visibility && ["internal", "private", "staff", "admin"].includes(visibility.toLowerCase())) return false;
+  return true;
+}
+
+function formatRequestLabel(value: string) {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Unknown";
 }
 
 function getActivityStatus(value: unknown) {

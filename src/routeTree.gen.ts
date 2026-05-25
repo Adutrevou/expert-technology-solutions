@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as MeetingsRouteImport } from './routes/meetings'
@@ -30,6 +31,11 @@ const UpdatesRoute = UpdatesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestsRoute = RequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/meetings': typeof MeetingsRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
+  '/requests': typeof RequestsRoute
   '/settings': typeof SettingsRoute
   '/updates': typeof UpdatesRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/meetings': typeof MeetingsRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
+  '/requests': typeof RequestsRoute
   '/settings': typeof SettingsRoute
   '/updates': typeof UpdatesRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/meetings': typeof MeetingsRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
+  '/requests': typeof RequestsRoute
   '/settings': typeof SettingsRoute
   '/updates': typeof UpdatesRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/meetings'
     | '/progress'
     | '/reports'
+    | '/requests'
     | '/settings'
     | '/updates'
     | '/api/gmail/messages'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/meetings'
     | '/progress'
     | '/reports'
+    | '/requests'
     | '/settings'
     | '/updates'
     | '/api/gmail/messages'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/meetings'
     | '/progress'
     | '/reports'
+    | '/requests'
     | '/settings'
     | '/updates'
     | '/api/gmail/messages'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   MeetingsRoute: typeof MeetingsRoute
   ProgressRoute: typeof ProgressRoute
   ReportsRoute: typeof ReportsRoute
+  RequestsRoute: typeof RequestsRoute
   SettingsRoute: typeof SettingsRoute
   UpdatesRoute: typeof UpdatesRoute
   ApiGmailMessagesRoute: typeof ApiGmailMessagesRoute
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requests': {
+      id: '/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof RequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -284,6 +304,7 @@ const rootRouteChildren: RootRouteChildren = {
   MeetingsRoute: MeetingsRoute,
   ProgressRoute: ProgressRoute,
   ReportsRoute: ReportsRoute,
+  RequestsRoute: RequestsRoute,
   SettingsRoute: SettingsRoute,
   UpdatesRoute: UpdatesRoute,
   ApiGmailMessagesRoute: ApiGmailMessagesRoute,

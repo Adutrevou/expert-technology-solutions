@@ -1,19 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addLeadComment,
+  createRequest,
   getCampaigns,
   getDashboard,
   getLeadActivity,
   getLeads,
+  getRequestDetail,
+  getRequests,
   getReports,
   updateLeadStatus,
   type LeadUserSummary,
   type LeadWorkflowStatus,
+  type RequestDetailRecord,
 } from "@/lib/leads-api";
 import { useApp } from "@/lib/app-state";
 
 const isBrowser = typeof window !== "undefined";
 const LEADS_QUERY_KEY = ["intergrai", "leads"] as const;
+const REQUESTS_QUERY_KEY = ["intergrai", "requests"] as const;
 
 export function useDashboardQuery() {
   const { isAuthenticated } = useApp();
@@ -59,6 +64,28 @@ export function useReportsQuery() {
   });
 }
 
+export function useRequestsQuery() {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: REQUESTS_QUERY_KEY,
+    queryFn: getRequests,
+    enabled: isBrowser && isAuthenticated,
+    retry: 1,
+  });
+}
+
+export function useRequestDetailQuery(requestId?: string) {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "request-detail", requestId],
+    queryFn: () => getRequestDetail(requestId || ""),
+    enabled: isBrowser && isAuthenticated && Boolean(requestId),
+    retry: 1,
+  });
+}
+
 export function useLeadActivityQuery(leadId?: string) {
   const { isAuthenticated } = useApp();
 
@@ -94,6 +121,27 @@ export function useAddLeadCommentMutation() {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-activity", variables.leadId] });
       void queryClient.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useCreateRequestMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      category: string;
+      title: string;
+      message: string;
+      created_by_name: string;
+      created_by_email: string;
+      created_by_role: string;
+    }) => createRequest(input),
+    onSuccess: (request: RequestDetailRecord) => {
+      void queryClient.invalidateQueries({ queryKey: REQUESTS_QUERY_KEY });
+      if (request.id) {
+        void queryClient.invalidateQueries({ queryKey: ["intergrai", "request-detail", request.id] });
+      }
     },
   });
 }
