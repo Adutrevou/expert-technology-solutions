@@ -4,6 +4,7 @@ import {
   createMission,
   createRequest,
   decideApproval,
+  decideEnrichmentCreditApproval,
   getCampaigns,
   getDashboard,
   getLeadAgentSummary,
@@ -187,6 +188,22 @@ export function useApprovalDecisionMutation() {
   return useMutation({
     mutationFn: (input: { approvalId: string; decision: "approved" | "rejected"; decision_note?: string }) =>
       decideApproval(input.approvalId, {
+        decision: input.decision,
+        decision_note: input.decision_note,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useEnrichmentCreditApprovalMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { queueItemId: string; decision: "approved" | "rejected"; decision_note?: string }) =>
+      decideEnrichmentCreditApproval(input.queueItemId, {
         decision: input.decision,
         decision_note: input.decision_note,
       }),

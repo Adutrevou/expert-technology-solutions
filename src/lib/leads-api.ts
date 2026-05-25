@@ -88,6 +88,32 @@ export interface ApprovalRecord {
   updatedAt?: string;
 }
 
+export interface EnrichmentCreditApprovalRecord {
+  queueItemId: string;
+  approvalId: string;
+  companyName: string;
+  rawLeadId: string;
+  rawLeadStatus: string;
+  campaignId: string;
+  campaignName: string;
+  queueStatus: string;
+  creditApprovalStatus: string;
+  providerStatus: string;
+  apolloPlanned: boolean;
+  hunterPlanned: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EnrichmentBudgetSummary {
+  apolloMonthlyLimit: number;
+  apolloUsed: number;
+  apolloRemaining: number;
+  hunterMonthlyLimit: number;
+  hunterUsed: number;
+  hunterRemaining: number;
+}
+
 export interface WeeklyReportRecord {
   id: string;
   title: string;
@@ -123,8 +149,10 @@ export interface LeadAgentSummary {
     apolloUsed: number;
     hunterUsed: number;
   };
+  enrichmentBudgetSummary: EnrichmentBudgetSummary;
   approvalsWaiting: number;
   approvals: ApprovalRecord[];
+  pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
   latestQualificationActions: Array<{
     id: string;
     companyName: string;
@@ -144,6 +172,15 @@ export interface LeadAgentSummary {
     budgetCheckStatus: string;
     apolloPlanned: boolean;
     hunterPlanned: boolean;
+    creditApprovalStatus: string;
+    providerStatus: string;
+    providerError: string;
+    enrichedContactName: string;
+    enrichedContactTitle: string;
+    enrichedEmail: string;
+    enrichedEmailStatus: string;
+    enrichedPhone: string;
+    enrichedSource: string;
     enrichmentNotes: string;
     modelRouteUsed: string;
     confidenceScore: number;
@@ -360,6 +397,13 @@ export function getLeadAgentSummary() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(normalizeLeadAgentSummary);
 }
 
+export function getEnrichmentApprovals() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals`).then((value) => {
+    const record = asRecord(value);
+    return asArray(record.enrichment_approvals).map((item, index) => normalizeEnrichmentCreditApproval(item, index));
+  });
+}
+
 export function createMission(input: {
   title: string;
   instruction: string;
@@ -377,6 +421,14 @@ export function decideApproval(approvalId: string, input: { decision: "approved"
     method: "POST",
     body: JSON.stringify(input),
   }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+}
+
+export function decideEnrichmentCreditApproval(queueItemId: string, input: { decision: "approved" | "rejected"; decision_note?: string }) {
+  const action = input.decision === "approved" ? "approve" : "decline";
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals/${encodeURIComponent(queueItemId)}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeEnrichmentCreditApproval(asRecord(asRecord(value).enrichment_queue_item)));
 }
 
 export function createRequest(input: {
@@ -634,6 +686,7 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     count: normalizeCount(count),
   }));
   const usageSummary = asRecord(record.enrichment_usage_summary);
+  const budgetSummary = asRecord(record.enrichment_budget_summary);
 
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
@@ -653,8 +706,19 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       apolloUsed: normalizeCount(usageSummary.apollo_used ?? usageSummary.apolloUsed),
       hunterUsed: normalizeCount(usageSummary.hunter_used ?? usageSummary.hunterUsed),
     },
+    enrichmentBudgetSummary: {
+      apolloMonthlyLimit: normalizeCount(budgetSummary.apollo_monthly_limit ?? budgetSummary.apolloMonthlyLimit),
+      apolloUsed: normalizeCount(budgetSummary.apollo_used ?? budgetSummary.apolloUsed),
+      apolloRemaining: normalizeCount(budgetSummary.apollo_remaining ?? budgetSummary.apolloRemaining),
+      hunterMonthlyLimit: normalizeCount(budgetSummary.hunter_monthly_limit ?? budgetSummary.hunterMonthlyLimit),
+      hunterUsed: normalizeCount(budgetSummary.hunter_used ?? budgetSummary.hunterUsed),
+      hunterRemaining: normalizeCount(budgetSummary.hunter_remaining ?? budgetSummary.hunterRemaining),
+    },
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
+    pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map((item, index) =>
+      normalizeEnrichmentCreditApproval(item, index),
+    ),
     latestQualificationActions: asArray(record.latest_qualification_actions).map((item, index) =>
       normalizeQualificationAction(item, index),
     ),
@@ -894,6 +958,26 @@ function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
   };
 }
 
+function normalizeEnrichmentCreditApproval(value: unknown, index = 0): EnrichmentCreditApprovalRecord {
+  const record = asRecord(value);
+  return {
+    queueItemId: pickString(record, ["queue_item_id", "queueItemId", "id"]) || `queue-item-${index}`,
+    approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
+    companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed raw lead",
+    rawLeadId: pickString(record, ["raw_lead_id", "rawLeadId"]) || "",
+    rawLeadStatus: pickString(record, ["raw_lead_status", "rawLeadStatus"]) || "",
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
+    queueStatus: pickString(record, ["queue_status", "queueStatus", "status"]) || "",
+    creditApprovalStatus: pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
+    providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
+    apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
+    hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
+    createdAt: normalizeTimestamp(record.approval_created_at ?? record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.approval_updated_at ?? record.updated_at ?? record.updatedAt),
+  };
+}
+
 function normalizeInternalNote(value: unknown, index = 0) {
   const record = asRecord(value);
   return {
@@ -930,6 +1014,15 @@ function normalizeEnrichmentAction(value: unknown, index = 0) {
     budgetCheckStatus: pickString(record, ["budget_check_status", "budgetCheckStatus"]) || "",
     apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
     hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
+    creditApprovalStatus: pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
+    providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
+    providerError: pickString(record, ["provider_error", "providerError"]) || "",
+    enrichedContactName: pickString(record, ["enriched_contact_name", "enrichedContactName"]) || "",
+    enrichedContactTitle: pickString(record, ["enriched_contact_title", "enrichedContactTitle"]) || "",
+    enrichedEmail: pickString(record, ["enriched_email", "enrichedEmail"]) || "",
+    enrichedEmailStatus: pickString(record, ["enriched_email_status", "enrichedEmailStatus"]) || "",
+    enrichedPhone: pickString(record, ["enriched_phone", "enrichedPhone"]) || "",
+    enrichedSource: pickString(record, ["enriched_source", "enrichedSource"]) || "",
     enrichmentNotes: pickString(record, ["enrichment_notes", "enrichmentNotes"]) || "",
     modelRouteUsed: pickString(record, ["enrichment_model_route_used", "enrichmentModelRouteUsed"]) || "",
     confidenceScore: normalizeCount(record.enrichment_confidence_score ?? record.enrichmentConfidenceScore),

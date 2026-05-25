@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-state";
-import { useApprovalDecisionMutation, useCreateMissionMutation, useLeadAgentSummaryQuery } from "@/lib/leads-api-hooks";
+import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery } from "@/lib/leads-api-hooks";
 import { ApprovalStatusBadge, CampaignStatusBadge, LeadStatusBadge } from "@/components/status-badges";
 
 export const Route = createFileRoute("/lead-agent")({
@@ -33,6 +33,7 @@ function LeadAgentPage() {
   const summaryQuery = useLeadAgentSummaryQuery();
   const createMissionMutation = useCreateMissionMutation();
   const approvalDecisionMutation = useApprovalDecisionMutation();
+  const enrichmentCreditApprovalMutation = useEnrichmentCreditApprovalMutation();
 
   const [title, setTitle] = useState("");
   const [instruction, setInstruction] = useState("");
@@ -89,6 +90,18 @@ function LeadAgentPage() {
       await summaryQuery.refetch();
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : "Unable to update approval.");
+    }
+  };
+
+  const handleEnrichmentApprovalDecision = async (queueItemId: string, decision: "approved" | "rejected") => {
+    setNotice(null);
+    setError(null);
+    try {
+      await enrichmentCreditApprovalMutation.mutateAsync({ queueItemId, decision });
+      setNotice(`Enrichment credit request ${decision}.`);
+      await summaryQuery.refetch();
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : "Unable to update enrichment credit approval.");
     }
   };
 
@@ -392,6 +405,23 @@ function LeadAgentPage() {
               <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentUsageSummary.hunterUsed}</p>
             </div>
           </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-border px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Apollo allowance</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentBudgetSummary.apolloRemaining}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {data.enrichmentBudgetSummary.apolloUsed} used of {data.enrichmentBudgetSummary.apolloMonthlyLimit}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Hunter allowance</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentBudgetSummary.hunterRemaining}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {data.enrichmentBudgetSummary.hunterUsed} used of {data.enrichmentBudgetSummary.hunterMonthlyLimit}
+              </p>
+            </div>
+          </div>
         </Card>
 
         <Card className="p-6 shadow-card">
@@ -409,9 +439,22 @@ function LeadAgentPage() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       Eligibility {formatStatusLabel(action.eligibilityStatus || "unknown")}
                       {action.budgetCheckStatus ? ` · Budget ${formatStatusLabel(action.budgetCheckStatus)}` : ""}
+                      {action.creditApprovalStatus ? ` · Credit ${formatStatusLabel(action.creditApprovalStatus)}` : ""}
+                      {action.providerStatus ? ` · Provider ${formatStatusLabel(action.providerStatus)}` : ""}
                       {action.modelRouteUsed ? ` · ${action.modelRouteUsed}` : ""}
                       {action.lastProcessedAt ? ` · ${formatDistanceToNow(new Date(action.lastProcessedAt), { addSuffix: true })}` : ""}
                     </p>
+                    {action.enrichedEmail || action.enrichedContactName ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {action.enrichedContactName ? `${action.enrichedContactName}` : "Contact pending"}
+                        {action.enrichedContactTitle ? ` · ${action.enrichedContactTitle}` : ""}
+                        {action.enrichedEmail ? ` · ${action.enrichedEmail}` : ""}
+                        {action.enrichedEmailStatus ? ` (${formatStatusLabel(action.enrichedEmailStatus)})` : ""}
+                      </p>
+                    ) : null}
+                    {action.providerError ? (
+                      <p className="mt-2 text-xs text-destructive">{action.providerError}</p>
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-start gap-2 md:items-end">
                     {action.apolloPlanned || action.hunterPlanned ? (
@@ -460,12 +503,73 @@ function LeadAgentPage() {
         </Card>
 
         <Card className="p-6 shadow-card">
+          <h2 className="text-lg font-semibold">Enrichment credit approvals</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Review tenant-scoped enrichment spend requests before any Apollo or Hunter credits are touched.
+          </p>
+          <div className="mt-5 space-y-3">
+            {data.pendingEnrichmentCreditApprovals.length ? data.pendingEnrichmentCreditApprovals.map((approval) => (
+              <div key={approval.queueItemId} className="rounded-2xl border border-border p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="font-medium">{approval.companyName}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Raw lead {formatStatusLabel(approval.rawLeadStatus)} · Queue {formatStatusLabel(approval.queueStatus)}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Campaign: {approval.campaignName || "No linked campaign"}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Apollo {approval.apolloPlanned ? "planned" : "off"} · Hunter {approval.hunterPlanned ? "planned" : "off"}
+                      {approval.createdAt ? ` · ${formatDistanceToNow(new Date(approval.createdAt), { addSuffix: true })}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 md:items-end">
+                    <ApprovalStatusBadge
+                      status={
+                        approval.creditApprovalStatus === "approved"
+                          ? "approved"
+                          : approval.creditApprovalStatus === "declined"
+                            ? "rejected"
+                            : "pending"
+                      }
+                    />
+                    {canApprove ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={enrichmentCreditApprovalMutation.isPending}
+                          onClick={() => handleEnrichmentApprovalDecision(approval.queueItemId, "approved")}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={enrichmentCreditApprovalMutation.isPending}
+                          onClick={() => handleEnrichmentApprovalDecision(approval.queueItemId, "rejected")}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )) : <EmptyState title="No enrichment approvals waiting" description="Dry-run enrichment requests will appear here when credits need an explicit approval decision." />}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Approvals</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Campaign, template, follow-up, and reply approvals waiting in the platform.
           </p>
           <div className="mt-5 space-y-3">
-            {data.approvals.length ? data.approvals.map((approval) => {
+            {data.approvals.filter((approval) => approval.approvalType !== "credit_approval").length ? data.approvals.filter((approval) => approval.approvalType !== "credit_approval").map((approval) => {
               const badgeStatus = approval.decisionStatus === "approved" ? "approved" : approval.decisionStatus === "rejected" ? "rejected" : "pending";
               return (
                 <div key={approval.id} className="rounded-2xl border border-border p-4">
