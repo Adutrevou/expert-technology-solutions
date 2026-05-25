@@ -160,8 +160,8 @@ export interface CreateRequestInput {
   category: RequestCategory;
   title?: string;
   message: string;
-  related_lead_id?: string;
-  related_campaign_id?: string;
+  related_lead_id?: string | null;
+  related_campaign_id?: string | null;
   created_by_name: string;
   created_by_email: string;
   created_by_role: string;

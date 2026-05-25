@@ -39,7 +39,7 @@ const CATEGORY_LABELS: Record<RequestCategory, string> = {
 };
 
 const REQUEST_CATEGORY_DEFAULT: RequestCategory = "lead_question";
-const NONE_OPTION = "none";
+const NONE_OPTION = "__none__";
 
 const PREVIEW_COPY =
   "Internal preview — this feature will be enabled for Expert users after login is active.";
@@ -65,11 +65,11 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [message, setMessage] = useState("");
   const [relatedLeadId, setRelatedLeadId] = useState(NONE_OPTION);
   const [relatedCampaignId, setRelatedCampaignId] = useState(NONE_OPTION);
-  const requests = useMemo(() => safeNormalizeRequests(requestsQuery.data?.requests), [requestsQuery.data?.requests]);
+  const requests = useMemo<AgentRequestRecord[]>(() => safeNormalizeRequests(requestsQuery.data?.requests), [requestsQuery.data?.requests]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const detailQuery = useRequestDetailQuery(selectedRequestId);
-  const leads = useMemo(() => safeNormalizeLeads(leadsQuery.data?.leads), [leadsQuery.data?.leads]);
-  const campaigns = useMemo(() => safeNormalizeCampaigns(campaignsQuery.data?.campaigns), [campaignsQuery.data?.campaigns]);
+  const leads = useMemo<LeadRecord[]>(() => safeNormalizeLeads(leadsQuery.data?.leads), [leadsQuery.data?.leads]);
+  const campaigns = useMemo<CampaignRecord[]>(() => safeNormalizeCampaigns(campaignsQuery.data?.campaigns), [campaignsQuery.data?.campaigns]);
   const leadOptions = useMemo(() => [NONE_OPTION, ...leads.map((lead) => lead.id)], [leads]);
   const campaignOptions = useMemo(
     () => [NONE_OPTION, ...campaigns.map((campaign) => campaign.id)],
@@ -78,18 +78,28 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const safeCategory = sanitizeRequestCategory(category);
   const safeLeadId = sanitizeSelectValue(relatedLeadId, leadOptions, NONE_OPTION);
   const safeCampaignId = sanitizeSelectValue(relatedCampaignId, campaignOptions, NONE_OPTION);
+  const safeDetailRequest = useMemo(
+    () => (detailQuery.data?.request ? safeNormalizeRequest(detailQuery.data.request) : null),
+    [detailQuery.data?.request],
+  );
 
-  const selectedRequest = useMemo(() => {
-    const detailRequest = detailQuery.data?.request ? safeNormalizeRequest(detailQuery.data.request) : null;
-    if (detailRequest) return detailRequest;
+  const selectedRequest = useMemo<AgentRequestRecord | null>(() => {
+    if (safeDetailRequest) return safeDetailRequest;
     return requests.find((request) => request.id === selectedRequestId) || requests[0] || null;
-  }, [detailQuery.data?.request, requests, selectedRequestId]);
+  }, [requests, safeDetailRequest, selectedRequestId]);
+  const selectedReplies = selectedRequest?.replies ?? [];
 
   useEffect(() => {
     if (!selectedRequestId && requests[0]?.id) {
       setSelectedRequestId(requests[0].id);
     }
   }, [requests, selectedRequestId]);
+
+  useEffect(() => {
+    if (selectedRequestId && !requests.some((request) => request.id === selectedRequestId) && !safeDetailRequest) {
+      setSelectedRequestId(requests[0]?.id ?? null);
+    }
+  }, [requests, safeDetailRequest, selectedRequestId]);
 
   useEffect(() => {
     if (category !== safeCategory) {
@@ -115,8 +125,8 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         category: safeCategory,
         title: title.trim() || undefined,
         message: message.trim(),
-        related_lead_id: safeLeadId !== NONE_OPTION ? safeLeadId : undefined,
-        related_campaign_id: safeCampaignId !== NONE_OPTION ? safeCampaignId : undefined,
+        related_lead_id: safeLeadId !== NONE_OPTION ? safeLeadId : null,
+        related_campaign_id: safeCampaignId !== NONE_OPTION ? safeCampaignId : null,
         created_by_name: user?.name || "Intergrai Admin Preview",
         created_by_email: user?.email || "admin@intergrai.co.za",
         created_by_role: user?.role || "intergrai_admin",
@@ -210,7 +220,6 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             <FieldBlock label="Request category">
               <Select
                 value={safeCategory}
-                defaultValue={REQUEST_CATEGORY_DEFAULT}
                 onValueChange={(value) => setCategory(sanitizeRequestCategory(value))}
               >
                 <SelectTrigger>
@@ -250,7 +259,6 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               >
                 <Select
                   value={safeLeadId}
-                  defaultValue={NONE_OPTION}
                   onValueChange={(value) => setRelatedLeadId(sanitizeSelectValue(value, leadOptions, NONE_OPTION))}
                 >
                   <SelectTrigger>
@@ -273,7 +281,6 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               >
                 <Select
                   value={safeCampaignId}
-                  defaultValue={NONE_OPTION}
                   onValueChange={(value) => setRelatedCampaignId(sanitizeSelectValue(value, campaignOptions, NONE_OPTION))}
                 >
                   <SelectTrigger>
@@ -456,10 +463,10 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                         Intergrai replies and client-visible updates
                       </p>
                     </div>
-                    {(selectedRequest.replies || []).length === 0 ? (
+                    {selectedReplies.length === 0 ? (
                       <EmptyState title="No replies yet" description="This request has not received a reply from the central queue." compact />
                     ) : (
-                      (selectedRequest.replies || []).map((reply) => (
+                      selectedReplies.map((reply) => (
                         <div key={reply.id} className="rounded-2xl border border-border bg-background/80 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-medium">{reply.authorName || "Intergrai"}</p>
