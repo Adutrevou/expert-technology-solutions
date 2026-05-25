@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList, Bot } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/lead-agent", label: "Lead Agent", icon: Bot },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/requests", label: "Requests", icon: ClipboardList },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },

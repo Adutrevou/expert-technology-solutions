@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addLeadComment,
+  createMission,
   createRequest,
+  decideApproval,
   getCampaigns,
   getDashboard,
+  getLeadAgentSummary,
   getLeadActivity,
   getLeads,
   getRequestDetail,
@@ -12,6 +15,7 @@ import {
   updateLeadStatus,
   type LeadUserSummary,
   type LeadWorkflowStatus,
+  type MissionRecord,
   type RequestDetailRecord,
 } from "@/lib/leads-api";
 import { useApp } from "@/lib/app-state";
@@ -97,6 +101,17 @@ export function useLeadActivityQuery(leadId?: string) {
   });
 }
 
+export function useLeadAgentSummaryQuery() {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "lead-agent"],
+    queryFn: getLeadAgentSummary,
+    enabled: isBrowser && isAuthenticated,
+    retry: 1,
+  });
+}
+
 export function useUpdateLeadStatusMutation() {
   const queryClient = useQueryClient();
 
@@ -142,6 +157,42 @@ export function useCreateRequestMutation() {
       if (request.id) {
         void queryClient.invalidateQueries({ queryKey: ["intergrai", "request-detail", request.id] });
       }
+    },
+  });
+}
+
+export function useCreateMissionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      title: string;
+      instruction: string;
+      assigned_worker_type?: string;
+      campaign_id?: string;
+    }) => createMission(input),
+    onSuccess: (mission: MissionRecord) => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+      if (mission.id) {
+        void queryClient.invalidateQueries({ queryKey: ["intergrai", "mission", mission.id] });
+      }
+    },
+  });
+}
+
+export function useApprovalDecisionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { approvalId: string; decision: "approved" | "rejected"; decision_note?: string }) =>
+      decideApproval(input.approvalId, {
+        decision: input.decision,
+        decision_note: input.decision_note,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
   });
 }

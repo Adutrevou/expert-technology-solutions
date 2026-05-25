@@ -17,6 +17,7 @@ import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as MeetingsRouteImport } from './routes/meetings'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
+import { Route as LeadAgentRouteImport } from './routes/lead-agent'
 import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as IndexRouteImport } from './routes/index'
@@ -63,6 +64,11 @@ const LeadsRoute = LeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LeadAgentRoute = LeadAgentRouteImport.update({
+  id: '/lead-agent',
+  path: '/lead-agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmailScriptsRoute = EmailScriptsRouteImport.update({
   id: '/email-scripts',
   path: '/email-scripts',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/campaigns': typeof CampaignsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/campaigns': typeof CampaignsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/campaigns': typeof CampaignsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/campaigns'
     | '/email-scripts'
+    | '/lead-agent'
     | '/leads'
     | '/login'
     | '/meetings'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/'
     | '/campaigns'
     | '/email-scripts'
+    | '/lead-agent'
     | '/leads'
     | '/login'
     | '/meetings'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/campaigns'
     | '/email-scripts'
+    | '/lead-agent'
     | '/leads'
     | '/login'
     | '/meetings'
@@ -187,6 +199,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CampaignsRoute: typeof CampaignsRoute
   EmailScriptsRoute: typeof EmailScriptsRoute
+  LeadAgentRoute: typeof LeadAgentRoute
   LeadsRoute: typeof LeadsRoute
   LoginRoute: typeof LoginRoute
   MeetingsRoute: typeof MeetingsRoute
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lead-agent': {
+      id: '/lead-agent'
+      path: '/lead-agent'
+      fullPath: '/lead-agent'
+      preLoaderRoute: typeof LeadAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/email-scripts': {
       id: '/email-scripts'
       path: '/email-scripts'
@@ -299,6 +319,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CampaignsRoute: CampaignsRoute,
   EmailScriptsRoute: EmailScriptsRoute,
+  LeadAgentRoute: LeadAgentRoute,
   LeadsRoute: LeadsRoute,
   LoginRoute: LoginRoute,
   MeetingsRoute: MeetingsRoute,

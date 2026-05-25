@@ -63,6 +63,104 @@ export interface RequestsResponse {
   requests: unknown[];
 }
 
+export interface MissionRecord {
+  id: string;
+  title: string;
+  instruction: string;
+  status: string;
+  priority: string;
+  missionType: string;
+  assignedWorkerType: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  entityType: string;
+  approvalType: string;
+  title: string;
+  status: string;
+  decisionStatus: string;
+  decisionNote: string;
+  decidedByName: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WeeklyReportRecord {
+  id: string;
+  title: string;
+  status: string;
+  summary: string;
+  periodStart?: string;
+  periodEnd?: string;
+  payload: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface LeadAgentSummary {
+  ok: boolean;
+  client: ApiClientSummary;
+  agent: {
+    id: string;
+    name: string;
+    status: string;
+    roleScope: string;
+    lastHeartbeatAt?: string;
+  } | null;
+  activeMissions: MissionRecord[];
+  openRequests: RequestHistoryRecord[];
+  campaigns: CampaignRecord[];
+  leadPipelineCounts: Array<{ stage: string; count: number }>;
+  rawLeadsCount: number;
+  rawLeadStatusCounts: Array<{ status: string; count: number }>;
+  enrichmentQueueCount: number;
+  enrichmentQueueStatusCounts: Array<{ status: string; count: number }>;
+  enrichmentUsageSummary: {
+    apolloAttempted: number;
+    hunterAttempted: number;
+    apolloUsed: number;
+    hunterUsed: number;
+  };
+  approvalsWaiting: number;
+  approvals: ApprovalRecord[];
+  latestQualificationActions: Array<{
+    id: string;
+    companyName: string;
+    status: string;
+    qualificationScore: number;
+    qualificationNotes: string;
+    modelRouteUsed: string;
+    confidenceScore: number;
+    escalationRequired: boolean;
+    updatedAt?: string;
+  }>;
+  latestEnrichmentActions: Array<{
+    id: string;
+    rawLeadId: string;
+    status: string;
+    eligibilityStatus: string;
+    budgetCheckStatus: string;
+    apolloPlanned: boolean;
+    hunterPlanned: boolean;
+    enrichmentNotes: string;
+    modelRouteUsed: string;
+    confidenceScore: number;
+    requiresApproval: boolean;
+    lastProcessedAt?: string;
+    updatedAt?: string;
+  }>;
+  latestWeeklyReport: WeeklyReportRecord | null;
+  internalNotes: Array<{
+    id: string;
+    note: string;
+    createdByName: string;
+    createdByRole: string;
+    createdAt?: string;
+  }>;
+}
+
 export type LeadQualification = "review" | "warm" | "hot" | "not_qualified";
 export type LeadWorkflowStatus =
   | "new"
@@ -256,6 +354,29 @@ export function getRequests() {
 
 export function getRequestDetail(requestId: string) {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests/${encodeURIComponent(requestId)}`).then(normalizeRequestDetail);
+}
+
+export function getLeadAgentSummary() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(normalizeLeadAgentSummary);
+}
+
+export function createMission(input: {
+  title: string;
+  instruction: string;
+  assigned_worker_type?: string;
+  campaign_id?: string;
+}) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/missions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeMission(asRecord(asRecord(value).mission)));
+}
+
+export function decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decision_note?: string }) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/approvals/${encodeURIComponent(approvalId)}/decision`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
 }
 
 export function createRequest(input: {
@@ -495,6 +616,56 @@ function normalizeCampaignsResponse(value: unknown): CampaignsResponse {
   };
 }
 
+function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
+  const record = asRecord(value);
+  const pipelineRecord = asRecord(record.lead_pipeline_counts);
+  const rawLeadStatusRecord = asRecord(record.raw_leads_by_status);
+  const enrichmentQueueStatusRecord = asRecord(record.enrichment_queue_by_status);
+  const pipelineEntries = Object.entries(pipelineRecord).map(([stage, count]) => ({
+    stage,
+    count: normalizeCount(count),
+  }));
+  const rawLeadStatusEntries = Object.entries(rawLeadStatusRecord).map(([status, count]) => ({
+    status,
+    count: normalizeCount(count),
+  }));
+  const enrichmentQueueStatusEntries = Object.entries(enrichmentQueueStatusRecord).map(([status, count]) => ({
+    status,
+    count: normalizeCount(count),
+  }));
+  const usageSummary = asRecord(record.enrichment_usage_summary);
+
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    agent: normalizeAgentRecord(record.agent),
+    activeMissions: asArray(record.active_missions).map((item, index) => normalizeMission(item, index)),
+    openRequests: asArray(record.open_requests).map((item, index) => normalizeRequestHistory(item, index)),
+    campaigns: asArray(record.campaigns).map((item, index) => normalizeCampaign(item, index)),
+    leadPipelineCounts: pipelineEntries.sort((a, b) => a.stage.localeCompare(b.stage)),
+    rawLeadsCount: normalizeCount(record.raw_leads_count),
+    rawLeadStatusCounts: rawLeadStatusEntries.sort((a, b) => a.status.localeCompare(b.status)),
+    enrichmentQueueCount: normalizeCount(record.enrichment_queue_count),
+    enrichmentQueueStatusCounts: enrichmentQueueStatusEntries.sort((a, b) => a.status.localeCompare(b.status)),
+    enrichmentUsageSummary: {
+      apolloAttempted: normalizeCount(usageSummary.apollo_attempted ?? usageSummary.apolloAttempted),
+      hunterAttempted: normalizeCount(usageSummary.hunter_attempted ?? usageSummary.hunterAttempted),
+      apolloUsed: normalizeCount(usageSummary.apollo_used ?? usageSummary.apolloUsed),
+      hunterUsed: normalizeCount(usageSummary.hunter_used ?? usageSummary.hunterUsed),
+    },
+    approvalsWaiting: normalizeCount(record.approvals_waiting),
+    approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
+    latestQualificationActions: asArray(record.latest_qualification_actions).map((item, index) =>
+      normalizeQualificationAction(item, index),
+    ),
+    latestEnrichmentActions: asArray(record.latest_enrichment_actions).map((item, index) =>
+      normalizeEnrichmentAction(item, index),
+    ),
+    latestWeeklyReport: normalizeWeeklyReport(record.latest_weekly_report),
+    internalNotes: asArray(record.internal_notes).map((item, index) => normalizeInternalNote(item, index)),
+  };
+}
+
 function normalizeReportsResponse(value: unknown): ReportsResponse {
   const record = asRecord(value);
   const reports = asArray(record.reports);
@@ -660,6 +831,111 @@ export function normalizeReport(value: unknown, index = 0): ReportRecord {
       pickString(record, ["summary", "description"]) ||
       "A live report is available for this client.",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeWeeklyReport(value: unknown, index = 0): WeeklyReportRecord | null {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    id: pickString(record, ["id", "_id"]) || `weekly-report-${index}`,
+    title: pickString(record, ["title"]) || "Weekly report",
+    status: pickString(record, ["status"]) || "draft",
+    summary: pickString(record, ["summary"]) || "No summary available.",
+    periodStart: normalizeTimestamp(record.period_start ?? record.periodStart),
+    periodEnd: normalizeTimestamp(record.period_end ?? record.periodEnd),
+    payload: asRecord(record.report_payload ?? record.payload),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeAgentRecord(value: unknown) {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    id: pickString(record, ["id", "_id"]) || "agent",
+    name: pickString(record, ["name"]) || "Mr Krabs",
+    status: pickString(record, ["status"]) || "unknown",
+    roleScope: pickString(record, ["role_scope", "roleScope"]) || "client_operator",
+    lastHeartbeatAt: normalizeTimestamp(record.last_heartbeat_at ?? record.lastHeartbeatAt),
+  };
+}
+
+function normalizeMission(value: unknown, index = 0): MissionRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `mission-${index}`,
+    title: pickString(record, ["title"]) || "Untitled mission",
+    instruction: pickString(record, ["instruction", "message"]) || "",
+    status: pickString(record, ["status"]) || "Queued",
+    priority: pickString(record, ["priority"]) || "normal",
+    missionType: pickString(record, ["mission_type", "missionType"]) || "instruction",
+    assignedWorkerType: pickString(record, ["assigned_worker_type", "assignedWorkerType"]) || "Unassigned",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `approval-${index}`,
+    entityType: pickString(record, ["entity_type", "entityType"]) || "general",
+    approvalType: pickString(record, ["approval_type", "approvalType"]) || "general",
+    title: pickString(record, ["title"]) || "Approval item",
+    status: pickString(record, ["status"]) || "pending",
+    decisionStatus: pickString(record, ["decision_status", "decisionStatus"]) || "pending",
+    decisionNote: pickString(record, ["decision_note", "decisionNote"]) || "",
+    decidedByName: pickString(record, ["decided_by_name", "decidedByName"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeInternalNote(value: unknown, index = 0) {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `internal-note-${index}`,
+    note: pickString(record, ["note", "message"]) || "",
+    createdByName: pickString(record, ["created_by_name", "createdByName"]) || "",
+    createdByRole: pickString(record, ["created_by_role", "createdByRole"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeQualificationAction(value: unknown, index = 0) {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `qualification-action-${index}`,
+    companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed raw lead",
+    status: pickString(record, ["status"]) || "unknown",
+    qualificationScore: normalizeCount(record.qualification_score ?? record.qualificationScore),
+    qualificationNotes: pickString(record, ["qualification_notes", "qualificationNotes"]) || "",
+    modelRouteUsed: pickString(record, ["model_route_used", "modelRouteUsed"]) || "",
+    confidenceScore: normalizeCount(record.confidence_score ?? record.confidenceScore),
+    escalationRequired: pickBoolean(record, ["escalation_required", "escalationRequired"]) ?? false,
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeEnrichmentAction(value: unknown, index = 0) {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `enrichment-action-${index}`,
+    rawLeadId: pickString(record, ["raw_lead_id", "rawLeadId"]) || "",
+    status: pickString(record, ["status"]) || "unknown",
+    eligibilityStatus: pickString(record, ["eligibility_status", "eligibilityStatus"]) || "",
+    budgetCheckStatus: pickString(record, ["budget_check_status", "budgetCheckStatus"]) || "",
+    apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
+    hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
+    enrichmentNotes: pickString(record, ["enrichment_notes", "enrichmentNotes"]) || "",
+    modelRouteUsed: pickString(record, ["enrichment_model_route_used", "enrichmentModelRouteUsed"]) || "",
+    confidenceScore: normalizeCount(record.enrichment_confidence_score ?? record.enrichmentConfidenceScore),
+    requiresApproval: pickBoolean(record, ["requires_approval", "requiresApproval"]) ?? false,
+    lastProcessedAt: normalizeTimestamp(record.last_processed_at ?? record.lastProcessedAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
 }
 
