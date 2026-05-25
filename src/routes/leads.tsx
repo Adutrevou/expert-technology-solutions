@@ -56,7 +56,15 @@ function LeadsPage() {
   const [commentNotice, setCommentNotice] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
 
-  const all = useMemo(() => (leadsQuery.data?.leads || []).map(normalizeLead), [leadsQuery.data?.leads]);
+  const all = useMemo(() => (leadsQuery.data?.leads ?? []).map(normalizeLead), [leadsQuery.data?.leads]);
+  const leadActor = useMemo(
+    () => ({
+      name: user?.name?.trim() || "Expert Admin",
+      email: user?.email?.trim() || "admin@experttechnologysolutions.co.za",
+      role: user?.role || "manager",
+    }),
+    [user],
+  );
   const industries = useMemo(() => Array.from(new Set(all.map((lead) => lead.industry))).sort(), [all]);
   const campaigns = useMemo(() => Array.from(new Set(all.map((lead) => lead.campaignName))).sort(), [all]);
 
@@ -136,20 +144,16 @@ function LeadsPage() {
   };
 
   const handleStatusUpdate = async () => {
-    if (!selectedLead || !user) return;
+    if (!selectedLead) return;
 
     setStatusNotice(null);
     try {
       await updateStatusMutation.mutateAsync({
         leadId: selectedLead.id,
         status: statusDraft as LeadWorkflowStatus,
-        user: {
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
+        user: leadActor,
       });
-      setStatusNotice(`Lead status saved as ${formatStatusLabel(statusDraft)}.`);
+      setStatusNotice("Status updated successfully.");
       void leadsQuery.refetch();
     } catch {
       setStatusNotice(null);
@@ -157,7 +161,7 @@ function LeadsPage() {
   };
 
   const handleCommentSubmit = async () => {
-    if (!selectedLead || !user) return;
+    if (!selectedLead) return;
 
     const nextComment = commentDraft.trim();
     if (!nextComment) {
@@ -173,14 +177,10 @@ function LeadsPage() {
       await addCommentMutation.mutateAsync({
         leadId: selectedLead.id,
         comment: nextComment,
-        user: {
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
+        user: leadActor,
       });
       setCommentDraft("");
-      setCommentNotice("Comment saved.");
+      setCommentNotice("Comment saved successfully.");
       void leadsQuery.refetch();
     } catch {
       setCommentNotice(null);
@@ -366,7 +366,7 @@ function LeadsPage() {
             statusNotice={statusNotice}
             statusOptions={statusOptions}
             commentLoading={addCommentMutation.isPending}
-            userLine={user ? `${user.name} · ${user.email} · ${user.role}` : "No active user"}
+            userLine={`${leadActor.name} · ${leadActor.email} · ${leadActor.role}`}
           />
         </div>
       )}

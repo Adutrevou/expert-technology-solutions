@@ -1,7 +1,4 @@
-// If VITE_LEADS_API_BASE_URL is provided (e.g. the static VPS build sets it to
-// https://api.intergrai.co.za), call the upstream directly. Otherwise route
-// through the same-origin server proxy at `/api/leads` so the browser is
-// never blocked by CORS on preview/published Lovable origins.
+// Leads requests must go directly to the upstream API for the static build.
 const ENV_BASE_URL = String(import.meta.env.VITE_LEADS_API_BASE_URL || "").trim();
 export const LEADS_API_BASE_URL = resolveApiBaseUrl(ENV_BASE_URL);
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
@@ -149,8 +146,13 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     let detail = "";
-    try { detail = (await response.text()).slice(0, 500); } catch { /* ignore */ }
-    const msg = `Leads API ${response.status} at ${url}${detail ? ` — ${detail}` : ""}`;
+    try {
+      const raw = await response.text();
+      detail = extractApiErrorMessage(raw) || raw.slice(0, 500);
+    } catch {
+      /* ignore */
+    }
+    const msg = detail || `Leads API request failed (${response.status}).`;
     if (IS_DEV) console.error(msg);
     throw new Error(msg);
   }
@@ -199,13 +201,8 @@ export function updateLeadStatus(leadId: string, status: LeadWorkflowStatus, use
     method: "PATCH",
     body: JSON.stringify({
       status,
-      user,
-      updated_by: user,
-      updatedBy: user,
-      actor: user,
-      user_name: user.name,
-      user_email: user.email,
-      user_role: user.role,
+      updated_by_name: user.name,
+      updated_by_email: user.email,
     }),
   }).then((value) => normalizeLeadStatus(getActivityStatus(value)) || status);
 }
@@ -215,13 +212,9 @@ export function addLeadComment(leadId: string, comment: string, user: LeadUserSu
     method: "POST",
     body: JSON.stringify({
       comment,
-      user,
-      created_by: user,
-      createdBy: user,
-      actor: user,
-      user_name: user.name,
-      user_email: user.email,
-      user_role: user.role,
+      created_by_name: user.name,
+      created_by_email: user.email,
+      visibility: "client",
     }),
   }).then(normalizeLeadActivityRecord);
 }
@@ -240,8 +233,8 @@ function asArray(value: unknown): unknown[] {
 
 function resolveApiBaseUrl(value: string): string {
   const trimmed = value.replace(/\/+$/, "");
-  if (!trimmed) return "/api/leads";
-  if (trimmed.startsWith("/")) return trimmed;
+  if (!trimmed) return "https://api.intergrai.co.za";
+  if (trimmed.startsWith("/")) return "https://api.intergrai.co.za";
 
   try {
     return new URL(trimmed).toString().replace(/\/+$/, "");
@@ -249,7 +242,7 @@ function resolveApiBaseUrl(value: string): string {
     try {
       return new URL(`https://${trimmed}`).toString().replace(/\/+$/, "");
     } catch {
-      return trimmed;
+      return "https://api.intergrai.co.za";
     }
   }
 }
@@ -383,11 +376,33 @@ function normalizeDashboardResponse(value: unknown): DashboardResponse {
 }
 
 function normalizeLeadsResponse(value: unknown): LeadsResponse {
+  if (Array.isArray(value)) {
+    return {
+      ok: true,
+      client: normalizeClientSummary({}),
+      count: value.length,
+      leads: value,
+    };
+  }
+
   const record = asRecord(value);
-  const leads = asArray(record.leads);
+  const nestedData = asRecord(record.data);
+  const directLeads = asArray(record.leads);
+  const directItems = asArray(record.items);
+  const directResults = asArray(record.results);
+  const directRows = asArray(record.rows);
+  const nestedLeads = asArray(nestedData.leads);
+  const nestedDataArray = asArray(record.data);
+  const leads =
+    directLeads.length ? directLeads :
+    directItems.length ? directItems :
+    directResults.length ? directResults :
+    directRows.length ? directRows :
+    nestedLeads.length ? nestedLeads :
+    nestedDataArray;
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
-    client: normalizeClientSummary(record.client),
+    client: normalizeClientSummary(record.client ?? nestedData.client),
     count: normalizeCount(record.count) || leads.length,
     leads,
   };
@@ -617,4 +632,21 @@ function formatLeadStatus(status: string) {
 function getStoredAuthToken() {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function extractApiErrorMessage(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  try {
+    const payload = JSON.parse(trimmed);
+    const record = asRecord(payload);
+    return (
+      pickString(record, ["error", "message"]) ||
+      pickString(asRecord(record.errors), ["error", "message"]) ||
+      trimmed.slice(0, 500)
+    );
+  } catch {
+    return trimmed.slice(0, 500);
+  }
 }
