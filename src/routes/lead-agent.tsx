@@ -44,6 +44,15 @@ function LeadAgentPage() {
 
   const data = summaryQuery.data;
   const canApprove = user?.role === "client_owner" || user?.role === "manager" || user?.role === "intergrai_admin";
+  const approvalsByEntityId = useMemo(() => {
+    const entries = new Map<string, string>();
+    for (const approval of data?.approvals || []) {
+      if (approval.entityId) {
+        entries.set(approval.entityId, approval.id);
+      }
+    }
+    return entries;
+  }, [data?.approvals]);
   const latestReportMetrics = useMemo(() => {
     const payload = data?.latestWeeklyReport?.payload || {};
     const metrics = typeof payload.metrics === "object" && payload.metrics ? payload.metrics as Record<string, unknown> : {};
@@ -160,11 +169,12 @@ function LeadAgentPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <KpiCard label="Active missions" value={data.activeMissions.length} icon={Clock3} />
         <KpiCard label="Open requests" value={data.openRequests.length} icon={Sparkles} />
         <KpiCard label="Raw leads" value={data.rawLeadsCount} icon={ShieldAlert} />
         <KpiCard label="Enrichment queue" value={data.enrichmentQueueCount} icon={LoaderCircle} />
+        <KpiCard label="Outreach queue" value={data.outreachQueueCount} icon={Send} />
         <KpiCard label="Approvals waiting" value={data.approvalsWaiting} icon={CheckCircle2} />
       </div>
 
@@ -558,6 +568,122 @@ function LeadAgentPage() {
                 </div>
               </div>
             )) : <EmptyState title="No enrichment approvals waiting" description="Dry-run enrichment requests will appear here when credits need an explicit approval decision." />}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <Card className="p-6 shadow-card">
+          <h2 className="text-lg font-semibold">Outreach templates</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            First-contact drafts stay in dry-run until the campaign, template variant, follow-up rules, and mailbox guardrails are all satisfied.
+          </p>
+          <div className="mt-5 space-y-4">
+            {data.outreachTemplates.length ? data.outreachTemplates.map((template) => (
+              <div key={template.id} className="rounded-2xl border border-border p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="font-medium">{template.campaignName}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {template.name} · {formatStatusLabel(template.templateType)}
+                    </p>
+                  </div>
+                  <ApprovalStatusBadge status={template.approvalStatus === "rejected" ? "rejected" : template.approvalStatus === "approved" ? "approved" : "pending"} />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {template.variants.map((variant) => (
+                    <div key={variant.id} className="rounded-xl border border-border/70 bg-muted/20 p-3">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="font-medium">Variant {variant.variantLabel}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{variant.subjectTemplate}</p>
+                          <p className="mt-2 text-xs text-muted-foreground line-clamp-3">{variant.bodyTemplate}</p>
+                        </div>
+                        <div className="flex flex-col items-start gap-2 md:items-end">
+                          <ApprovalStatusBadge status={variant.approvalStatus === "rejected" ? "rejected" : variant.approvalStatus === "approved" ? "approved" : "pending"} />
+                          {canApprove && variant.approvalStatus !== "approved" ? (
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(variant.id) || "", "approved")} disabled={!approvalsByEntityId.get(variant.id)}>
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(variant.id) || "", "rejected")} disabled={!approvalsByEntityId.get(variant.id)}>
+                                Decline
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )) : <EmptyState title="No outreach templates yet" description="Campaign-scoped first-contact drafts will appear here once seeded from the API." />}
+          </div>
+        </Card>
+
+        <Card className="p-6 shadow-card">
+          <h2 className="text-lg font-semibold">Follow-up rules and queue</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Mailbox remains disconnected. Planning can happen, but no real outreach is sent from this workspace.
+          </p>
+          <div className="mt-4 rounded-2xl border border-border bg-muted/20 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Mailbox status</p>
+            <p className="mt-2 text-2xl font-semibold">{formatStatusLabel(data.mailboxStatus)}</p>
+          </div>
+          <div className="mt-5 space-y-3">
+            {data.followupSequences.length ? data.followupSequences.map((sequence) => (
+              <div key={sequence.id} className="rounded-2xl border border-border p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="font-medium">{sequence.campaignName}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {sequence.name} · {sequence.followupCount} follow-ups
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 md:items-end">
+                    <ApprovalStatusBadge status={sequence.approvalStatus === "rejected" ? "rejected" : sequence.approvalStatus === "approved" ? "approved" : "pending"} />
+                    {canApprove && sequence.approvalStatus !== "approved" ? (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(sequence.id) || "", "approved")} disabled={!approvalsByEntityId.get(sequence.id)}>
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(sequence.id) || "", "rejected")} disabled={!approvalsByEntityId.get(sequence.id)}>
+                          Decline
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )) : <EmptyState title="No follow-up rules yet" description="Follow-up approval drafts will appear here when the API seed is loaded." />}
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-base font-semibold">Outreach queue</h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {data.outreachQueueStatusCounts.length ? data.outreachQueueStatusCounts.map((item) => (
+                <div key={item.status} className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(item.status)}</p>
+                  <p className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</p>
+                </div>
+              )) : <EmptyState title="No outreach queue statuses yet" description="Dry-run outreach planning states will appear here after a verified enrichment item is planned." />}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {data.outreachQueue.length ? data.outreachQueue.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-border p-4">
+                  <p className="font-medium">{item.rawCompanyName || item.leadCompanyName || "Unnamed prospect"}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {item.campaignName} · {formatStatusLabel(item.status)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Approval {formatStatusLabel(item.approvalStatus)} · Mailbox {formatStatusLabel(item.mailboxStatus)}
+                    {item.variantLabel ? ` · Variant ${item.variantLabel}` : ""}
+                    {item.sequenceName ? ` · ${item.sequenceName}` : ""}
+                  </p>
+                </div>
+              )) : null}
+            </div>
           </div>
         </Card>
       </div>

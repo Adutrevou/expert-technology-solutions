@@ -78,6 +78,7 @@ export interface MissionRecord {
 export interface ApprovalRecord {
   id: string;
   entityType: string;
+  entityId: string;
   approvalType: string;
   title: string;
   status: string;
@@ -125,6 +126,53 @@ export interface WeeklyReportRecord {
   createdAt?: string;
 }
 
+export interface OutreachTemplateVariantRecord {
+  id: string;
+  variantLabel: string;
+  status: string;
+  approvalStatus: string;
+  subjectTemplate: string;
+  bodyTemplate: string;
+}
+
+export interface OutreachTemplateRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  name: string;
+  channel: string;
+  templateType: string;
+  status: string;
+  approvalStatus: string;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  variants: OutreachTemplateVariantRecord[];
+}
+
+export interface FollowupSequenceRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  name: string;
+  status: string;
+  approvalStatus: string;
+  followupCount: number;
+}
+
+export interface OutreachQueueRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  status: string;
+  approvalStatus: string;
+  mailboxStatus: string;
+  variantLabel: string;
+  sequenceName: string;
+  leadCompanyName: string;
+  rawCompanyName: string;
+  scheduledFor?: string;
+}
+
 export interface LeadAgentSummary {
   ok: boolean;
   client: ApiClientSummary;
@@ -150,6 +198,12 @@ export interface LeadAgentSummary {
     hunterUsed: number;
   };
   enrichmentBudgetSummary: EnrichmentBudgetSummary;
+  outreachTemplates: OutreachTemplateRecord[];
+  followupSequences: FollowupSequenceRecord[];
+  outreachQueueCount: number;
+  outreachQueueStatusCounts: Array<{ status: string; count: number }>;
+  outreachQueue: OutreachQueueRecord[];
+  mailboxStatus: string;
   approvalsWaiting: number;
   approvals: ApprovalRecord[];
   pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
@@ -714,6 +768,15 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       hunterUsed: normalizeCount(budgetSummary.hunter_used ?? budgetSummary.hunterUsed),
       hunterRemaining: normalizeCount(budgetSummary.hunter_remaining ?? budgetSummary.hunterRemaining),
     },
+    outreachTemplates: asArray(record.outreach_templates).map((item, index) => normalizeOutreachTemplate(item, index)),
+    followupSequences: asArray(record.followup_sequences).map((item, index) => normalizeFollowupSequence(item, index)),
+    outreachQueueCount: normalizeCount(record.outreach_queue_count),
+    outreachQueueStatusCounts: Object.entries(asRecord(record.outreach_queue_by_status)).map(([status, count]) => ({
+      status,
+      count: normalizeCount(count),
+    })).sort((a, b) => a.status.localeCompare(b.status)),
+    outreachQueue: asArray(record.outreach_queue).map((item, index) => normalizeOutreachQueueItem(item, index)),
+    mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "disconnected",
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
     pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map((item, index) =>
@@ -947,6 +1010,7 @@ function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
   return {
     id: pickString(record, ["id", "_id"]) || `approval-${index}`,
     entityType: pickString(record, ["entity_type", "entityType"]) || "general",
+    entityId: pickString(record, ["entity_id", "entityId"]) || "",
     approvalType: pickString(record, ["approval_type", "approvalType"]) || "general",
     title: pickString(record, ["title"]) || "Approval item",
     status: pickString(record, ["status"]) || "pending",
@@ -955,6 +1019,65 @@ function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
     decidedByName: pickString(record, ["decided_by_name", "decidedByName"]) || "",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeOutreachTemplateVariant(value: unknown, index = 0): OutreachTemplateVariantRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `template-variant-${index}`,
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    status: pickString(record, ["status"]) || "draft",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
+    bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
+  };
+}
+
+function normalizeOutreachTemplate(value: unknown, index = 0): OutreachTemplateRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `template-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    name: pickString(record, ["name"]) || "Untitled template",
+    channel: pickString(record, ["channel"]) || "email",
+    templateType: pickString(record, ["template_type", "templateType"]) || "first_contact",
+    status: pickString(record, ["status"]) || "draft",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
+    bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
+    variants: asArray(record.variants).map((item, variantIndex) => normalizeOutreachTemplateVariant(item, variantIndex)),
+  };
+}
+
+function normalizeFollowupSequence(value: unknown, index = 0): FollowupSequenceRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `followup-sequence-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    name: pickString(record, ["name"]) || "Untitled follow-up sequence",
+    status: pickString(record, ["status"]) || "draft",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    followupCount: normalizeCount(record.followup_count ?? record.followupCount),
+  };
+}
+
+function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `outreach-queue-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    status: pickString(record, ["status"]) || "planned",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "waiting_for_mailbox",
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
+    leadCompanyName: pickString(record, ["lead_company_name", "leadCompanyName"]) || "",
+    rawCompanyName: pickString(record, ["raw_company_name", "rawCompanyName"]) || "",
+    scheduledFor: normalizeTimestamp(record.scheduled_for ?? record.scheduledFor),
   };
 }
 
