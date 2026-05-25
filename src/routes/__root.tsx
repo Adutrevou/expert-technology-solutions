@@ -85,6 +85,7 @@ function Gate() {
   const navigate = useNavigate();
   const path = router.location.pathname;
   const search = router.location.search;
+  const isAgentRoute = path === "/agent";
 
   useEffect(() => {
     if (!user && path !== "/login") {
@@ -99,6 +100,7 @@ function Gate() {
 
   if (path === "/login") return <Outlet />;
   if (!user) return null;
+  if (isAgentRoute) return <Outlet />;
   return (
     <AppShell>
       <Outlet />
