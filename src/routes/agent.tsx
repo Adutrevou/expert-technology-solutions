@@ -7,7 +7,6 @@ import { Bot, CheckCircle2, Inbox, RefreshCcw, Send, ShieldAlert, Sparkles } fro
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RequestStatusBadge } from "@/components/status-badges";
@@ -218,21 +217,17 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </div>
 
             <FieldBlock label="Request category">
-              <Select
+              <select
                 value={safeCategory}
-                onValueChange={(value) => setCategory(sanitizeRequestCategory(value))}
+                onChange={(event) => setCategory(sanitizeRequestCategory(event.target.value))}
+                className={nativeSelectClassName}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {REQUEST_CATEGORIES.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {getCategoryLabel(item)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {REQUEST_CATEGORIES.map((item) => (
+                  <option key={item} value={item}>
+                    {getCategoryLabel(item)}
+                  </option>
+                ))}
+              </select>
             </FieldBlock>
 
             <FieldBlock label="Request title" hint="Optional but recommended">
@@ -257,44 +252,38 @@ function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 label="Related lead"
                 hint={leadsQuery.isError ? "Lead selector unavailable right now." : "Optional"}
               >
-                <Select
+                <select
                   value={safeLeadId}
-                  onValueChange={(value) => setRelatedLeadId(sanitizeSelectValue(value, leadOptions, NONE_OPTION))}
+                  onChange={(event) => setRelatedLeadId(sanitizeSelectValue(event.target.value, leadOptions, NONE_OPTION))}
+                  className={nativeSelectClassName}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a lead" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE_OPTION}>No related lead</SelectItem>
-                    {leads.map((lead) => (
-                      <SelectItem key={lead.id} value={lead.id}>
-                        {lead.name} · {lead.company}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value={NONE_OPTION}>No related lead</option>
+                  {leads.map((lead) => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.name} · {lead.company}
+                    </option>
+                  ))}
+                </select>
               </FieldBlock>
 
               <FieldBlock
                 label="Related campaign"
                 hint={campaignsQuery.isError ? "Campaign selector unavailable right now." : "Optional"}
               >
-                <Select
+                <select
                   value={safeCampaignId}
-                  onValueChange={(value) => setRelatedCampaignId(sanitizeSelectValue(value, campaignOptions, NONE_OPTION))}
+                  onChange={(event) =>
+                    setRelatedCampaignId(sanitizeSelectValue(event.target.value, campaignOptions, NONE_OPTION))
+                  }
+                  className={nativeSelectClassName}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a campaign" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE_OPTION}>No related campaign</SelectItem>
-                    {campaigns.map((campaign) => (
-                      <SelectItem key={campaign.id} value={campaign.id}>
-                        {campaign.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value={NONE_OPTION}>No related campaign</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </option>
+                  ))}
+                </select>
               </FieldBlock>
             </div>
 
@@ -585,6 +574,9 @@ function getCategoryLabel(value: string | null | undefined) {
   const category = sanitizeRequestCategory(value);
   return CATEGORY_LABELS[category] || CATEGORY_LABELS[REQUEST_CATEGORY_DEFAULT];
 }
+
+const nativeSelectClassName =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 function safeNormalizeRequest(value: unknown, index = 0): AgentRequestRecord | null {
   try {
