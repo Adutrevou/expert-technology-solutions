@@ -67,6 +67,9 @@ function LeadsPage() {
   );
   const industries = useMemo(() => Array.from(new Set(all.map((lead) => lead.industry))).sort(), [all]);
   const campaigns = useMemo(() => Array.from(new Set(all.map((lead) => lead.campaignName))).sort(), [all]);
+  const hasLeadData = all.length > 0;
+  const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
+  const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
 
   const filtered = useMemo(() => {
     return all.filter((lead) => {
@@ -97,6 +100,18 @@ function LeadsPage() {
       setPage(totalPages);
     }
   }, [page, totalPages]);
+
+  useEffect(() => {
+    if (industry !== "all" && !visibleIndustries.includes(industry)) {
+      setIndustry("all");
+    }
+    if (campaign !== "all" && !visibleCampaigns.includes(campaign)) {
+      setCampaign("all");
+    }
+    if (qualification !== "all" && !all.some((lead) => lead.qualification === qualification)) {
+      setQualification("all");
+    }
+  }, [all, campaign, industry, qualification, visibleCampaigns, visibleIndustries]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -153,8 +168,8 @@ function LeadsPage() {
         status: statusDraft as LeadWorkflowStatus,
         user: leadActor,
       });
+      await Promise.all([leadsQuery.refetch(), activityQuery.refetch()]);
       setStatusNotice("Status updated successfully.");
-      void leadsQuery.refetch();
     } catch {
       setStatusNotice(null);
     }
@@ -179,9 +194,9 @@ function LeadsPage() {
         comment: nextComment,
         user: leadActor,
       });
+      await Promise.all([leadsQuery.refetch(), activityQuery.refetch()]);
       setCommentDraft("");
       setCommentNotice("Comment saved successfully.");
-      void leadsQuery.refetch();
     } catch {
       setCommentNotice(null);
     }
@@ -222,7 +237,7 @@ function LeadsPage() {
             <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Industry" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All industries</SelectItem>
-              {industries.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              {visibleIndustries.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={qualification} onValueChange={(value) => { setQualification(value); setPage(1); }}>
@@ -239,7 +254,7 @@ function LeadsPage() {
             <SelectTrigger className="w-full md:w-[220px]"><SelectValue placeholder="Campaign" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All campaigns</SelectItem>
-              {campaigns.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              {visibleCampaigns.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -264,7 +279,7 @@ function LeadsPage() {
               Showing {filtered.length.toLocaleString()} of {all.length.toLocaleString()} synced leads
             </div>
             <div className="grid gap-3 p-4 md:hidden">
-              {all.length === 0 ? (
+              {!hasLeadData ? (
                 <EmptyState
                   title="No leads synced yet"
                   description="The live leads endpoint is connected, but this client does not have any leads yet."
@@ -298,7 +313,7 @@ function LeadsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {all.length === 0 && (
+                  {!hasLeadData && (
                     <TableRow>
                       <TableCell colSpan={7} className="py-16">
                         <EmptyState
@@ -308,7 +323,7 @@ function LeadsPage() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {all.length > 0 && paged.length === 0 && (
+                  {hasLeadData && paged.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No leads match your filters.</TableCell>
                     </TableRow>
@@ -316,19 +331,25 @@ function LeadsPage() {
                   {paged.map((lead) => (
                     <TableRow
                       key={lead.id}
-                      className={lead.id === selectedLead?.id ? "bg-muted/40" : "transition-smooth"}
+                      role="button"
+                      tabIndex={0}
+                      aria-selected={lead.id === selectedLead?.id}
+                      onClick={() => setSelectedLeadId(lead.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedLeadId(lead.id);
+                        }
+                      }}
+                      className={lead.id === selectedLead?.id ? "cursor-pointer bg-primary/5 ring-1 ring-primary/30" : "cursor-pointer transition-smooth hover:bg-muted/30"}
                     >
-                      <TableCell className="font-medium">
-                        <button type="button" className="text-left" onClick={() => setSelectedLeadId(lead.id)}>
-                          {lead.name}
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{lead.company}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">{lead.title}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground">{lead.industry}</TableCell>
+                      <TableCell className="font-medium">{displayValue(lead.name)}</TableCell>
+                      <TableCell className="text-muted-foreground">{displayValue(lead.company)}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">{displayValue(lead.title)}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(lead.industry)}</TableCell>
                       <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                       <TableCell><LeadStatusBadge status={lead.qualification} /></TableCell>
-                      <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{lead.campaignName}</TableCell>
+                      <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -412,8 +433,8 @@ function LeadMobileCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate font-semibold">{lead.name}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{lead.company}</p>
+          <h2 className="truncate font-semibold">{displayValue(lead.name)}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{displayValue(lead.company)}</p>
         </div>
         <LeadStatusBadge status={lead.status} />
       </div>
@@ -421,10 +442,10 @@ function LeadMobileCard({
         <LeadStatusBadge status={lead.qualification} />
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <LeadField label="Title" value={lead.title} />
-        <LeadField label="Industry" value={lead.industry} />
-        <LeadField label="Location" value={lead.location} />
-        <LeadField label="Campaign" value={lead.campaignName} />
+        <LeadField label="Title" value={displayValue(lead.title)} />
+        <LeadField label="Industry" value={displayValue(lead.industry)} />
+        <LeadField label="Location" value={displayValue(lead.location)} />
+        <LeadField label="Campaign" value={displayValue(lead.campaignName)} />
       </dl>
     </button>
   );
@@ -488,19 +509,25 @@ function LeadDetailPanel({
         <div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">{lead.name}</h2>
+              <h2 className="text-2xl font-semibold">{displayValue(lead.name)}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {lead.company}
-                {lead.title !== "Unknown title" ? ` · ${lead.title}` : ""}
+                {displayValue(lead.company)}
+                {lead.title ? ` · ${lead.title}` : ""}
               </p>
             </div>
             <LeadStatusBadge status={currentStatus} />
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <LeadField label="Email" value={lead.email || "No email provided"} />
-            <LeadField label="Campaign" value={lead.campaignName} />
-            <LeadField label="Industry" value={lead.industry} />
-            <LeadField label="Location" value={lead.location} />
+            <LeadField label="Contact" value={displayValue(lead.name)} />
+            <LeadField label="Company" value={displayValue(lead.company)} />
+            <LeadField label="Email" value={displayValue(lead.email)} />
+            <LeadField label="Phone" value={displayValue(lead.phone)} />
+            <LeadField label="Title" value={displayValue(lead.title)} />
+            <LeadField label="Campaign" value={displayValue(lead.campaignName)} />
+            <LeadField label="Industry" value={displayValue(lead.industry)} />
+            <LeadField label="Location" value={displayValue(lead.location)} />
+            <LeadField label="Website" value={displayValue(lead.website || lead.domain)} />
+            <LeadField label="LinkedIn" value={displayValue(lead.linkedinUrl || lead.companyLinkedin)} />
           </div>
         </div>
 
@@ -590,7 +617,7 @@ function ActivityItem({ item }: { item: LeadActivityRecord }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{activityLabel(item)}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{item.message}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{displayValue(item.message)}</p>
         </div>
         {item.status ? <LeadStatusBadge status={item.status} /> : null}
       </div>
@@ -649,6 +676,10 @@ function LeadField({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-sm break-words">{value}</dd>
     </div>
   );
+}
+
+function displayValue(value?: string | null) {
+  return value?.trim() ? value : "Not provided";
 }
 
 function activityLabel(item: LeadActivityRecord) {

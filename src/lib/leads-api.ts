@@ -96,6 +96,11 @@ export interface LeadRecord {
   industry: string;
   location: string;
   email: string;
+  phone: string;
+  website: string;
+  domain: string;
+  linkedinUrl: string;
+  companyLinkedin: string;
   qualification: LeadQualification;
   status: string;
   campaignName: string;
@@ -500,11 +505,16 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   return {
     id: pickString(record, ["id", "_id"]) || `lead-${index}`,
     name,
-    company: pickString(record, ["company", "company_name", "companyName"]) || "Unknown company",
-    title: pickString(record, ["title", "job_title", "jobTitle", "role"]) || "Unknown title",
-    industry: pickString(record, ["industry", "target_niche", "targetNiche"]) || "Unknown industry",
-    location: location || "Unknown location",
+    company: pickString(record, ["company", "company_name", "companyName"]) || "",
+    title: pickString(record, ["title", "job_title", "jobTitle", "role"]) || "",
+    industry: pickString(record, ["industry", "target_niche", "targetNiche"]) || "",
+    location: location || "",
     email: pickString(record, ["email"]) || "",
+    phone: pickString(record, ["phone", "phone_number", "phoneNumber", "mobile"]) || "",
+    website: pickString(record, ["website", "url"]) || "",
+    domain: pickString(record, ["domain"]) || "",
+    linkedinUrl: pickString(record, ["linkedin_url", "linkedinUrl"]) || "",
+    companyLinkedin: pickString(record, ["company_linkedin", "companyLinkedin"]) || "",
     qualification: mapQualification(
       pickString(record, ["qualification"]) || normalizedStatus,
     ),
@@ -567,17 +577,21 @@ function normalizeLeadActivityResponse(value: unknown): LeadActivityRecord[] {
 
 function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRecord {
   const record = asRecord(value);
-  const comment = pickString(record, ["comment", "note", "body", "text", "message"]);
+  const metadata = asRecord(record.metadata);
+  const explicitType = pickString(record, ["type", "activity_type", "activityType", "event_type", "eventType", "kind"]);
+  const description = pickString(record, ["description", "message", "summary"]);
+  const comment =
+    pickString(record, ["comment", "note", "body", "text", "message"]) ||
+    (explicitType === "comment_added" ? description : undefined);
   const status = getActivityStatus(record);
-  const explicitType = pickString(record, ["type", "event_type", "eventType", "kind"]);
   const type = normalizeActivityType(explicitType, Boolean(comment), Boolean(status));
   const userRecord = asRecord(record.user ?? record.actor ?? record.created_by ?? record.createdBy ?? record.updated_by ?? record.updatedBy);
   const userName =
     pickString(userRecord, ["name", "full_name", "fullName"]) ||
-    pickString(record, ["user_name", "userName", "author_name", "authorName"]);
+    pickString(record, ["user_name", "userName", "author_name", "authorName", "created_by_name", "updated_by_name"]);
   const userEmail =
     pickString(userRecord, ["email"]) ||
-    pickString(record, ["user_email", "userEmail", "author_email", "authorEmail"]);
+    pickString(record, ["user_email", "userEmail", "author_email", "authorEmail", "created_by_email", "updated_by_email"]);
   const userRole =
     pickString(userRecord, ["role"]) ||
     pickString(record, ["user_role", "userRole", "author_role", "authorRole"]);
@@ -588,8 +602,9 @@ function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRec
     status,
     comment,
     message:
-      pickString(record, ["message", "summary", "description"]) ||
+      description ||
       (type === "status_change" && status ? `Status updated to ${formatLeadStatus(status)}.` : "") ||
+      pickString(metadata, ["message"]) ||
       comment ||
       "Lead activity updated.",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
@@ -601,18 +616,21 @@ function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRec
 
 function getActivityStatus(value: unknown) {
   const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
   const nextStatus = pickString(record, ["status", "lead_status", "leadStatus", "to_status", "toStatus", "next_status", "nextStatus"]);
-  return nextStatus || pickString(asRecord(record.status_change), ["status", "to_status", "toStatus"]);
+  return nextStatus || pickString(metadata, ["to_status", "toStatus", "status"]) || pickString(asRecord(record.status_change), ["status", "to_status", "toStatus"]);
 }
 
 function normalizeActivityType(value: string | undefined, hasComment: boolean, hasStatus: boolean): LeadActivityRecord["type"] {
   switch ((value || "").toLowerCase()) {
     case "comment":
     case "note":
+    case "comment_added":
       return "comment";
     case "status":
     case "status_change":
     case "lead_status_updated":
+    case "status_changed":
       return "status_change";
     default:
       if (hasComment && !hasStatus) return "comment";
