@@ -1,648 +1,568 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ErrorInfo } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, formatDistanceToNow } from "date-fns";
-import { Bot, CheckCircle2, Inbox, RefreshCcw, Send, ShieldAlert, Sparkles } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
-import { RequestStatusBadge } from "@/components/status-badges";
-import { useApp } from "@/lib/app-state";
-import { useCampaignsQuery, useLeadsQuery, useRequestDetailQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
-import {
-  createRequest,
-  normalizeCampaign,
-  normalizeLead,
-  normalizeRequest,
-  REQUEST_CATEGORIES,
-  type AgentRequestRecord,
-  type CampaignRecord,
-  type LeadRecord,
-  type RequestCategory,
-} from "@/lib/leads-api";
+import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useState } from "react";
 
 export const Route = createFileRoute("/agent")({
-  head: () => ({ meta: [{ title: "Expert Lead Agent — Expert Technology Solutions" }] }),
-  component: AgentRequestsPage,
+  head: () => ({ meta: [{ title: "Expert Lead Agent - Expert Technology Solutions" }] }),
+  component: AgentPage,
 });
 
-const CATEGORY_LABELS: Record<RequestCategory, string> = {
-  new_campaign: "New campaign",
-  campaign_change: "Campaign change",
-  lead_question: "Lead question",
-  outreach_draft: "Outreach draft",
-  support_issue: "Support issue",
+const API_BASE = (import.meta.env.VITE_LEADS_API_BASE_URL || "https://api.intergrai.co.za").replace(/\/+$/, "");
+const CLIENT_SLUG = "expert-technology-solutions";
+const CATEGORY_OPTIONS = [
+  "new_campaign",
+  "campaign_change",
+  "lead_question",
+  "outreach_draft",
+  "support_issue",
+] as const;
+
+type Category = (typeof CATEGORY_OPTIONS)[number];
+
+type HistoryItem = {
+  id: string;
+  title: string;
+  message: string;
+  category: string;
+  status: string;
+  createdAt: string;
+  createdBy: string;
 };
 
-const REQUEST_CATEGORY_DEFAULT: RequestCategory = "lead_question";
-const NONE_OPTION = "__none__";
+type ReplyItem = {
+  id: string;
+  message: string;
+  createdAt: string;
+  author: string;
+};
 
-const PREVIEW_COPY =
-  "Internal preview — this feature will be enabled for Expert users after login is active.";
+type RequestDetail = HistoryItem & {
+  replies: ReplyItem[];
+};
 
-function AgentRequestsPage() {
-  const { user } = useApp();
-  const isSuperAdmin = user?.role === "super_admin";
+function AgentPage() {
   return (
-    <AgentRouteErrorBoundary>
-      <AgentRequestsAdminView isSuperAdmin={isSuperAdmin} />
-    </AgentRouteErrorBoundary>
+    <AgentPageBoundary>
+      <AgentPageContent />
+    </AgentPageBoundary>
   );
 }
 
-function AgentRequestsAdminView({ isSuperAdmin }: { isSuperAdmin: boolean }) {
-  const { user } = useApp();
-  const queryClient = useQueryClient();
-  const requestsQuery = useRequestsQuery();
-  const leadsQuery = useLeadsQuery();
-  const campaignsQuery = useCampaignsQuery();
-  const [category, setCategory] = useState<RequestCategory>(REQUEST_CATEGORY_DEFAULT);
+function AgentPageContent() {
+  const [category, setCategory] = useState<Category>("lead_question");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [relatedLeadId, setRelatedLeadId] = useState(NONE_OPTION);
-  const [relatedCampaignId, setRelatedCampaignId] = useState(NONE_OPTION);
-  const requests = useMemo<AgentRequestRecord[]>(() => safeNormalizeRequests(requestsQuery.data?.requests), [requestsQuery.data?.requests]);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const detailQuery = useRequestDetailQuery(selectedRequestId);
-  const leads = useMemo<LeadRecord[]>(() => safeNormalizeLeads(leadsQuery.data?.leads), [leadsQuery.data?.leads]);
-  const campaigns = useMemo<CampaignRecord[]>(() => safeNormalizeCampaigns(campaignsQuery.data?.campaigns), [campaignsQuery.data?.campaigns]);
-  const leadOptions = useMemo(() => [NONE_OPTION, ...leads.map((lead) => lead.id)], [leads]);
-  const campaignOptions = useMemo(
-    () => [NONE_OPTION, ...campaigns.map((campaign) => campaign.id)],
-    [campaigns],
-  );
-  const safeCategory = sanitizeRequestCategory(category);
-  const safeLeadId = sanitizeSelectValue(relatedLeadId, leadOptions, NONE_OPTION);
-  const safeCampaignId = sanitizeSelectValue(relatedCampaignId, campaignOptions, NONE_OPTION);
-  const safeDetailRequest = useMemo(
-    () => (detailQuery.data?.request ? safeNormalizeRequest(detailQuery.data.request) : null),
-    [detailQuery.data?.request],
-  );
-
-  const selectedRequest = useMemo<AgentRequestRecord | null>(() => {
-    if (safeDetailRequest) return safeDetailRequest;
-    return requests.find((request) => request.id === selectedRequestId) || requests[0] || null;
-  }, [requests, safeDetailRequest, selectedRequestId]);
-  const selectedReplies = selectedRequest?.replies ?? [];
+  const [requests, setRequests] = useState<HistoryItem[]>([]);
+  const [selectedRequestId, setSelectedRequestId] = useState<string>("");
+  const [selectedRequest, setSelectedRequest] = useState<RequestDetail | null>(null);
+  const [listLoading, setListLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [listError, setListError] = useState("");
+  const [detailError, setDetailError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
 
   useEffect(() => {
-    if (!selectedRequestId && requests[0]?.id) {
-      setSelectedRequestId(requests[0].id);
+    let active = true;
+
+    async function loadRequests() {
+      setListLoading(true);
+      setListError("");
+
+      try {
+        const response = await fetch(`${API_BASE}/clients/${CLIENT_SLUG}/requests`, {
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request history failed (${response.status})`);
+        }
+
+        const payload = await response.json();
+        const nextRequests = normalizeRequestList(payload);
+
+        if (!active) return;
+
+        setRequests(nextRequests);
+        setSelectedRequestId((current) => {
+          if (current && nextRequests.some((item) => item.id === current)) {
+            return current;
+          }
+          return nextRequests[0]?.id || "";
+        });
+      } catch (error) {
+        if (!active) return;
+        setRequests([]);
+        setListError(getErrorMessage(error, "Unable to load request history."));
+      } finally {
+        if (active) {
+          setListLoading(false);
+        }
+      }
     }
-  }, [requests, selectedRequestId]);
+
+    void loadRequests();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
-    if (selectedRequestId && !requests.some((request) => request.id === selectedRequestId) && !safeDetailRequest) {
-      setSelectedRequestId(requests[0]?.id ?? null);
+    if (!selectedRequestId) {
+      setSelectedRequest(null);
+      setDetailError("");
+      return;
     }
-  }, [requests, safeDetailRequest, selectedRequestId]);
 
-  useEffect(() => {
-    if (category !== safeCategory) {
-      setCategory(safeCategory);
+    let active = true;
+
+    async function loadRequestDetail() {
+      setDetailLoading(true);
+      setDetailError("");
+
+      try {
+        const response = await fetch(`${API_BASE}/clients/${CLIENT_SLUG}/requests/${selectedRequestId}`, {
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request detail failed (${response.status})`);
+        }
+
+        const payload = await response.json();
+        const nextDetail = normalizeRequestDetail(payload, selectedRequestId);
+
+        if (!active) return;
+
+        setSelectedRequest(nextDetail);
+      } catch (error) {
+        if (!active) return;
+        setSelectedRequest(null);
+        setDetailError(getErrorMessage(error, "Unable to load request detail."));
+      } finally {
+        if (active) {
+          setDetailLoading(false);
+        }
+      }
     }
-  }, [category, safeCategory]);
 
-  useEffect(() => {
-    if (relatedLeadId !== safeLeadId) {
-      setRelatedLeadId(safeLeadId);
+    void loadRequestDetail();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedRequestId]);
+
+  async function refreshRequests(preferredRequestId?: string) {
+    setListError("");
+
+    try {
+      const response = await fetch(`${API_BASE}/clients/${CLIENT_SLUG}/requests`, {
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request history failed (${response.status})`);
+      }
+
+      const payload = await response.json();
+      const nextRequests = normalizeRequestList(payload);
+      setRequests(nextRequests);
+
+      if (preferredRequestId && nextRequests.some((item) => item.id === preferredRequestId)) {
+        setSelectedRequestId(preferredRequestId);
+        return;
+      }
+
+      setSelectedRequestId((current) => {
+        if (current && nextRequests.some((item) => item.id === current)) {
+          return current;
+        }
+        return nextRequests[0]?.id || "";
+      });
+    } catch (error) {
+      setListError(getErrorMessage(error, "Unable to refresh request history."));
     }
-  }, [relatedLeadId, safeLeadId]);
+  }
 
-  useEffect(() => {
-    if (relatedCampaignId !== safeCampaignId) {
-      setRelatedCampaignId(safeCampaignId);
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitError("");
+    setSubmitSuccess("");
+
+    const trimmedMessage = message.trim();
+    const trimmedTitle = title.trim();
+
+    if (!trimmedMessage) {
+      setSubmitError("Message is required.");
+      return;
     }
-  }, [relatedCampaignId, safeCampaignId]);
 
-  const submitMutation = useMutation({
-    mutationFn: () =>
-      createRequest({
-        category: safeCategory,
-        title: title.trim() || undefined,
-        message: message.trim(),
-        related_lead_id: safeLeadId !== NONE_OPTION ? safeLeadId : null,
-        related_campaign_id: safeCampaignId !== NONE_OPTION ? safeCampaignId : null,
-        created_by_name: user?.name || "Intergrai Admin Preview",
-        created_by_email: user?.email || "admin@intergrai.co.za",
-        created_by_role: user?.role || "intergrai_admin",
-      }),
-    onSuccess: async (response) => {
-      const createdRequest = safeNormalizeRequest(response.request);
+    setSubmitting(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/clients/${CLIENT_SLUG}/requests`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          category,
+          title: trimmedTitle || undefined,
+          message: trimmedMessage,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Submit failed (${response.status})`);
+      }
+
+      const payload = await response.json();
+      const createdRequestId = getCreatedRequestId(payload);
+
       setTitle("");
       setMessage("");
-      setCategory(REQUEST_CATEGORY_DEFAULT);
-      setRelatedLeadId(NONE_OPTION);
-      setRelatedCampaignId(NONE_OPTION);
-      if (createdRequest?.id) {
-        setSelectedRequestId(createdRequest.id);
-      }
-      await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests"] });
-      if (createdRequest?.id) {
-        await queryClient.invalidateQueries({ queryKey: ["intergrai", "requests", createdRequest.id] });
-      }
-    },
-  });
+      setCategory("lead_question");
+      setSubmitSuccess("Request submitted successfully.");
+
+      await refreshRequests(createdRequestId);
+    } catch (error) {
+      setSubmitError(getErrorMessage(error, "Unable to submit request."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const safeSelectedRequest = selectedRequest || getFallbackDetail(requests, selectedRequestId);
+  const safeReplies = safeSelectedRequest?.replies || [];
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-6">
-      <header className="overflow-hidden rounded-[28px] border border-border bg-gradient-subtle p-6 shadow-card md:p-8">
-        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              <Bot className="h-3.5 w-3.5" />
-              Powered by Intergrai
-            </div>
-            <h1 className="mt-4 text-3xl font-bold md:text-4xl">Expert Lead Agent</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{PREVIEW_COPY}</p>
-          </div>
-          <div className="rounded-2xl border border-border bg-background/85 px-4 py-3 text-sm shadow-card">
-            <p className="font-medium">{isSuperAdmin ? "Internal preview notice" : "Admin preview notice"}</p>
-            <p className="mt-1 text-muted-foreground">
-              {isSuperAdmin
-                ? "Hidden from normal client navigation. Requests submit against the live Intergrai client queue."
-                : "You are viewing the internal preview without super admin navigation access. Requests still submit against the live Intergrai client queue."}
-            </p>
-          </div>
-        </div>
-      </header>
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-medium text-slate-600">Powered by Intergrai</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Expert Lead Agent</h1>
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Internal preview notice. This page is a minimal go-live fallback and is intentionally hidden from normal
+          navigation.
+        </p>
+      </div>
 
-      {!isSuperAdmin ? (
-        <Card className="border-warning/30 bg-warning/10 shadow-card">
-          <CardContent className="flex items-start gap-3 p-4">
-            <ShieldAlert className="mt-0.5 h-5 w-5 text-warning-foreground" />
-            <div className="space-y-1 text-sm">
-              <p className="font-medium">Internal preview mode</p>
-              <p className="text-muted-foreground">
-                This route is intentionally hidden from standard client navigation until production auth is finalized.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Create request</h2>
+          <p className="mt-1 text-sm text-slate-600">Submits directly to the public Intergrai client request API.</p>
 
-      {submitMutation.isSuccess ? (
-        <Card className="border-success/30 bg-success/10 shadow-card">
-          <CardContent className="flex items-center gap-3 p-4">
-            <CheckCircle2 className="h-5 w-5 text-success" />
-            <p className="text-sm">Request submitted successfully. History has been refreshed.</p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {submitMutation.isError ? (
-        <Card className="border-destructive/30 bg-destructive/10 shadow-card">
-          <CardContent className="p-4 text-sm text-destructive">
-            {(submitMutation.error as Error).message || "The request could not be submitted."}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle>Submit a request</CardTitle>
-            <CardDescription>
-              Structured preview form for the central Leads API request queue.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-4 rounded-3xl border border-border bg-background/70 p-4 md:grid-cols-3">
-              <PreviewMetric label="API target" value="api.intergrai.co.za" />
-              <PreviewMetric label="Client slug" value="expert-technology-solutions" />
-              <PreviewMetric label="Preview actor" value={user?.name || "Intergrai Admin Preview"} />
-            </div>
-
-            <FieldBlock label="Request category">
+          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-800" htmlFor="agent-category">
+                Category
+              </label>
               <select
-                value={safeCategory}
-                onChange={(event) => setCategory(sanitizeRequestCategory(event.target.value))}
-                className={nativeSelectClassName}
+                id="agent-category"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                value={category}
+                onChange={(event) => setCategory(toCategory(event.target.value))}
               >
-                {REQUEST_CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
-                    {getCategoryLabel(item)}
+                {CATEGORY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
                   </option>
                 ))}
               </select>
-            </FieldBlock>
+            </div>
 
-            <FieldBlock label="Request title" hint="Optional but recommended">
-              <Input
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-800" htmlFor="agent-title">
+                Title
+              </label>
+              <input
+                id="agent-title"
+                type="text"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="Short summary of the request"
+                placeholder="Short summary"
               />
-            </FieldBlock>
+            </div>
 
-            <FieldBlock label="Message or details">
-              <Textarea
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-800" htmlFor="agent-message">
+                Message
+              </label>
+              <textarea
+                id="agent-message"
+                className="min-h-40 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder="Describe the request, needed outcome, context, and any deadlines."
-                className="min-h-[180px] resize-y"
+                placeholder="Describe the request"
               />
-            </FieldBlock>
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <FieldBlock
-                label="Related lead"
-                hint={leadsQuery.isError ? "Lead selector unavailable right now." : "Optional"}
-              >
-                <select
-                  value={safeLeadId}
-                  onChange={(event) => setRelatedLeadId(sanitizeSelectValue(event.target.value, leadOptions, NONE_OPTION))}
-                  className={nativeSelectClassName}
-                >
-                  <option value={NONE_OPTION}>No related lead</option>
-                  {leads.map((lead) => (
-                    <option key={lead.id} value={lead.id}>
-                      {lead.name} · {lead.company}
-                    </option>
-                  ))}
-                </select>
-              </FieldBlock>
-
-              <FieldBlock
-                label="Related campaign"
-                hint={campaignsQuery.isError ? "Campaign selector unavailable right now." : "Optional"}
-              >
-                <select
-                  value={safeCampaignId}
-                  onChange={(event) =>
-                    setRelatedCampaignId(sanitizeSelectValue(event.target.value, campaignOptions, NONE_OPTION))
-                  }
-                  className={nativeSelectClassName}
-                >
-                  <option value={NONE_OPTION}>No related campaign</option>
-                  {campaigns.map((campaign) => (
-                    <option key={campaign.id} value={campaign.id}>
-                      {campaign.name}
-                    </option>
-                  ))}
-                </select>
-              </FieldBlock>
             </div>
 
-            <div className="rounded-2xl border border-border bg-muted/20 p-4 text-sm">
-              <p className="font-medium">Submission identity</p>
-              <p className="mt-1 text-muted-foreground">
-                {(user?.name || "Intergrai Admin Preview") +
-                  " · " +
-                  (user?.email || "admin@intergrai.co.za") +
-                  " · " +
-                  (user?.role || "intergrai_admin")}
-              </p>
-            </div>
-
-            <Button
-              onClick={() => submitMutation.mutate()}
-              disabled={!message.trim() || submitMutation.isPending}
-              className="w-full gap-2 md:w-auto"
-            >
-              {submitMutation.isPending ? (
-                <>
-                  <RefreshCcw className="h-4 w-4 animate-spin" />
-                  Submitting
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Submit request
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] xl:grid-cols-1">
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-start justify-between space-y-0">
-              <div>
-                <CardTitle>Request history</CardTitle>
-                <CardDescription>Latest requests submitted for this client.</CardDescription>
+            {submitError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {submitError}
               </div>
-              <Button onClick={() => requestsQuery.refetch()} variant="outline" size="sm" className="gap-2">
-                <RefreshCcw className="h-4 w-4" />
+            ) : null}
+
+            {submitSuccess ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {submitSuccess}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : "Submit"}
+            </button>
+          </form>
+        </div>
+
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Request history</h2>
+                <p className="mt-1 text-sm text-slate-600">Latest requests for this client.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                onClick={() => {
+                  void refreshRequests(selectedRequestId || undefined);
+                }}
+              >
                 Refresh
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {requestsQuery.isLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, index) => (
-                    <Skeleton key={index} className="h-28 rounded-2xl" />
-                  ))}
-                </div>
-              ) : requestsQuery.isError ? (
-                <EmptyState title="Request history unavailable" description="The requests endpoint could not be loaded right now." />
-              ) : requests.length === 0 ? (
-                <EmptyState title="No requests yet" description="Submit the first request from this preview form." />
-              ) : (
-                <div className="space-y-3">
-                  {requests.map((request) => {
-                    const active = request.id === (selectedRequestId || selectedRequest?.id);
-                    const replyCount = (request.replies || []).length;
-                    return (
-                      <button
-                        key={request.id}
-                        type="button"
-                        onClick={() => setSelectedRequestId(request.id)}
-                        className={`w-full rounded-2xl border p-4 text-left transition-smooth ${
-                          active
-                            ? "border-primary/40 bg-primary/10 shadow-card"
-                            : "border-border bg-card hover:border-primary/30 hover:bg-muted/20"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                              {getCategoryLabel(request.category)}
-                            </p>
-                            <h2 className="mt-2 line-clamp-1 font-semibold">{request.title}</h2>
-                            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{request.latestReply || request.message}</p>
-                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span>{replyCount} {replyCount === 1 ? "reply" : "replies"}</span>
-                              {request.createdByName ? <span>Submitted by {request.createdByName}</span> : null}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-start gap-2 sm:items-end">
-                            <RequestStatusBadge status={request.status} />
-                            <p className="text-xs text-muted-foreground">{formatRequestDate(request.createdAt)}</p>
-                          </div>
+              </button>
+            </div>
+
+            {listError ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {listError}
+              </div>
+            ) : null}
+
+            {listLoading ? <p className="mt-4 text-sm text-slate-500">Loading requests...</p> : null}
+
+            {!listLoading && requests.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500">No requests found.</p>
+            ) : null}
+
+            <ul className="mt-4 space-y-3">
+              {requests.map((request) => {
+                const isSelected = request.id === selectedRequestId;
+
+                return (
+                  <li key={request.id}>
+                    <button
+                      type="button"
+                      className={`w-full rounded-xl border px-4 py-3 text-left ${
+                        isSelected ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                      }`}
+                      onClick={() => setSelectedRequestId(request.id)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{request.title || "Untitled request"}</p>
+                          <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{request.category}</p>
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle>Request details</CardTitle>
-              <CardDescription>Selected request plus latest replies if available.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedRequestId && detailQuery.isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-8 w-40" />
-                  <Skeleton className="h-24 rounded-xl" />
-                  <Skeleton className="h-24 rounded-xl" />
-                </div>
-              ) : selectedRequestId && detailQuery.isError && !selectedRequest ? (
-                <EmptyState
-                  title="Request details unavailable"
-                  description="The selected request could not be loaded. Pick another item or refresh history."
-                />
-              ) : !selectedRequest ? (
-                <EmptyState title="No request selected" description="Pick a request from history to inspect its full details." />
-              ) : (
-                <div className="space-y-5">
-                  {selectedRequestId && detailQuery.isError ? (
-                    <Card className="border-warning/30 bg-warning/10 shadow-none">
-                      <CardContent className="p-4 text-sm text-warning-foreground">
-                        Showing cached request data because the latest detail response could not be loaded.
-                      </CardContent>
-                    </Card>
-                  ) : null}
-                  <div className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/15 p-5 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                        {getCategoryLabel(selectedRequest.category)}
+                        <span className="rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600">
+                          {request.status || "unknown"}
+                        </span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm text-slate-600">{request.message || "No message provided."}</p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        {formatDateTime(request.createdAt)}{request.createdBy ? ` • ${request.createdBy}` : ""}
                       </p>
-                      <h2 className="mt-2 text-xl font-semibold">{selectedRequest.title}</h2>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Created {formatRequestDate(selectedRequest.createdAt, true)}
-                      </p>
-                    </div>
-                    <RequestStatusBadge status={selectedRequest.status} />
-                  </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
-                  <DetailPanel label="Request message" value={selectedRequest.message || "No request details provided."} />
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Selected request detail</h2>
+            <p className="mt-1 text-sm text-slate-600">Replies are shown when the public API provides them.</p>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <DetailPanel
-                      label="Related lead"
-                      value={findLeadLabel(leads, selectedRequest.relatedLeadId) || "No linked lead"}
-                    />
-                    <DetailPanel
-                      label="Related campaign"
-                      value={findCampaignLabel(campaigns, selectedRequest.relatedCampaignId) || "No linked campaign"}
-                    />
-                  </div>
+            {detailError ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {detailError}
+              </div>
+            ) : null}
 
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <DetailPanel label="Submitted by" value={selectedRequest.createdByName || "Unknown"} />
-                    <DetailPanel label="Email" value={selectedRequest.createdByEmail || "Not provided"} />
-                    <DetailPanel
-                      label="Role"
-                      value={selectedRequest.createdByRole ? selectedRequest.createdByRole.replace(/_/g, " ") : "Not provided"}
-                    />
-                  </div>
+            {detailLoading ? <p className="mt-4 text-sm text-slate-500">Loading request detail...</p> : null}
 
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                        Intergrai replies and client-visible updates
-                      </p>
-                    </div>
-                    {selectedReplies.length === 0 ? (
-                      <EmptyState title="No replies yet" description="This request has not received a reply from the central queue." compact />
-                    ) : (
-                      selectedReplies.map((reply) => (
-                        <div key={reply.id} className="rounded-2xl border border-border bg-background/80 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-medium">{reply.authorName || "Intergrai"}</p>
-                            <p className="text-xs text-muted-foreground">{formatRequestDate(reply.createdAt)}</p>
-                          </div>
-                          {reply.authorRole ? (
-                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                              {reply.authorRole.replace(/_/g, " ")}
-                            </p>
-                          ) : null}
-                          <p className="mt-3 text-sm leading-6">{reply.message}</p>
-                        </div>
-                      ))
-                    )}
+            {!detailLoading && !safeSelectedRequest ? (
+              <p className="mt-4 text-sm text-slate-500">Select a request to view detail.</p>
+            ) : null}
+
+            {safeSelectedRequest ? (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900">
+                      {safeSelectedRequest.title || "Untitled request"}
+                    </h3>
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+                      {safeSelectedRequest.status || "unknown"}
+                    </span>
                   </div>
+                  <p className="mt-2 text-sm text-slate-600">{safeSelectedRequest.category || "uncategorized"}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-slate-800">
+                    {safeSelectedRequest.message || "No message provided."}
+                  </p>
+                  <p className="mt-3 text-xs text-slate-500">
+                    {formatDateTime(safeSelectedRequest.createdAt)}
+                    {safeSelectedRequest.createdBy ? ` • ${safeSelectedRequest.createdBy}` : ""}
+                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Replies</h3>
+                  {safeReplies.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-500">No replies available.</p>
+                  ) : (
+                    <ul className="mt-3 space-y-3">
+                      {safeReplies.map((reply) => (
+                        <li key={reply.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                          <p className="whitespace-pre-wrap text-sm text-slate-800">{reply.message || "Empty reply."}</p>
+                          <p className="mt-2 text-xs text-slate-500">
+                            {formatDateTime(reply.createdAt)}{reply.author ? ` • ${reply.author}` : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function FieldBlock({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-medium">{label}</label>
-        {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-      </div>
-      {children}
-    </div>
-  );
+function normalizeRequestList(payload: unknown): HistoryItem[] {
+  const source = getObject(payload);
+  const list = getArray(source.requests) || getArray(source.data) || [];
+  return list.map((item, index) => normalizeHistoryItem(item, index)).filter((item): item is HistoryItem => Boolean(item));
 }
 
-function PreviewMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-muted/20 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-sm font-medium">{value}</p>
-    </div>
-  );
+function normalizeRequestDetail(payload: unknown, fallbackId: string): RequestDetail {
+  const source = getObject(payload);
+  const requestSource = getObject(source.request) || source;
+  const base = normalizeHistoryItem(requestSource, 0, fallbackId) || emptyHistoryItem(fallbackId);
+  const repliesSource = getArray(requestSource.replies) || getArray(source.replies) || [];
+
+  return {
+    ...base,
+    replies: repliesSource
+      .map((item, index) => normalizeReplyItem(item, index))
+      .filter((item): item is ReplyItem => Boolean(item)),
+  };
 }
 
-function DetailPanel({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-border p-4">
-      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{value}</p>
-    </div>
-  );
+function normalizeHistoryItem(item: unknown, index: number, fallbackId?: string): HistoryItem | null {
+  const source = getObject(item);
+  if (!source) return null;
+
+  const id = getString(source.id) || getString(source.request_id) || fallbackId || `request-${index}`;
+
+  return {
+    id,
+    title: getString(source.title) || getString(source.subject) || "",
+    message: getString(source.message) || getString(source.description) || "",
+    category: getString(source.category) || "unknown",
+    status: getString(source.status) || "unknown",
+    createdAt: getString(source.created_at) || getString(source.createdAt) || "",
+    createdBy:
+      getString(source.created_by_name) ||
+      getString(source.createdByName) ||
+      getString(source.created_by_email) ||
+      getString(source.createdByEmail) ||
+      "",
+  };
 }
 
-function EmptyState({
-  title,
-  description,
-  compact = false,
-}: {
-  title: string;
-  description: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`rounded-2xl border border-dashed border-border bg-muted/15 text-center ${compact ? "px-4 py-8" : "px-6 py-10"}`}>
-      <Inbox className="mx-auto mb-3 h-5 w-5 text-muted-foreground" />
-      <p className="font-medium">{title}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
+function normalizeReplyItem(item: unknown, index: number): ReplyItem | null {
+  const source = getObject(item);
+  if (!source) return null;
+
+  return {
+    id: getString(source.id) || getString(source.reply_id) || `reply-${index}`,
+    message: getString(source.message) || getString(source.body) || "",
+    createdAt: getString(source.created_at) || getString(source.createdAt) || "",
+    author:
+      getString(source.author_name) ||
+      getString(source.authorName) ||
+      getString(source.created_by_name) ||
+      getString(source.createdByName) ||
+      "",
+  };
 }
 
-function formatRequestDate(value?: string, includeRelative = false) {
-  if (!value) return "Unknown date";
+function getCreatedRequestId(payload: unknown): string | undefined {
+  const source = getObject(payload);
+  const requestSource = getObject(source.request) || source;
+  return getString(requestSource.id) || getString(requestSource.request_id) || undefined;
+}
+
+function getFallbackDetail(requests: HistoryItem[], selectedRequestId: string): RequestDetail | null {
+  const match = requests.find((request) => request.id === selectedRequestId);
+  if (!match) return null;
+  return { ...match, replies: [] };
+}
+
+function emptyHistoryItem(id: string): HistoryItem {
+  return {
+    id,
+    title: "",
+    message: "",
+    category: "unknown",
+    status: "unknown",
+    createdAt: "",
+    createdBy: "",
+  };
+}
+
+function toCategory(value: string): Category {
+  return CATEGORY_OPTIONS.includes(value as Category) ? (value as Category) : "lead_question";
+}
+
+function getObject(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function getArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function getString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+function formatDateTime(value: string): string {
+  if (!value) return "Date unavailable";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  const absolute = format(parsed, "PPP p");
-  if (!includeRelative) return absolute;
-  return `${absolute} (${formatDistanceToNow(parsed, { addSuffix: true })})`;
+  return parsed.toLocaleString();
 }
 
-function findLeadLabel(leads: Array<{ id: string; name: string; company: string }>, leadId?: string) {
-  if (!leadId) return null;
-  const match = leads.find((lead) => lead.id === leadId);
-  return match ? `${match.name} · ${match.company}` : leadId;
-}
-
-function findCampaignLabel(campaigns: Array<{ id: string; name: string }>, campaignId?: string) {
-  if (!campaignId) return null;
-  const match = campaigns.find((campaign) => campaign.id === campaignId);
-  return match ? match.name : campaignId;
-}
-
-function sanitizeRequestCategory(value: string | null | undefined): RequestCategory {
-  if (typeof value !== "string") return REQUEST_CATEGORY_DEFAULT;
-  return REQUEST_CATEGORIES.includes(value as RequestCategory)
-    ? (value as RequestCategory)
-    : REQUEST_CATEGORY_DEFAULT;
-}
-
-function sanitizeSelectValue(value: string | null | undefined, allowedValues: string[], fallback: string) {
-  if (typeof value !== "string" || !value.trim()) return fallback;
-  return allowedValues.includes(value) ? value : fallback;
-}
-
-function getCategoryLabel(value: string | null | undefined) {
-  const category = sanitizeRequestCategory(value);
-  return CATEGORY_LABELS[category] || CATEGORY_LABELS[REQUEST_CATEGORY_DEFAULT];
-}
-
-const nativeSelectClassName =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
-
-function safeNormalizeRequest(value: unknown, index = 0): AgentRequestRecord | null {
-  try {
-    const request = normalizeRequest(value, index);
-    return {
-      ...request,
-      category: sanitizeRequestCategory(request.category),
-      title: request.title || "Untitled request",
-      message: request.message || "No request details provided.",
-      replies: Array.isArray(request.replies) ? request.replies : [],
-    };
-  } catch {
-    return null;
-  }
-}
-
-function safeNormalizeRequests(values: unknown): AgentRequestRecord[] {
-  if (!Array.isArray(values)) return [];
-  return values
-    .map((value, index) => safeNormalizeRequest(value, index))
-    .filter((value): value is AgentRequestRecord => Boolean(value));
-}
-
-function safeNormalizeLeads(values: unknown): LeadRecord[] {
-  if (!Array.isArray(values)) return [];
-  return values
-    .map((value, index) => {
-      try {
-        const lead = normalizeLead(value, index);
-        if (!lead.id || lead.id === NONE_OPTION) return null;
-        return {
-          ...lead,
-          id: lead.id.trim(),
-          name: lead.name || "Unnamed lead",
-          company: lead.company || "Unknown company",
-        };
-      } catch {
-        return null;
-      }
-    })
-    .filter((value): value is LeadRecord => Boolean(value));
-}
-
-function safeNormalizeCampaigns(values: unknown): CampaignRecord[] {
-  if (!Array.isArray(values)) return [];
-  return values
-    .map((value, index) => {
-      try {
-        const campaign = normalizeCampaign(value, index);
-        if (!campaign.id || campaign.id === NONE_OPTION) return null;
-        return {
-          ...campaign,
-          id: campaign.id.trim(),
-          name: campaign.name || "Untitled campaign",
-        };
-      } catch {
-        return null;
-      }
-    })
-    .filter((value): value is CampaignRecord => Boolean(value));
-}
-
-class AgentRouteErrorBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean; message: string }
-> {
+class AgentPageBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false, message: "" };
@@ -651,28 +571,22 @@ class AgentRouteErrorBoundary extends Component<
   static getDerivedStateFromError(error: Error) {
     return {
       hasError: true,
-      message: error?.message || "The agent page could not be rendered.",
+      message: error?.message || "Agent page failed to render.",
     };
   }
 
-  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {}
+  componentDidCatch(_error: Error, _info: ErrorInfo) {}
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="mx-auto max-w-[1440px]">
-          <Card className="border-warning/30 bg-warning/10 shadow-card">
-            <CardHeader>
-              <CardTitle>Agent preview unavailable</CardTitle>
-              <CardDescription>
-                A bad response or render error was contained inside `/agent` so the rest of the app stays usable.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-warning-foreground">{this.state.message}</p>
-              <p className="text-muted-foreground">Refresh the page after the upstream request payload is corrected.</p>
-            </CardContent>
-          </Card>
+        <div className="mx-auto max-w-3xl px-4 py-6">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
+            <h1 className="text-xl font-semibold">Expert Lead Agent</h1>
+            <p className="mt-2 text-sm font-medium">Powered by Intergrai</p>
+            <p className="mt-4 text-sm">{this.state.message || "This page encountered a render error."}</p>
+            <p className="mt-2 text-sm">Refresh the page or return later. This fallback keeps the rest of the app usable.</p>
+          </div>
         </div>
       );
     }
