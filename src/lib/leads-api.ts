@@ -2,8 +2,8 @@
 // https://api.intergrai.co.za), call the upstream directly. Otherwise route
 // through the same-origin server proxy at `/api/leads` so the browser is
 // never blocked by CORS on preview/published Lovable origins.
-const ENV_BASE_URL = (import.meta.env.VITE_LEADS_API_BASE_URL || "").replace(/\/+$/, "");
-export const LEADS_API_BASE_URL = ENV_BASE_URL || "/api/leads";
+const ENV_BASE_URL = String(import.meta.env.VITE_LEADS_API_BASE_URL || "").trim();
+export const LEADS_API_BASE_URL = resolveApiBaseUrl(ENV_BASE_URL);
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
 const IS_DEV = Boolean(import.meta.env?.DEV);
 
@@ -104,7 +104,7 @@ export interface ReportRecord {
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const url = `${LEADS_API_BASE_URL}${path}`;
+  const url = buildApiUrl(path);
   let response: Response;
   try {
     response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -122,27 +122,68 @@ async function apiGet<T>(path: string): Promise<T> {
     throw new Error(msg);
   }
 
-  return response.json() as Promise<T>;
+  let text = "";
+  try {
+    text = await response.text();
+  } catch (e: any) {
+    const msg = `Leads API unreadable response at ${url}: ${e?.message ?? String(e)}`;
+    if (IS_DEV) console.error(msg, e);
+    throw new Error(msg);
+  }
+
+  try {
+    return (text ? JSON.parse(text) : {}) as T;
+  } catch (e: any) {
+    const snippet = text.slice(0, 500);
+    const msg = `Leads API invalid JSON at ${url}${snippet ? ` — ${snippet}` : ""}`;
+    if (IS_DEV) console.error(msg, e);
+    throw new Error(msg);
+  }
 }
 
 export function getDashboard() {
-  return apiGet<DashboardResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(normalizeDashboardResponse);
 }
 
 export function getLeads() {
-  return apiGet<LeadsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads`).then(normalizeLeadsResponse);
 }
 
 export function getCampaigns() {
-  return apiGet<CampaignsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`).then(normalizeCampaignsResponse);
 }
 
 export function getReports() {
-  return apiGet<ReportsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`).then(normalizeReportsResponse);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function resolveApiBaseUrl(value: string): string {
+  const trimmed = value.replace(/\/+$/, "");
+  if (!trimmed) return "/api/leads";
+  if (trimmed.startsWith("/")) return trimmed;
+
+  try {
+    return new URL(trimmed).toString().replace(/\/+$/, "");
+  } catch {
+    try {
+      return new URL(`https://${trimmed}`).toString().replace(/\/+$/, "");
+    } catch {
+      return trimmed;
+    }
+  }
+}
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${LEADS_API_BASE_URL}${normalizedPath}`;
 }
 
 function pickString(record: Record<string, unknown>, keys: string[]): string | undefined {
@@ -157,8 +198,116 @@ function pickNumber(record: Record<string, unknown>, keys: string[]): number | u
   for (const key of keys) {
     const value = record[key];
     if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
   }
   return undefined;
+}
+
+function pickBoolean(record: Record<string, unknown>, keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") return value;
+  }
+  return undefined;
+}
+
+function normalizeCount(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function normalizeTimestamp(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return Number.isNaN(Date.parse(trimmed)) ? undefined : trimmed;
+}
+
+function normalizeClientSummary(value: unknown): ApiClientSummary {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || INTERGRAI_CLIENT_SLUG,
+    slug: pickString(record, ["slug"]) || INTERGRAI_CLIENT_SLUG,
+    name: pickString(record, ["name", "client_name", "clientName"]) || "Expert Technology Solutions",
+    domain: pickString(record, ["domain", "website", "url"]),
+    status: pickString(record, ["status"]) || "unknown",
+    client_agent_name: pickString(record, ["client_agent_name", "clientAgentName"]),
+    created_at: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeDashboardResponse(value: unknown): DashboardResponse {
+  const record = asRecord(value);
+  const campaignCounts = asRecord(record.campaign_counts);
+  const leadCounts = asRecord(record.lead_counts);
+  const normalizedCampaignActive = normalizeCount(campaignCounts.active);
+  const normalizedCampaignDraft = normalizeCount(campaignCounts.draft);
+  const normalizedCampaignTotal = normalizeCount(campaignCounts.total);
+  const normalizedLeadHot = normalizeCount(leadCounts.hot);
+  const normalizedLeadWarm = normalizeCount(leadCounts.warm);
+  const normalizedLeadReview = normalizeCount(leadCounts.review);
+  const normalizedLeadNotQualified = normalizeCount(leadCounts.not_qualified ?? leadCounts.notQualified);
+  const normalizedLeadTotal = normalizeCount(leadCounts.total);
+
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    campaign_counts: {
+      total: normalizedCampaignTotal || normalizedCampaignActive + normalizedCampaignDraft,
+      active: normalizedCampaignActive,
+      draft: normalizedCampaignDraft,
+    },
+    lead_counts: {
+      total: normalizedLeadTotal || normalizedLeadHot + normalizedLeadWarm + normalizedLeadReview + normalizedLeadNotQualified,
+      hot: normalizedLeadHot,
+      warm: normalizedLeadWarm,
+      review: normalizedLeadReview,
+      not_qualified: normalizedLeadNotQualified,
+    },
+    recent_leads: asArray(record.recent_leads),
+    pending_approvals: asArray(record.pending_approvals),
+    recent_reports: asArray(record.recent_reports),
+  };
+}
+
+function normalizeLeadsResponse(value: unknown): LeadsResponse {
+  const record = asRecord(value);
+  const leads = asArray(record.leads);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    count: normalizeCount(record.count) || leads.length,
+    leads,
+  };
+}
+
+function normalizeCampaignsResponse(value: unknown): CampaignsResponse {
+  const record = asRecord(value);
+  const campaigns = asArray(record.campaigns);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    count: normalizeCount(record.count) || campaigns.length,
+    campaigns,
+  };
+}
+
+function normalizeReportsResponse(value: unknown): ReportsResponse {
+  const record = asRecord(value);
+  const reports = asArray(record.reports);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    count: normalizeCount(record.count) || reports.length,
+    reports,
+  };
 }
 
 function mapQualification(value?: string): LeadQualification {
@@ -234,7 +383,7 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
       pickString(record, ["qualification", "status", "lead_status", "leadStatus"]),
     ),
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
-    createdAt: pickString(record, ["created_at", "createdAt"]),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
 }
 
@@ -249,8 +398,8 @@ export function normalizeCampaign(value: unknown, index = 0): CampaignRecord {
     targetLocation: pickString(record, ["target_location", "targetLocation"]) || "Not specified",
     objective: pickString(record, ["objective", "goal"]) || "No objective provided yet.",
     leadCount: pickNumber(record, ["lead_count", "leadCount"]),
-    createdAt: pickString(record, ["created_at", "createdAt"]),
-    updatedAt: pickString(record, ["updated_at", "updatedAt"]),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
 }
 
@@ -273,6 +422,6 @@ export function normalizeReport(value: unknown, index = 0): ReportRecord {
     summary:
       pickString(record, ["summary", "description"]) ||
       "A live report is available for this client.",
-    createdAt: pickString(record, ["created_at", "createdAt"]),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
 }
