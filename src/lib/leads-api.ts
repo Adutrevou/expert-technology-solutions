@@ -6,6 +6,7 @@ const ENV_BASE_URL = String(import.meta.env.VITE_LEADS_API_BASE_URL || "").trim(
 export const LEADS_API_BASE_URL = resolveApiBaseUrl(ENV_BASE_URL);
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
 const IS_DEV = Boolean(import.meta.env?.DEV);
+const AUTH_TOKEN_STORAGE_KEY = "ets-auth-token";
 
 export interface ApiClientSummary {
   id: string;
@@ -59,8 +60,36 @@ export interface ReportsResponse {
 }
 
 export type LeadQualification = "review" | "warm" | "hot" | "not_qualified";
+export type LeadWorkflowStatus =
+  | "new"
+  | "reviewed"
+  | "contacted"
+  | "interested"
+  | "not_interested"
+  | "follow_up"
+  | "meeting_booked"
+  | "converted"
+  | "rejected";
 export type CampaignLifecycleStatus = "active" | "paused" | "completed" | "draft";
 export type CampaignApprovalStatus = "pending" | "approved" | "rejected" | "none";
+
+export interface LeadUserSummary {
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface LeadActivityRecord {
+  id: string;
+  type: "status_change" | "comment" | "activity";
+  status?: string;
+  comment?: string;
+  message: string;
+  createdAt?: string;
+  userName?: string;
+  userEmail?: string;
+  userRole?: string;
+}
 
 export interface LeadRecord {
   id: string;
@@ -71,6 +100,7 @@ export interface LeadRecord {
   location: string;
   email: string;
   qualification: LeadQualification;
+  status: string;
   campaignName: string;
   createdAt?: string;
 }
@@ -103,11 +133,14 @@ export interface ReportRecord {
   createdAt?: string;
 }
 
-async function apiGet<T>(path: string): Promise<T> {
+async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = buildApiUrl(path);
   let response: Response;
   try {
-    response = await fetch(url, { headers: { Accept: "application/json" } });
+    response = await fetch(url, {
+      ...init,
+      headers: buildHeaders(init.headers, init.body !== undefined),
+    });
   } catch (e: any) {
     const msg = `Leads API network error at ${url}: ${e?.message ?? String(e)}`;
     if (IS_DEV) console.error(msg, e);
@@ -141,6 +174,10 @@ async function apiGet<T>(path: string): Promise<T> {
   }
 }
 
+async function apiGet<T>(path: string): Promise<T> {
+  return apiRequest<T>(path);
+}
+
 export function getDashboard() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(normalizeDashboardResponse);
 }
@@ -155,6 +192,42 @@ export function getCampaigns() {
 
 export function getReports() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`).then(normalizeReportsResponse);
+}
+
+export function updateLeadStatus(leadId: string, status: LeadWorkflowStatus, user: LeadUserSummary) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      status,
+      user,
+      updated_by: user,
+      updatedBy: user,
+      actor: user,
+      user_name: user.name,
+      user_email: user.email,
+      user_role: user.role,
+    }),
+  }).then((value) => normalizeLeadStatus(getActivityStatus(value)) || status);
+}
+
+export function addLeadComment(leadId: string, comment: string, user: LeadUserSummary) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/comments`, {
+    method: "POST",
+    body: JSON.stringify({
+      comment,
+      user,
+      created_by: user,
+      createdBy: user,
+      actor: user,
+      user_name: user.name,
+      user_email: user.email,
+      user_role: user.role,
+    }),
+  }).then(normalizeLeadActivityRecord);
+}
+
+export function getLeadActivity(leadId: string) {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/activity`).then(normalizeLeadActivityResponse);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -184,6 +257,19 @@ function resolveApiBaseUrl(value: string): string {
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${LEADS_API_BASE_URL}${normalizedPath}`;
+}
+
+function buildHeaders(headers: HeadersInit | undefined, hasBody: boolean): Headers {
+  const next = new Headers(headers);
+  if (!next.has("Accept")) next.set("Accept", "application/json");
+  if (hasBody && !next.has("Content-Type")) next.set("Content-Type", "application/json");
+
+  const authToken = getStoredAuthToken();
+  if (authToken && !next.has("Authorization")) {
+    next.set("Authorization", `Bearer ${authToken}`);
+  }
+
+  return next;
 }
 
 function pickString(record: Record<string, unknown>, keys: string[]): string | undefined {
@@ -228,6 +314,25 @@ function normalizeTimestamp(value: unknown): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return Number.isNaN(Date.parse(trimmed)) ? undefined : trimmed;
+}
+
+function normalizeLeadStatus(value: unknown): LeadWorkflowStatus | undefined {
+  if (typeof value !== "string") return undefined;
+
+  switch (value.trim().toLowerCase()) {
+    case "new":
+    case "reviewed":
+    case "contacted":
+    case "interested":
+    case "not_interested":
+    case "follow_up":
+    case "meeting_booked":
+    case "converted":
+    case "rejected":
+      return value.trim().toLowerCase() as LeadWorkflowStatus;
+    default:
+      return undefined;
+  }
 }
 
 function normalizeClientSummary(value: unknown): ApiClientSummary {
@@ -358,6 +463,12 @@ function mapApprovalStatus(value?: string): CampaignApprovalStatus {
 
 export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const record = asRecord(value);
+  const normalizedStatus =
+    normalizeLeadStatus(
+      pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]),
+    ) ||
+    normalizeLeadStatus(pickString(record, ["qualification"])) ||
+    "new";
   const firstName = pickString(record, ["first_name", "firstName"]);
   const lastName = pickString(record, ["last_name", "lastName"]);
   const name =
@@ -380,8 +491,11 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     location: location || "Unknown location",
     email: pickString(record, ["email"]) || "",
     qualification: mapQualification(
-      pickString(record, ["qualification", "status", "lead_status", "leadStatus"]),
+      pickString(record, ["qualification"]) || normalizedStatus,
     ),
+    status:
+      pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]) ||
+      normalizedStatus,
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
@@ -424,4 +538,83 @@ export function normalizeReport(value: unknown, index = 0): ReportRecord {
       "A live report is available for this client.",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
+}
+
+function normalizeLeadActivityResponse(value: unknown): LeadActivityRecord[] {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLeadActivityRecord).filter(Boolean);
+  }
+
+  const record = asRecord(value);
+  const activity = asArray(record.activity ?? record.activities ?? record.history ?? record.comments);
+  return activity.map(normalizeLeadActivityRecord).filter(Boolean);
+}
+
+function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRecord {
+  const record = asRecord(value);
+  const comment = pickString(record, ["comment", "note", "body", "text", "message"]);
+  const status = getActivityStatus(record);
+  const explicitType = pickString(record, ["type", "event_type", "eventType", "kind"]);
+  const type = normalizeActivityType(explicitType, Boolean(comment), Boolean(status));
+  const userRecord = asRecord(record.user ?? record.actor ?? record.created_by ?? record.createdBy ?? record.updated_by ?? record.updatedBy);
+  const userName =
+    pickString(userRecord, ["name", "full_name", "fullName"]) ||
+    pickString(record, ["user_name", "userName", "author_name", "authorName"]);
+  const userEmail =
+    pickString(userRecord, ["email"]) ||
+    pickString(record, ["user_email", "userEmail", "author_email", "authorEmail"]);
+  const userRole =
+    pickString(userRecord, ["role"]) ||
+    pickString(record, ["user_role", "userRole", "author_role", "authorRole"]);
+
+  return {
+    id: pickString(record, ["id", "_id"]) || `activity-${index}`,
+    type,
+    status,
+    comment,
+    message:
+      pickString(record, ["message", "summary", "description"]) ||
+      (type === "status_change" && status ? `Status updated to ${formatLeadStatus(status)}.` : "") ||
+      comment ||
+      "Lead activity updated.",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
+    userName,
+    userEmail,
+    userRole,
+  };
+}
+
+function getActivityStatus(value: unknown) {
+  const record = asRecord(value);
+  const nextStatus = pickString(record, ["status", "lead_status", "leadStatus", "to_status", "toStatus", "next_status", "nextStatus"]);
+  return nextStatus || pickString(asRecord(record.status_change), ["status", "to_status", "toStatus"]);
+}
+
+function normalizeActivityType(value: string | undefined, hasComment: boolean, hasStatus: boolean): LeadActivityRecord["type"] {
+  switch ((value || "").toLowerCase()) {
+    case "comment":
+    case "note":
+      return "comment";
+    case "status":
+    case "status_change":
+    case "lead_status_updated":
+      return "status_change";
+    default:
+      if (hasComment && !hasStatus) return "comment";
+      if (hasStatus) return "status_change";
+      return "activity";
+  }
+}
+
+function formatLeadStatus(status: string) {
+  return status
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getStoredAuthToken() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 }
