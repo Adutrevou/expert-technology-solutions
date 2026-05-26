@@ -44,6 +44,7 @@ function LeadAgentPage() {
 
   const data = summaryQuery.data;
   const canApprove = user?.role === "client_owner" || user?.role === "manager" || user?.role === "intergrai_admin";
+  const isIntergraiAdmin = user?.role === "intergrai_admin";
   const approvalsByEntityId = useMemo(() => {
     const entries = new Map<string, string>();
     for (const approval of data?.approvals || []) {
@@ -177,6 +178,7 @@ function LeadAgentPage() {
         <KpiCard label="Outreach queue" value={data.outreachQueueCount} icon={Send} />
         <KpiCard label="Verified contacts" value={data.verifiedContactsCount} icon={CheckCircle2} />
         <KpiCard label="Outreach planned" value={data.outreachPlannedCount} icon={Send} />
+        <KpiCard label="Send ready" value={data.sendReadyCount} icon={CheckCircle2} />
         <KpiCard label="Waiting mailbox" value={data.waitingForMailboxCount} icon={ShieldAlert} />
         <KpiCard label="Approvals waiting" value={data.approvalsWaiting} icon={CheckCircle2} />
       </div>
@@ -627,11 +629,84 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Follow-up rules and queue</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mailbox remains disconnected. Planning can happen, but no real outreach is sent from this workspace.
+            Mailbox readiness is evaluated before anything can move to send-ready. Real sending is still disabled.
           </p>
-          <div className="mt-4 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Mailbox status</p>
-            <p className="mt-2 text-2xl font-semibold">{formatStatusLabel(data.mailboxStatus)}</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Mailbox status</p>
+              <p className="mt-2 text-2xl font-semibold">{formatStatusLabel(data.mailboxStatus)}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Connected {data.mailboxConnected ? "yes" : "no"} · Sending enabled {data.sendingEnabled ? "yes" : "no"} · Send-ready {data.sendReady ? "yes" : "no"}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {data.mailboxFromEmail ? `${data.mailboxFromName || "Configured sender"} <${data.mailboxFromEmail}>` : "No sender configured yet"}
+                {data.mailboxProviderType ? ` · ${formatStatusLabel(data.mailboxProviderType)}` : ""}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending limits</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Daily {data.mailboxDailySendLimit ?? "Not set"} · Monthly {data.mailboxMonthlySendLimit ?? "Not set"}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sent today {data.mailboxSentToday} · Sent this month {data.mailboxSentThisMonth}
+              </p>
+              {data.mailboxLastError ? (
+                <p className="mt-2 text-xs text-destructive">{data.mailboxLastError}</p>
+              ) : data.mailboxReadinessBlockers.length ? (
+                <p className="mt-2 text-xs text-destructive">
+                  {data.mailboxReadinessBlockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Mailbox guardrails pass, but real sending is still not wired.</p>
+              )}
+            </div>
+          </div>
+
+          {isIntergraiAdmin ? (
+            <div className="mt-5 rounded-2xl border border-dashed border-border p-4">
+              <h3 className="text-base font-semibold">Mailbox config placeholder</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Admin-only foundation for future provider connection. No passwords or secrets are collected here yet.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider type</p>
+                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxProviderType || "other")}</p>
+                </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Connection status</p>
+                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxStatus)}</p>
+                </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">From name</p>
+                  <p className="mt-2 font-medium">{data.mailboxFromName || "Not configured"}</p>
+                </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">From email</p>
+                  <p className="mt-2 font-medium break-all">{data.mailboxFromEmail || "Not configured"}</p>
+                </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Daily / monthly limits</p>
+                  <p className="mt-2 font-medium">{data.mailboxDailySendLimit ?? "Not set"} / {data.mailboxMonthlySendLimit ?? "Not set"}</p>
+                </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending enabled</p>
+                  <p className="mt-2 font-medium">{data.sendingEnabled ? "Yes" : "No"}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-border px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Queue waiting for mailbox</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.waitingForMailboxCount}</p>
+            </div>
+            <div className="rounded-xl border border-border px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Queue send-ready</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.sendReadyCount}</p>
+            </div>
           </div>
           <div className="mt-5 space-y-3">
             {data.followupSequences.length ? data.followupSequences.map((sequence) => (

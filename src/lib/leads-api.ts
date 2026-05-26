@@ -179,6 +179,22 @@ export interface OutreachBlockerRecord {
   message?: string;
 }
 
+export interface MailboxRecord {
+  id: string;
+  mailboxName: string;
+  fromName: string;
+  fromEmail: string;
+  providerType: string;
+  connectionStatus: string;
+  sendingEnabled: boolean;
+  dailySendLimit?: number | null;
+  monthlySendLimit?: number | null;
+  sentToday: number;
+  sentThisMonth: number;
+  lastHealthCheckAt?: string;
+  lastError: string;
+}
+
 export interface VerifiedContactPlanningRecord {
   id: string;
   campaignId: string;
@@ -233,10 +249,25 @@ export interface LeadAgentSummary {
   outreachQueue: OutreachQueueRecord[];
   verifiedContactsCount: number;
   outreachPlannedCount: number;
+  sendReadyCount: number;
   waitingForMailboxCount: number;
   outreachBlockers: OutreachBlockerRecord[];
   verifiedContactsWaitingForOutreach: VerifiedContactPlanningRecord[];
   mailboxStatus: string;
+  mailboxConnected: boolean;
+  sendingEnabled: boolean;
+  sendReady: boolean;
+  mailboxFromName: string;
+  mailboxFromEmail: string;
+  mailboxProviderType: string;
+  mailboxDailySendLimit?: number | null;
+  mailboxMonthlySendLimit?: number | null;
+  mailboxSentToday: number;
+  mailboxSentThisMonth: number;
+  mailboxLastError: string;
+  mailboxLastHealthCheckAt?: string;
+  mailboxReadinessBlockers: OutreachBlockerRecord[];
+  mailboxes: MailboxRecord[];
   approvalsWaiting: number;
   approvals: ApprovalRecord[];
   pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
@@ -811,12 +842,27 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     outreachQueue: asArray(record.outreach_queue).map((item, index) => normalizeOutreachQueueItem(item, index)),
     verifiedContactsCount: normalizeCount(record.verified_contacts_count),
     outreachPlannedCount: normalizeCount(record.outreach_planned_count),
+    sendReadyCount: normalizeCount(record.send_ready_count),
     waitingForMailboxCount: normalizeCount(record.waiting_for_mailbox_count),
     outreachBlockers: asArray(record.outreach_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
     verifiedContactsWaitingForOutreach: asArray(record.verified_contacts_waiting_for_outreach).map((item, index) =>
       normalizeVerifiedContactPlanning(item, index),
     ),
     mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "disconnected",
+    mailboxConnected: pickBoolean(record, ["mailbox_connected", "mailboxConnected"]) ?? false,
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    sendReady: pickBoolean(record, ["send_ready", "sendReady"]) ?? false,
+    mailboxFromName: pickString(record, ["mailbox_from_name", "mailboxFromName"]) || "",
+    mailboxFromEmail: pickString(record, ["mailbox_from_email", "mailboxFromEmail"]) || "",
+    mailboxProviderType: pickString(record, ["mailbox_provider_type", "mailboxProviderType"]) || "",
+    mailboxDailySendLimit: pickNumber(record, ["mailbox_daily_send_limit", "mailboxDailySendLimit"]),
+    mailboxMonthlySendLimit: pickNumber(record, ["mailbox_monthly_send_limit", "mailboxMonthlySendLimit"]),
+    mailboxSentToday: normalizeCount(record.mailbox_sent_today ?? record.mailboxSentToday),
+    mailboxSentThisMonth: normalizeCount(record.mailbox_sent_this_month ?? record.mailboxSentThisMonth),
+    mailboxLastError: pickString(record, ["mailbox_last_error", "mailboxLastError"]) || "",
+    mailboxLastHealthCheckAt: normalizeTimestamp(record.mailbox_last_health_check_at ?? record.mailboxLastHealthCheckAt),
+    mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+    mailboxes: asArray(record.mailboxes).map((item, index) => normalizeMailbox(item, index)),
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
     pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map((item, index) =>
@@ -1127,6 +1173,25 @@ function normalizeOutreachBlocker(value: unknown, index = 0): OutreachBlockerRec
     code: pickString(record, ["code"]) || `blocker-${index}`,
     count: pickNumber(record, ["count"]),
     message: pickString(record, ["message"]) || "",
+  };
+}
+
+function normalizeMailbox(value: unknown, index = 0): MailboxRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `mailbox-${index}`,
+    mailboxName: pickString(record, ["mailbox_name", "mailboxName"]) || "Untitled mailbox",
+    fromName: pickString(record, ["from_name", "fromName"]) || "",
+    fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
+    providerType: pickString(record, ["provider_type", "providerType"]) || "other",
+    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    dailySendLimit: pickNumber(record, ["daily_send_limit", "dailySendLimit"]),
+    monthlySendLimit: pickNumber(record, ["monthly_send_limit", "monthlySendLimit"]),
+    sentToday: normalizeCount(record.sent_today ?? record.sentToday),
+    sentThisMonth: normalizeCount(record.sent_this_month ?? record.sentThisMonth),
+    lastHealthCheckAt: normalizeTimestamp(record.last_health_check_at ?? record.lastHealthCheckAt),
+    lastError: pickString(record, ["last_error", "lastError"]) || "",
   };
 }
 
