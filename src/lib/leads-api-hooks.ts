@@ -10,12 +10,15 @@ import {
   getLeadAgentSummary,
   getLeadActivity,
   getLeads,
+  getOutreachRenderPreview,
   getRequestDetail,
   getRequests,
   getReports,
+  startMailboxOAuth,
   updateLeadStatus,
   type LeadUserSummary,
   type LeadWorkflowStatus,
+  type MailboxOAuthStartResponse,
   type MissionRecord,
   type RequestDetailRecord,
 } from "@/lib/leads-api";
@@ -113,6 +116,17 @@ export function useLeadAgentSummaryQuery() {
   });
 }
 
+export function useOutreachRenderPreviewQuery(queueItemId?: string) {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "outreach-render-preview", queueItemId],
+    queryFn: () => getOutreachRenderPreview(queueItemId || ""),
+    enabled: isBrowser && isAuthenticated && Boolean(queueItemId),
+    retry: 1,
+  });
+}
+
 export function useUpdateLeadStatusMutation() {
   const queryClient = useQueryClient();
 
@@ -179,6 +193,12 @@ export function useCreateMissionMutation() {
         void queryClient.invalidateQueries({ queryKey: ["intergrai", "mission", mission.id] });
       }
     },
+  });
+}
+
+export function useStartMailboxOAuthMutation() {
+  return useMutation<MailboxOAuthStartResponse, Error, { mailboxId: string }>({
+    mutationFn: ({ mailboxId }) => startMailboxOAuth(mailboxId),
   });
 }
 

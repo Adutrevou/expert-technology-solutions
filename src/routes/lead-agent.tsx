@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-state";
-import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery, useOutreachRenderPreviewQuery } from "@/lib/leads-api-hooks";
+import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery, useOutreachRenderPreviewQuery, useStartMailboxOAuthMutation } from "@/lib/leads-api-hooks";
 import { ApprovalStatusBadge, CampaignStatusBadge, LeadStatusBadge } from "@/components/status-badges";
 
 export const Route = createFileRoute("/lead-agent")({
@@ -34,6 +34,7 @@ function LeadAgentPage() {
   const createMissionMutation = useCreateMissionMutation();
   const approvalDecisionMutation = useApprovalDecisionMutation();
   const enrichmentCreditApprovalMutation = useEnrichmentCreditApprovalMutation();
+  const startMailboxOAuthMutation = useStartMailboxOAuthMutation();
 
   const [title, setTitle] = useState("");
   const [instruction, setInstruction] = useState("");
@@ -56,6 +57,11 @@ function LeadAgentPage() {
     }
     return entries;
   }, [data?.approvals]);
+  const connectableMailbox = useMemo(() => {
+    return data?.mailboxes.find((mailbox) => mailbox.providerType === "google_workspace")
+      || data?.mailboxes[0]
+      || null;
+  }, [data?.mailboxes]);
   const latestReportMetrics = useMemo(() => {
     const payload = data?.latestWeeklyReport?.payload || {};
     const metrics = typeof payload.metrics === "object" && payload.metrics ? payload.metrics as Record<string, unknown> : {};
@@ -127,6 +133,29 @@ function LeadAgentPage() {
       await summaryQuery.refetch();
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : "Unable to update enrichment credit approval.");
+    }
+  };
+
+  const handleStartMailboxOAuth = async () => {
+    if (!connectableMailbox) {
+      setError("No mailbox is configured for OAuth connection.");
+      return;
+    }
+
+    setNotice(null);
+    setError(null);
+
+    try {
+      const response = await startMailboxOAuthMutation.mutateAsync({ mailboxId: connectableMailbox.id });
+      const popup = window.open(response.authUrl, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        window.location.assign(response.authUrl);
+        return;
+      }
+
+      setNotice(`Google OAuth opened for ${response.mailboxName}. Connection can complete there, but sending remains disabled.`);
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : "Unable to start mailbox OAuth.");
     }
   };
 
@@ -663,6 +692,9 @@ function LeadAgentPage() {
                   {` · Credentials configured ${data.mailboxConnectionCheck.configured ? "yes" : "no"}`}
                 </p>
               ) : null}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Google connection can complete here, but sending stays disabled until explicitly enabled later.
+              </p>
             </div>
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending limits</p>
@@ -686,10 +718,32 @@ function LeadAgentPage() {
 
           {isIntergraiAdmin ? (
             <div className="mt-5 rounded-2xl border border-dashed border-border p-4">
-              <h3 className="text-base font-semibold">Mailbox config placeholder</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Admin-only foundation for future provider connection. No passwords or secrets are collected here yet.
-              </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold">Google Workspace connection</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Admin-only mailbox OAuth. Tokens stay server-side and sending remains disabled after connection.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleStartMailboxOAuth}
+                  disabled={!connectableMailbox || startMailboxOAuthMutation.isPending}
+                  className="gap-2"
+                >
+                  {startMailboxOAuthMutation.isPending ? (
+                    <>
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      Opening Google OAuth
+                    </>
+                  ) : (
+                    <>
+                      <MailSearch className="h-4 w-4" />
+                      Connect Google Workspace
+                    </>
+                  )}
+                </Button>
+              </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-border px-4 py-3">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider type</p>
@@ -716,6 +770,14 @@ function LeadAgentPage() {
                   <p className="mt-2 font-medium">{data.sendingEnabled ? "Yes" : "No"}</p>
                 </div>
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {connectableMailbox
+                  ? `OAuth will be started for ${connectableMailbox.mailboxName} <${connectableMailbox.fromEmail}>.`
+                  : "No mailbox is available for OAuth connection."}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                After Google authorizes the mailbox, the connection status may become connected, but `sending_enabled` remains false.
+              </p>
             </div>
           ) : null}
 

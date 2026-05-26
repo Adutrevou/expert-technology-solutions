@@ -209,6 +209,19 @@ export interface MailboxConnectionCheck {
   blockers: OutreachBlockerRecord[];
 }
 
+export interface MailboxOAuthStartResponse {
+  mailboxId: string;
+  mailboxName: string;
+  providerType: string;
+  connectionStatus: string;
+  authUrl: string;
+  expiresAt?: string;
+  redirectUri: string;
+  scopes: string[];
+  sendingEnabled: boolean;
+  note: string;
+}
+
 export interface OutreachRenderPreview {
   dryRun: boolean;
   renderable: boolean;
@@ -562,6 +575,12 @@ export function getLeadAgentSummary() {
 
 export function getOutreachRenderPreview(queueItemId: string) {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-queue/${encodeURIComponent(queueItemId)}/render-preview`).then(normalizeOutreachRenderPreviewResponse);
+}
+
+export function startMailboxOAuth(mailboxId: string) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/mailboxes/${encodeURIComponent(mailboxId)}/oauth/google/start`, {
+    method: "POST",
+  }).then(normalizeMailboxOAuthStartResponse);
 }
 
 export function getEnrichmentApprovals() {
@@ -1262,6 +1281,22 @@ function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck
     connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
     checkedAt: normalizeTimestamp(record.checked_at ?? record.checkedAt),
     blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+  };
+}
+
+function normalizeMailboxOAuthStartResponse(value: unknown): MailboxOAuthStartResponse {
+  const record = asRecord(value);
+  return {
+    mailboxId: pickString(record, ["mailbox_id", "mailboxId"]) || "",
+    mailboxName: pickString(record, ["mailbox_name", "mailboxName"]) || "Untitled mailbox",
+    providerType: pickString(record, ["provider_type", "providerType"]) || "google_workspace",
+    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "pending",
+    authUrl: pickString(record, ["auth_url", "authUrl"]) || "",
+    expiresAt: normalizeTimestamp(record.expires_at ?? record.expiresAt),
+    redirectUri: pickString(record, ["redirect_uri", "redirectUri"]) || "",
+    scopes: asArray(record.scopes).map((item) => String(item || "")).filter(Boolean),
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    note: pickString(record, ["note", "message"]) || "",
   };
 }
 
