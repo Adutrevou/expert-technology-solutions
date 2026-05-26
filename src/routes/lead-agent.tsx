@@ -135,6 +135,10 @@ function LeadAgentPage() {
       ["Handoffs", normalizeMetric(metrics.handoffs_to_client)],
     ];
   }, [data.latestWeeklyReport?.payload]);
+  const mailboxPrimaryMessage = "Outreach is prepared. Sending is paused until mailbox setup is completed and approved.";
+  const mailboxSetupMessage = getMailboxSetupMessage(data);
+  const mailboxReadinessMessage = getMailboxReadinessMessage(data);
+  const mailboxReadinessTone = getMailboxReadinessTone(data);
 
   useEffect(() => {
     if (!data.outreachQueue.length) {
@@ -250,10 +254,10 @@ function LeadAgentPage() {
       <header className="rounded-[28px] border border-border/70 bg-gradient-subtle px-6 py-6 shadow-card md:px-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">Expert Mr Krabs</p>
+            <p className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">Expert Lead Agent</p>
             <h1 className="mt-3 text-3xl font-bold md:text-4xl">Lead Agent Workspace</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Missions, campaign approvals, lead pipeline visibility, and weekly operational reporting.
+              Campaign progress, outreach readiness, pipeline visibility, and weekly reporting in one workspace.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -294,9 +298,9 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Instruct your sub-agent</h2>
+              <h2 className="text-lg font-semibold">Create a new mission</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Every instruction becomes a mission in the Expert workspace.
+                Each instruction creates a tracked mission for the Expert Lead Agent.
               </p>
             </div>
             <Send className="h-5 w-5 text-primary" />
@@ -374,7 +378,7 @@ function LeadAgentPage() {
             <div>
               <h2 className="text-lg font-semibold">Latest weekly report</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Client-visible summary with budget and pipeline context.
+                Client-ready summary of progress, pipeline movement, and next steps.
               </p>
             </div>
             <FileBarChart className="h-5 w-5 text-primary" />
@@ -399,7 +403,7 @@ function LeadAgentPage() {
               </div>
             </div>
           ) : (
-            <EmptyState title="No weekly report yet" description="A report will appear here once the first reporting cycle is generated." />
+            <EmptyState title="No weekly report yet" description="Your first weekly update will appear here once the next reporting cycle is published." />
           )}
         </Card>
       </div>
@@ -423,7 +427,7 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Active missions</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mission queue created by Intergrai or the Expert portal.
+            Current work assigned through the Expert workspace.
           </p>
           <div className="mt-5 space-y-3">
             {data.activeMissions.length ? data.activeMissions.map((mission) => (
@@ -449,7 +453,7 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Raw lead statuses</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Internal qualification progress before any client-visible promotion.
+            Early-stage sourcing and review progress before leads are promoted into the working pipeline.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {data.rawLeadStatusCounts.length ? data.rawLeadStatusCounts.map((item) => (
@@ -464,7 +468,7 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Latest qualification actions</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Recent Qualification Agent decisions, scoring, and model routing.
+            Recent qualification decisions, scoring updates, and review outcomes.
           </p>
           <div className="mt-5 space-y-3">
             {data.latestQualificationActions.length ? data.latestQualificationActions.map((action) => (
@@ -498,7 +502,7 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Enrichment queue statuses</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Dry-run planning, approval waiting, and provider-readiness states before any credit spend.
+            Planning, approvals, and provider-readiness before any contact lookup is approved.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {data.enrichmentQueueStatusCounts.length ? data.enrichmentQueueStatusCounts.map((item) => (
@@ -592,7 +596,7 @@ function LeadAgentPage() {
                   </div>
                 </div>
               </div>
-            )) : <EmptyState title="No enrichment actions yet" description="Dry-run enrichment planning will appear here once the Enrichment Agent processes the queue." />}
+            )) : <EmptyState title="No enrichment actions yet" description="Enrichment planning updates will appear here once queued records are reviewed." />}
           </div>
         </Card>
       </div>
@@ -601,10 +605,10 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Campaigns</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Approved Expert campaign foundations and their current approval state.
+            Current campaign foundations and their approval status.
           </p>
           <div className="mt-5 space-y-3">
-            {data.campaigns.map((campaign) => (
+            {data.campaigns.length ? data.campaigns.map((campaign) => (
               <div key={campaign.id} className="rounded-2xl border border-border p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -620,14 +624,14 @@ function LeadAgentPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            )) : <EmptyState title="No campaigns yet" description="Campaign records will appear here as soon as campaign planning is published into the workspace." />}
           </div>
         </Card>
 
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Enrichment credit approvals</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review tenant-scoped enrichment spend requests before any Apollo or Hunter credits are touched.
+            Review enrichment spend requests before any Apollo or Hunter credits are used.
           </p>
           <div className="mt-5 space-y-3">
             {data.pendingEnrichmentCreditApprovals.length ? data.pendingEnrichmentCreditApprovals.map((approval) => (
@@ -688,7 +692,7 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Outreach templates</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            First-contact drafts stay in dry-run until the campaign, template variant, follow-up rules, and mailbox guardrails are all satisfied.
+            First-contact drafts stay paused until approvals, follow-up rules, and mailbox setup are complete.
           </p>
           <div className="mt-5 space-y-4">
             {data.outreachTemplates.length ? data.outreachTemplates.map((template) => (
@@ -729,14 +733,14 @@ function LeadAgentPage() {
                   ))}
                 </div>
               </div>
-            )) : <EmptyState title="No outreach templates yet" description="Campaign-scoped first-contact drafts will appear here once seeded from the API." />}
+            )) : <EmptyState title="No outreach templates yet" description="Campaign-specific first-contact drafts will appear here once they are prepared." />}
           </div>
         </Card>
 
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Follow-up rules and queue</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mailbox readiness is evaluated before anything can move to send-ready. Real sending is still disabled.
+            Mailbox readiness is checked before outreach can move forward. Sending remains paused for pre-launch setup.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
@@ -757,10 +761,10 @@ function LeadAgentPage() {
                 </p>
               ) : null}
               <p className="mt-2 text-xs font-medium text-foreground">
-                Resend setup pending — outreach is prepared but sending is disabled until launch approval.
+                {mailboxPrimaryMessage}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Provider checks stay dry-run only. Real sending remains blocked until provider config, sender approval, queue approval, send-ready state, and an explicit send command all exist.
+                {mailboxSetupMessage}
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
@@ -771,14 +775,12 @@ function LeadAgentPage() {
               <p className="mt-2 text-xs text-muted-foreground">
                 Sent today {data.mailboxSentToday} · Sent this month {data.mailboxSentThisMonth}
               </p>
-              {data.mailboxLastError ? (
-                <p className="mt-2 text-xs text-destructive">{data.mailboxLastError}</p>
-              ) : data.mailboxReadinessBlockers.length ? (
-                <p className="mt-2 text-xs text-destructive">
-                  {data.mailboxReadinessBlockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")}
+              {mailboxReadinessMessage ? (
+                <p className={`mt-2 text-xs ${mailboxReadinessTone === "warning" ? "text-destructive" : "text-muted-foreground"}`}>
+                  {mailboxReadinessMessage}
                 </p>
               ) : (
-                <p className="mt-2 text-xs text-muted-foreground">Mailbox guardrails pass, but real sending is still not wired.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Mailbox readiness checks are clear, but sending remains paused until launch approval.</p>
               )}
             </div>
           </div>
@@ -789,7 +791,7 @@ function LeadAgentPage() {
                 <div>
                   <h3 className="text-base font-semibold">Mailbox provider configuration</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Admin-only provider overview. API keys stay server-side and real sending remains disabled.
+                    Admin-only provider overview. Credentials stay server-side and sending remains paused.
                   </p>
                 </div>
                 {isGoogleMailboxProvider ? (
@@ -853,7 +855,7 @@ function LeadAgentPage() {
                   : "Google OAuth is only available when the mailbox provider is Google Workspace or Gmail."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Resend, SMTP, and future providers are surfaced here without exposing credentials in the frontend.
+                Resend, SMTP, and future providers can be reviewed here without exposing credentials in the workspace.
               </p>
             </div>
           ) : null}
@@ -897,7 +899,7 @@ function LeadAgentPage() {
                   </div>
                 </div>
               </div>
-            )) : <EmptyState title="No follow-up rules yet" description="Follow-up approval drafts will appear here when the API seed is loaded." />}
+            )) : <EmptyState title="No follow-up rules yet" description="Follow-up approval drafts will appear here once outreach sequencing is prepared." />}
           </div>
 
           <div className="mt-6">
@@ -908,7 +910,7 @@ function LeadAgentPage() {
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(item.status)}</p>
                   <p className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</p>
                 </div>
-              )) : <EmptyState title="No outreach queue statuses yet" description="Dry-run outreach planning states will appear here after a verified enrichment item is planned." />}
+              )) : <EmptyState title="No outreach queue statuses yet" description="Outreach planning states will appear here after a verified contact is prepared for review." />}
             </div>
 
             <div className="mt-4 space-y-3">
@@ -952,14 +954,14 @@ function LeadAgentPage() {
                     </div>
                   </div>
                 </div>
-              )) : null}
+              )) : <EmptyState title="No outreach queued yet" description="Planned outreach records will appear here once contacts move into the outreach review queue." />}
             </div>
           </div>
 
           <div className="mt-6">
             <h3 className="text-base font-semibold">Rendered email preview</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Approved outreach email rendering only. This is a dry-run preview and cannot send.
+              Preview approved outreach content here. This view cannot send email.
             </p>
             <div className="mt-4 rounded-2xl border border-border p-4">
               {renderPreviewQuery.isLoading ? (
@@ -1014,11 +1016,11 @@ function LeadAgentPage() {
                   <p className="text-xs text-destructive">
                     {renderPreviewQuery.data.readiness.blockers.length
                       ? renderPreviewQuery.data.readiness.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")
-                      : "Real sending remains blocked until an explicit send command exists."}
+                      : "Sending remains paused until launch approval and mailbox setup are complete."}
                   </p>
                 </div>
               ) : (
-                <EmptyState title="No preview selected" description="Choose an outreach queue item to render its dry-run email preview." />
+                <EmptyState title="No preview selected" description="Choose an outreach queue item to render its email preview." />
               )}
             </div>
           </div>
@@ -1026,7 +1028,7 @@ function LeadAgentPage() {
           <div className="mt-6">
             <h3 className="text-base font-semibold">Verified contacts waiting for outreach planning</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Verified contacts stay tenant-scoped and dry-run only. Missing template approval, follow-up approval, or mailbox connection is surfaced here.
+              Verified contacts remain paused here until template approval, follow-up approval, and mailbox setup are complete.
             </p>
 
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1035,7 +1037,7 @@ function LeadAgentPage() {
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(blocker.code)}</p>
                   <p className="mt-2 text-2xl font-semibold tabular-nums">{blocker.count || 0}</p>
                 </div>
-              )) : <EmptyState title="No outreach blockers" description="Verified contacts can be planned once a mailbox is available, without sending any real email." />}
+              )) : <EmptyState title="No outreach blockers" description="Verified contacts can move into planning as soon as mailbox setup is completed, with sending still paused." />}
             </div>
 
             <div className="mt-4 space-y-3">
@@ -1068,7 +1070,7 @@ function LeadAgentPage() {
                         </p>
                       ) : (
                         <p className="mt-2 text-xs text-muted-foreground">
-                          Ready for queue planning. Mailbox remains disconnected, so no email can send.
+                          Ready for queue planning. Sending will remain paused until mailbox setup is completed and approved.
                         </p>
                       )}
                     </div>
@@ -1082,7 +1084,7 @@ function LeadAgentPage() {
                     </div>
                   </div>
                 </div>
-              )) : <EmptyState title="No verified contacts yet" description="Verified contacts will appear here after live enrichment confirms a real email." />}
+              )) : <EmptyState title="No verified contacts yet" description="Verified contacts will appear here after approved enrichment confirms a usable email address." />}
             </div>
           </div>
         </Card>
@@ -1092,7 +1094,7 @@ function LeadAgentPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-lg font-semibold">Approvals</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Campaign, template, follow-up, and reply approvals waiting in the platform.
+            Campaign, template, follow-up, and reply approvals waiting for review.
           </p>
           <div className="mt-5 space-y-3">
             {data.approvals.filter((approval) => approval.approvalType !== "credit_approval").length ? data.approvals.filter((approval) => approval.approvalType !== "credit_approval").map((approval) => {
@@ -1286,4 +1288,63 @@ function formatStatusLabel(value: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ") || "Unknown";
+}
+
+function getMailboxSetupMessage(data: LeadAgentSummary) {
+  const check = data.mailboxConnectionCheck;
+  const providerType = String(check?.providerType || data.mailboxProviderType || "").toLowerCase();
+
+  if (providerType === "resend" && check?.apiKeyConfigured === false) {
+    return "Resend launch-day setup is still pending. This is expected before go-live and is not an error.";
+  }
+
+  if (providerType === "resend") {
+    return "Resend remains in pre-launch pending status. Sending will stay paused until launch-day setup and approval are complete.";
+  }
+
+  return "Mailbox setup is still being finalized. Sending will stay paused until configuration, approval, and launch-day activation are complete.";
+}
+
+function getMailboxReadinessMessage(data: LeadAgentSummary) {
+  const expectedMessage = getExpectedMailboxPendingMessage(data);
+  if (expectedMessage) return expectedMessage;
+  if (data.mailboxLastError) return data.mailboxLastError;
+  if (data.mailboxReadinessBlockers.length) {
+    return data.mailboxReadinessBlockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ");
+  }
+  return "";
+}
+
+function getMailboxReadinessTone(data: LeadAgentSummary): "info" | "warning" {
+  return getExpectedMailboxPendingMessage(data) ? "info" : "warning";
+}
+
+function getExpectedMailboxPendingMessage(data: LeadAgentSummary) {
+  const codes = new Set(data.mailboxReadinessBlockers.map((blocker) => blocker.code));
+  const check = data.mailboxConnectionCheck;
+  const providerType = String(check?.providerType || data.mailboxProviderType || "").toLowerCase();
+  const message = String(data.mailboxLastError || "").toLowerCase();
+
+  if (
+    providerType === "resend"
+    && (
+      check?.apiKeyConfigured === false
+      || codes.has("missing_resend_config")
+      || message.includes("resend")
+      || message.includes("api key")
+    )
+  ) {
+    return "Resend API setup is planned for launch day. Outreach stays prepared and no sending is enabled before then.";
+  }
+
+  if (
+    codes.has("mailbox_pending")
+    || codes.has("sending_disabled")
+    || codes.has("sender_not_verified")
+    || data.mailboxStatus === "pending"
+  ) {
+    return "Mailbox approval and verification are still pending, which is expected before launch. Sending remains paused.";
+  }
+
+  return "";
 }
