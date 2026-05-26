@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-state";
 import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery, useOutreachRenderPreviewQuery, useStartMailboxOAuthMutation } from "@/lib/leads-api-hooks";
+import type { LeadAgentSummary } from "@/lib/leads-api";
 import { ApprovalStatusBadge, CampaignStatusBadge, LeadStatusBadge } from "@/components/status-badges";
 
 export const Route = createFileRoute("/lead-agent")({
@@ -28,6 +29,69 @@ const WORKER_OPTIONS = [
   "Approval/Compliance Agent",
 ] as const;
 
+const EMPTY_LEAD_AGENT_SUMMARY: LeadAgentSummary = {
+  ok: false,
+  client: { id: "", slug: "", name: "" },
+  agent: null,
+  activeMissions: [],
+  openRequests: [],
+  campaigns: [],
+  leadPipelineCounts: [],
+  rawLeadsCount: 0,
+  rawLeadStatusCounts: [],
+  enrichmentQueueCount: 0,
+  enrichmentQueueStatusCounts: [],
+  enrichmentUsageSummary: {
+    apolloAttempted: 0,
+    hunterAttempted: 0,
+    apolloUsed: 0,
+    hunterUsed: 0,
+  },
+  enrichmentBudgetSummary: {
+    apolloMonthlyLimit: 0,
+    apolloUsed: 0,
+    apolloRemaining: 0,
+    hunterMonthlyLimit: 0,
+    hunterUsed: 0,
+    hunterRemaining: 0,
+  },
+  outreachTemplates: [],
+  followupSequences: [],
+  outreachQueueCount: 0,
+  outreachQueueStatusCounts: [],
+  outreachQueue: [],
+  verifiedContactsCount: 0,
+  outreachPlannedCount: 0,
+  sendReadyCount: 0,
+  waitingForMailboxCount: 0,
+  outreachBlockers: [],
+  verifiedContactsWaitingForOutreach: [],
+  mailboxStatus: "disconnected",
+  mailboxConnected: false,
+  sendingEnabled: false,
+  sendReady: false,
+  mailboxFromName: "",
+  mailboxFromEmail: "",
+  mailboxProviderType: "",
+  mailboxDailySendLimit: null,
+  mailboxMonthlySendLimit: null,
+  mailboxSentToday: 0,
+  mailboxSentThisMonth: 0,
+  mailboxLastError: "",
+  mailboxLastHealthCheckAt: undefined,
+  mailboxReadinessBlockers: [],
+  mailboxConnectionCheck: null,
+  renderPreviewAvailableCount: 0,
+  mailboxes: [],
+  approvalsWaiting: 0,
+  approvals: [],
+  pendingEnrichmentCreditApprovals: [],
+  latestQualificationActions: [],
+  latestEnrichmentActions: [],
+  latestWeeklyReport: null,
+  internalNotes: [],
+};
+
 function LeadAgentPage() {
   const { user } = useApp();
   const summaryQuery = useLeadAgentSummaryQuery();
@@ -44,23 +108,23 @@ function LeadAgentPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const data = summaryQuery.data;
+  const data = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
   const renderPreviewQuery = useOutreachRenderPreviewQuery(selectedQueueItemId || undefined);
   const canApprove = user?.role === "client_owner" || user?.role === "manager" || user?.role === "intergrai_admin";
   const isIntergraiAdmin = user?.role === "intergrai_admin";
   const approvalsByEntityId = useMemo(() => {
     const entries = new Map<string, string>();
-    for (const approval of data?.approvals || []) {
+    for (const approval of data.approvals || []) {
       if (approval.entityId) {
         entries.set(approval.entityId, approval.id);
       }
     }
     return entries;
-  }, [data?.approvals]);
+  }, [data.approvals]);
   const googleConnectableMailbox = useMemo(() => {
-    return data?.mailboxes.find((mailbox) => mailbox.providerType === "google_workspace" || mailbox.providerType === "gmail")
+    return (data.mailboxes || []).find((mailbox) => mailbox.providerType === "google_workspace" || mailbox.providerType === "gmail")
       || null;
-  }, [data?.mailboxes]);
+  }, [data.mailboxes]);
   const latestReportMetrics = useMemo(() => {
     const payload = data?.latestWeeklyReport?.payload || {};
     const metrics = typeof payload.metrics === "object" && payload.metrics ? payload.metrics as Record<string, unknown> : {};
@@ -70,10 +134,10 @@ function LeadAgentPage() {
       ["Replies received", normalizeMetric(metrics.replies_received)],
       ["Handoffs", normalizeMetric(metrics.handoffs_to_client)],
     ];
-  }, [data?.latestWeeklyReport?.payload]);
+  }, [data.latestWeeklyReport?.payload]);
 
   useEffect(() => {
-    if (!data?.outreachQueue.length) {
+    if (!data.outreachQueue.length) {
       if (selectedQueueItemId) {
         setSelectedQueueItemId("");
       }
@@ -146,6 +210,10 @@ function LeadAgentPage() {
 
     try {
       const response = await startMailboxOAuthMutation.mutateAsync({ mailboxId: googleConnectableMailbox.id });
+      if (!response.authUrl) {
+        throw new Error("Mailbox OAuth is unavailable right now.");
+      }
+
       const popup = window.open(response.authUrl, "_blank", "noopener,noreferrer");
       if (!popup) {
         window.location.assign(response.authUrl);
@@ -160,31 +228,25 @@ function LeadAgentPage() {
 
   const isGoogleMailboxProvider = data.mailboxProviderType === "google_workspace" || data.mailboxProviderType === "gmail";
 
-  if (summaryQuery.isLoading) {
+  if (summaryQuery.isLoading && !summaryQuery.data) {
     return <LeadAgentLoadingState />;
-  }
-
-  if (summaryQuery.isError || !data) {
-    return (
-      <div className="mx-auto max-w-[1400px]">
-        <Card className="p-10 text-center shadow-card">
-          <h1 className="text-2xl font-semibold">Lead Agent unavailable</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {(summaryQuery.error as Error | undefined)?.message || "We couldn’t load the Mr Krabs workspace right now."}
-          </p>
-          <div className="mt-6 flex justify-center">
-            <Button variant="outline" onClick={() => summaryQuery.refetch()} className="gap-2">
-              <RefreshCcw className="h-4 w-4" />
-              Try again
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
   }
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
+      {summaryQuery.isError ? (
+        <WarningCard
+          title="Lead Agent data is partially unavailable"
+          message={(summaryQuery.error as Error | undefined)?.message || "Some workspace data could not be loaded. Fallback values are shown until the next refresh."}
+          action={(
+            <Button variant="outline" onClick={() => summaryQuery.refetch()} className="gap-2">
+              <RefreshCcw className="h-4 w-4" />
+              Retry
+            </Button>
+          )}
+        />
+      ) : null}
+
       <header className="rounded-[28px] border border-border/70 bg-gradient-subtle px-6 py-6 shadow-card md:px-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
@@ -202,8 +264,8 @@ function LeadAgentPage() {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Status: {data.agent?.status || "Unknown"}
-                {data.agent?.lastHeartbeatAt
-                  ? ` · heartbeat ${formatDistanceToNow(new Date(data.agent.lastHeartbeatAt), { addSuffix: true })}`
+                {safeDistanceLabel(data.agent?.lastHeartbeatAt)
+                  ? ` · heartbeat ${safeDistanceLabel(data.agent?.lastHeartbeatAt)}`
                   : ""}
               </p>
             </div>
@@ -323,7 +385,7 @@ function LeadAgentPage() {
               <div className="rounded-2xl border border-border bg-muted/20 p-4">
                 <p className="text-sm font-medium">{data.latestWeeklyReport.title}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {data.latestWeeklyReport.periodStart} to {data.latestWeeklyReport.periodEnd}
+                  {formatDateRange(data.latestWeeklyReport.periodStart, data.latestWeeklyReport.periodEnd)}
                 </p>
                 <p className="mt-3 text-sm text-muted-foreground">{data.latestWeeklyReport.summary}</p>
               </div>
@@ -372,7 +434,7 @@ function LeadAgentPage() {
                     <p className="mt-1 text-sm text-muted-foreground">{mission.instruction}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {mission.assignedWorkerType} · {mission.missionType}
-                      {mission.createdAt ? ` · ${formatDistanceToNow(new Date(mission.createdAt), { addSuffix: true })}` : ""}
+                      {safeDistanceLabel(mission.createdAt) ? ` · ${safeDistanceLabel(mission.createdAt)}` : ""}
                     </p>
                   </div>
                   <LeadStatusBadge status={mission.status.toLowerCase().replace(/\s+/g, "_")} />
@@ -414,7 +476,7 @@ function LeadAgentPage() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       Score {action.qualificationScore} · Confidence {action.confidenceScore}
                       {action.modelRouteUsed ? ` · ${action.modelRouteUsed}` : ""}
-                      {action.updatedAt ? ` · ${formatDistanceToNow(new Date(action.updatedAt), { addSuffix: true })}` : ""}
+                      {safeDistanceLabel(action.updatedAt) ? ` · ${safeDistanceLabel(action.updatedAt)}` : ""}
                     </p>
                   </div>
                   <div className="flex flex-col items-start gap-2 md:items-end">
@@ -502,7 +564,7 @@ function LeadAgentPage() {
                       {action.creditApprovalStatus ? ` · Credit ${formatStatusLabel(action.creditApprovalStatus)}` : ""}
                       {action.providerStatus ? ` · Provider ${formatStatusLabel(action.providerStatus)}` : ""}
                       {action.modelRouteUsed ? ` · ${action.modelRouteUsed}` : ""}
-                      {action.lastProcessedAt ? ` · ${formatDistanceToNow(new Date(action.lastProcessedAt), { addSuffix: true })}` : ""}
+                      {safeDistanceLabel(action.lastProcessedAt) ? ` · ${safeDistanceLabel(action.lastProcessedAt)}` : ""}
                     </p>
                     {action.enrichedEmail || action.enrichedContactName ? (
                       <p className="mt-2 text-xs text-muted-foreground">
@@ -581,7 +643,7 @@ function LeadAgentPage() {
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
                       Apollo {approval.apolloPlanned ? "planned" : "off"} · Hunter {approval.hunterPlanned ? "planned" : "off"}
-                      {approval.createdAt ? ` · ${formatDistanceToNow(new Date(approval.createdAt), { addSuffix: true })}` : ""}
+                      {safeDistanceLabel(approval.createdAt) ? ` · ${safeDistanceLabel(approval.createdAt)}` : ""}
                     </p>
                   </div>
                   <div className="flex flex-col items-start gap-2 md:items-end">
@@ -906,6 +968,17 @@ function LeadAgentPage() {
                   <Skeleton className="h-4 w-64" />
                   <Skeleton className="h-32 w-full" />
                 </div>
+              ) : renderPreviewQuery.isError ? (
+                <WarningCard
+                  title="Email preview unavailable"
+                  message={(renderPreviewQuery.error as Error | undefined)?.message || "The selected outreach preview could not be loaded."}
+                  compact
+                  action={selectedQueueItemId ? (
+                    <Button size="sm" variant="outline" onClick={() => renderPreviewQuery.refetch()}>
+                      Retry preview
+                    </Button>
+                  ) : undefined}
+                />
               ) : renderPreviewQuery.data?.preview ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 md:grid-cols-2">
@@ -1067,7 +1140,7 @@ function LeadAgentPage() {
                 <p className="mt-1 text-sm text-muted-foreground">{request.message}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
                   {request.clientVisibleStatus}
-                  {request.createdAt ? ` · ${formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}` : ""}
+                  {safeDistanceLabel(request.createdAt) ? ` · ${safeDistanceLabel(request.createdAt)}` : ""}
                 </p>
               </div>
             )) : <EmptyState title="No open requests" description="Requests created in the existing requests workflow will appear here." />}
@@ -1087,7 +1160,7 @@ function LeadAgentPage() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     {note.createdByName || "Intergrai"}
                     {note.createdByRole ? ` · ${note.createdByRole}` : ""}
-                    {note.createdAt ? ` · ${formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}` : ""}
+                    {safeDistanceLabel(note.createdAt) ? ` · ${safeDistanceLabel(note.createdAt)}` : ""}
                   </p>
                 </div>
               )) : <EmptyState title="No internal notes" description="Private Intergrai-only notes will appear here." />}
@@ -1134,6 +1207,30 @@ function InlineMessage({ tone, children }: { tone: "success" | "error"; children
   );
 }
 
+function WarningCard({
+  title,
+  message,
+  action,
+  compact = false,
+}: {
+  title: string;
+  message: string;
+  action?: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <Card className={compact ? "border-warning/40 bg-warning/5 p-4 shadow-card" : "border-warning/40 bg-warning/5 p-5 shadow-card"}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </Card>
+  );
+}
+
 function LeadAgentLoadingState() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
@@ -1162,6 +1259,25 @@ function normalizeMetric(value: unknown) {
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
+}
+
+function safeDistanceLabel(value?: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  try {
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch {
+    return "";
+  }
+}
+
+function formatDateRange(start?: string, end?: string) {
+  const startLabel = start || "Unknown start";
+  const endLabel = end || "Unknown end";
+  return `${startLabel} to ${endLabel}`;
 }
 
 function formatStatusLabel(value: string) {
