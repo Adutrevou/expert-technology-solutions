@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Bot, CheckCircle2, Clock3, FileBarChart, LoaderCircle, RefreshCcw, Send, ShieldAlert, Sparkles } from "lucide-react";
+import { Bot, CheckCircle2, Clock3, FileBarChart, LoaderCircle, MailSearch, RefreshCcw, Send, ShieldAlert, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-state";
-import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery } from "@/lib/leads-api-hooks";
+import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery, useOutreachRenderPreviewQuery } from "@/lib/leads-api-hooks";
 import { ApprovalStatusBadge, CampaignStatusBadge, LeadStatusBadge } from "@/components/status-badges";
 
 export const Route = createFileRoute("/lead-agent")({
@@ -39,10 +39,12 @@ function LeadAgentPage() {
   const [instruction, setInstruction] = useState("");
   const [assignedWorkerType, setAssignedWorkerType] = useState<string>(WORKER_OPTIONS[0]);
   const [campaignId, setCampaignId] = useState<string>("none");
+  const [selectedQueueItemId, setSelectedQueueItemId] = useState<string>("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const data = summaryQuery.data;
+  const renderPreviewQuery = useOutreachRenderPreviewQuery(selectedQueueItemId || undefined);
   const canApprove = user?.role === "client_owner" || user?.role === "manager" || user?.role === "intergrai_admin";
   const isIntergraiAdmin = user?.role === "intergrai_admin";
   const approvalsByEntityId = useMemo(() => {
@@ -64,6 +66,19 @@ function LeadAgentPage() {
       ["Handoffs", normalizeMetric(metrics.handoffs_to_client)],
     ];
   }, [data?.latestWeeklyReport?.payload]);
+
+  useEffect(() => {
+    if (!data?.outreachQueue.length) {
+      if (selectedQueueItemId) {
+        setSelectedQueueItemId("");
+      }
+      return;
+    }
+
+    if (!selectedQueueItemId || !data.outreachQueue.some((item) => item.id === selectedQueueItemId)) {
+      setSelectedQueueItemId(data.outreachQueue[0].id);
+    }
+  }, [data?.outreachQueue, selectedQueueItemId]);
 
   const handleMissionSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -642,6 +657,12 @@ function LeadAgentPage() {
                 {data.mailboxFromEmail ? `${data.mailboxFromName || "Configured sender"} <${data.mailboxFromEmail}>` : "No sender configured yet"}
                 {data.mailboxProviderType ? ` · ${formatStatusLabel(data.mailboxProviderType)}` : ""}
               </p>
+              {data.mailboxConnectionCheck ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Check {formatStatusLabel(data.mailboxConnectionCheck.connectionStatus)}
+                  {` · Credentials configured ${data.mailboxConnectionCheck.configured ? "yes" : "no"}`}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending limits</p>
@@ -707,6 +728,10 @@ function LeadAgentPage() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Queue send-ready</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">{data.sendReadyCount}</p>
             </div>
+            <div className="rounded-xl border border-border px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Render previews available</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.renderPreviewAvailableCount}</p>
+            </div>
           </div>
           <div className="mt-5 space-y-3">
             {data.followupSequences.length ? data.followupSequences.map((sequence) => (
@@ -750,17 +775,101 @@ function LeadAgentPage() {
             <div className="mt-4 space-y-3">
               {data.outreachQueue.length ? data.outreachQueue.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-border p-4">
-                  <p className="font-medium">{item.rawCompanyName || item.leadCompanyName || "Unnamed prospect"}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {item.campaignName} · {formatStatusLabel(item.status)}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Approval {formatStatusLabel(item.approvalStatus)} · Mailbox {formatStatusLabel(item.mailboxStatus)}
-                    {item.variantLabel ? ` · Variant ${item.variantLabel}` : ""}
-                    {item.sequenceName ? ` · ${item.sequenceName}` : ""}
-                  </p>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-medium">{item.rawCompanyName || item.leadCompanyName || "Unnamed prospect"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {item.campaignName} · {formatStatusLabel(item.status)}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Approval {formatStatusLabel(item.approvalStatus)} · Mailbox {formatStatusLabel(item.mailboxStatus)}
+                        {item.variantLabel ? ` · Variant ${item.variantLabel}` : ""}
+                        {item.sequenceName ? ` · ${item.sequenceName}` : ""}
+                      </p>
+                      {item.recipientEmail ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {item.recipientName || "Recipient"} · {item.recipientEmail}
+                        </p>
+                      ) : null}
+                      {item.blockers.length ? (
+                        <p className="mt-2 text-xs text-destructive">
+                          {item.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col items-start gap-2 md:items-end">
+                      <Button
+                        size="sm"
+                        variant={selectedQueueItemId === item.id ? "default" : "outline"}
+                        onClick={() => setSelectedQueueItemId(item.id)}
+                        className="gap-2"
+                      >
+                        <MailSearch className="h-4 w-4" />
+                        Preview
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        {item.renderPreviewAvailable ? "Preview available" : "Preview blocked"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )) : null}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-base font-semibold">Rendered email preview</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Approved outreach email rendering only. This is a dry-run preview and cannot send.
+            </p>
+            <div className="mt-4 rounded-2xl border border-border p-4">
+              {renderPreviewQuery.isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-32 w-full" />
+                </div>
+              ) : renderPreviewQuery.data?.preview ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">From</p>
+                      <p className="mt-2 text-sm font-medium">
+                        {renderPreviewQuery.data.preview.fromName || "Configured sender"} &lt;{renderPreviewQuery.data.preview.fromEmail || "-"}&gt;
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">To</p>
+                      <p className="mt-2 text-sm font-medium">
+                        {renderPreviewQuery.data.preview.recipientName || "Recipient"} &lt;{renderPreviewQuery.data.preview.recipientEmail || "-"}&gt;
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Subject</p>
+                    <p className="mt-2 text-sm font-medium">{renderPreviewQuery.data.preview.subject || "No subject rendered"}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Body</p>
+                    <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm text-foreground">{renderPreviewQuery.data.preview.body || "No body rendered"}</pre>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Variant {renderPreviewQuery.data.preview.template.variantLabel || "-"} · {formatStatusLabel(renderPreviewQuery.data.preview.template.type || "email")} · Follow-up {renderPreviewQuery.data.preview.followupSequence.name || "-"} ({renderPreviewQuery.data.preview.followupSequence.followupCount} steps)
+                  </p>
+                  {renderPreviewQuery.data.preview.missingPlaceholders.length ? (
+                    <p className="text-xs text-destructive">
+                      Missing placeholders: {renderPreviewQuery.data.preview.missingPlaceholders.join(", ")}
+                    </p>
+                  ) : null}
+                  <p className="text-xs text-destructive">
+                    {renderPreviewQuery.data.readiness.blockers.length
+                      ? renderPreviewQuery.data.readiness.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")
+                      : "Real sending remains blocked until an explicit send command exists."}
+                  </p>
+                </div>
+              ) : (
+                <EmptyState title="No preview selected" description="Choose an outreach queue item to render its dry-run email preview." />
+              )}
             </div>
           </div>
 

@@ -170,6 +170,10 @@ export interface OutreachQueueRecord {
   sequenceName: string;
   leadCompanyName: string;
   rawCompanyName: string;
+  recipientEmail: string;
+  recipientName: string;
+  renderPreviewAvailable: boolean;
+  blockers: OutreachBlockerRecord[];
   scheduledFor?: string;
 }
 
@@ -193,6 +197,45 @@ export interface MailboxRecord {
   sentThisMonth: number;
   lastHealthCheckAt?: string;
   lastError: string;
+}
+
+export interface MailboxConnectionCheck {
+  providerType: string;
+  configured: boolean;
+  configurationMode: string;
+  connected: boolean;
+  connectionStatus: string;
+  checkedAt?: string;
+  blockers: OutreachBlockerRecord[];
+}
+
+export interface OutreachRenderPreview {
+  dryRun: boolean;
+  renderable: boolean;
+  fromName: string;
+  fromEmail: string;
+  recipientName: string;
+  recipientEmail: string;
+  companyName: string;
+  subject: string;
+  body: string;
+  missingPlaceholders: string[];
+  template: {
+    name: string;
+    type: string;
+    variantLabel: string;
+  };
+  followupSequence: {
+    name: string;
+    followupCount: number;
+  };
+  metadata: {
+    queueItemId: string;
+    queueStatus: string;
+    approvalStatus: string;
+    mailboxStatus: string;
+    providerType: string;
+  };
 }
 
 export interface VerifiedContactPlanningRecord {
@@ -267,6 +310,8 @@ export interface LeadAgentSummary {
   mailboxLastError: string;
   mailboxLastHealthCheckAt?: string;
   mailboxReadinessBlockers: OutreachBlockerRecord[];
+  mailboxConnectionCheck: MailboxConnectionCheck | null;
+  renderPreviewAvailableCount: number;
   mailboxes: MailboxRecord[];
   approvalsWaiting: number;
   approvals: ApprovalRecord[];
@@ -513,6 +558,10 @@ export function getRequestDetail(requestId: string) {
 
 export function getLeadAgentSummary() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(normalizeLeadAgentSummary);
+}
+
+export function getOutreachRenderPreview(queueItemId: string) {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-queue/${encodeURIComponent(queueItemId)}/render-preview`).then(normalizeOutreachRenderPreviewResponse);
 }
 
 export function getEnrichmentApprovals() {
@@ -862,6 +911,8 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     mailboxLastError: pickString(record, ["mailbox_last_error", "mailboxLastError"]) || "",
     mailboxLastHealthCheckAt: normalizeTimestamp(record.mailbox_last_health_check_at ?? record.mailboxLastHealthCheckAt),
     mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+    mailboxConnectionCheck: normalizeMailboxConnectionCheck(record.mailbox_connection_check ?? record.mailboxConnectionCheck),
+    renderPreviewAvailableCount: normalizeCount(record.render_preview_available_count ?? record.renderPreviewAvailableCount),
     mailboxes: asArray(record.mailboxes).map((item, index) => normalizeMailbox(item, index)),
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
@@ -1163,6 +1214,10 @@ function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRec
     sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
     leadCompanyName: pickString(record, ["lead_company_name", "leadCompanyName"]) || "",
     rawCompanyName: pickString(record, ["raw_company_name", "rawCompanyName"]) || "",
+    recipientEmail: pickString(record, ["recipient_email", "recipientEmail", "enriched_email", "enrichedEmail", "lead_email", "leadEmail"]) || "",
+    recipientName: pickString(record, ["recipient_name", "recipientName", "enriched_contact_name", "enrichedContactName", "lead_contact_name", "leadContactName"]) || "",
+    renderPreviewAvailable: pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
+    blockers: asArray(record.blockers).map((item, blockerIndex) => normalizeOutreachBlocker(item, blockerIndex)),
     scheduledFor: normalizeTimestamp(record.scheduled_for ?? record.scheduledFor),
   };
 }
@@ -1192,6 +1247,72 @@ function normalizeMailbox(value: unknown, index = 0): MailboxRecord {
     sentThisMonth: normalizeCount(record.sent_this_month ?? record.sentThisMonth),
     lastHealthCheckAt: normalizeTimestamp(record.last_health_check_at ?? record.lastHealthCheckAt),
     lastError: pickString(record, ["last_error", "lastError"]) || "",
+  };
+}
+
+function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck | null {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    providerType: pickString(record, ["provider_type", "providerType"]) || "",
+    configured: pickBoolean(record, ["configured"]) ?? false,
+    configurationMode: pickString(record, ["configuration_mode", "configurationMode"]) || "",
+    connected: pickBoolean(record, ["connected"]) ?? false,
+    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    checkedAt: normalizeTimestamp(record.checked_at ?? record.checkedAt),
+    blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+  };
+}
+
+function normalizeOutreachRenderPreview(value: unknown): OutreachRenderPreview {
+  const record = asRecord(value);
+  const template = asRecord(record.template);
+  const followupSequence = asRecord(record.followup_sequence ?? record.followupSequence);
+  const metadata = asRecord(record.metadata);
+
+  return {
+    dryRun: pickBoolean(record, ["dry_run", "dryRun"]) ?? true,
+    renderable: pickBoolean(record, ["renderable"]) ?? false,
+    fromName: pickString(record, ["from_name", "fromName"]) || "",
+    fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
+    recipientName: pickString(record, ["recipient_name", "recipientName"]) || "",
+    recipientEmail: pickString(record, ["recipient_email", "recipientEmail"]) || "",
+    companyName: pickString(record, ["company_name", "companyName"]) || "",
+    subject: pickString(record, ["subject"]) || "",
+    body: pickString(record, ["body"]) || "",
+    missingPlaceholders: asArray(record.missing_placeholders).map((item) => String(item || "")).filter(Boolean),
+    template: {
+      name: pickString(template, ["name"]) || "",
+      type: pickString(template, ["type"]) || "",
+      variantLabel: pickString(template, ["variant_label", "variantLabel"]) || "",
+    },
+    followupSequence: {
+      name: pickString(followupSequence, ["name"]) || "",
+      followupCount: normalizeCount(followupSequence.followup_count ?? followupSequence.followupCount),
+    },
+    metadata: {
+      queueItemId: pickString(metadata, ["queue_item_id", "queueItemId"]) || "",
+      queueStatus: pickString(metadata, ["queue_status", "queueStatus"]) || "",
+      approvalStatus: pickString(metadata, ["approval_status", "approvalStatus"]) || "",
+      mailboxStatus: pickString(metadata, ["mailbox_status", "mailboxStatus"]) || "",
+      providerType: pickString(metadata, ["provider_type", "providerType"]) || "",
+    },
+  };
+}
+
+function normalizeOutreachRenderPreviewResponse(value: unknown) {
+  const record = asRecord(value);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    queueItemId: pickString(record, ["queue_item_id", "queueItemId"]) || "",
+    renderPreviewAvailable: pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
+    preview: normalizeOutreachRenderPreview(record.preview),
+    readiness: {
+      sendReady: pickBoolean(asRecord(record.readiness), ["send_ready", "sendReady"]) ?? false,
+      sendAllowed: pickBoolean(asRecord(record.readiness), ["send_allowed", "sendAllowed"]) ?? false,
+      blockers: asArray(asRecord(record.readiness).blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+    },
   };
 }
 
