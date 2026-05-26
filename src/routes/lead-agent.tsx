@@ -694,6 +694,9 @@ function LeadAgentPage() {
                   {data.mailboxConnectionCheck.senderStatus ? ` · Sender ${formatStatusLabel(data.mailboxConnectionCheck.senderStatus)}` : ""}
                 </p>
               ) : null}
+              <p className="mt-2 text-xs font-medium text-foreground">
+                Resend setup pending — outreach is prepared but sending is disabled until launch approval.
+              </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Provider checks stay dry-run only. Real sending remains blocked until provider config, sender approval, queue approval, send-ready state, and an explicit send command all exist.
               </p>
