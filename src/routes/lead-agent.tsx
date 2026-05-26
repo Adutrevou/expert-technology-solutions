@@ -169,12 +169,15 @@ function LeadAgentPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
         <KpiCard label="Active missions" value={data.activeMissions.length} icon={Clock3} />
         <KpiCard label="Open requests" value={data.openRequests.length} icon={Sparkles} />
         <KpiCard label="Raw leads" value={data.rawLeadsCount} icon={ShieldAlert} />
         <KpiCard label="Enrichment queue" value={data.enrichmentQueueCount} icon={LoaderCircle} />
         <KpiCard label="Outreach queue" value={data.outreachQueueCount} icon={Send} />
+        <KpiCard label="Verified contacts" value={data.verifiedContactsCount} icon={CheckCircle2} />
+        <KpiCard label="Outreach planned" value={data.outreachPlannedCount} icon={Send} />
+        <KpiCard label="Waiting mailbox" value={data.waitingForMailboxCount} icon={ShieldAlert} />
         <KpiCard label="Approvals waiting" value={data.approvalsWaiting} icon={CheckCircle2} />
       </div>
 
@@ -685,6 +688,69 @@ function LeadAgentPage() {
               )) : null}
             </div>
           </div>
+
+          <div className="mt-6">
+            <h3 className="text-base font-semibold">Verified contacts waiting for outreach planning</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Verified contacts stay tenant-scoped and dry-run only. Missing template approval, follow-up approval, or mailbox connection is surfaced here.
+            </p>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {data.outreachBlockers.length ? data.outreachBlockers.map((blocker) => (
+                <div key={blocker.code} className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(blocker.code)}</p>
+                  <p className="mt-2 text-2xl font-semibold tabular-nums">{blocker.count || 0}</p>
+                </div>
+              )) : <EmptyState title="No outreach blockers" description="Verified contacts can be planned once a mailbox is available, without sending any real email." />}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {data.verifiedContactsWaitingForOutreach.length ? data.verifiedContactsWaitingForOutreach.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-border p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-medium">{item.companyName}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {item.contactName || "Verified contact"}{item.contactTitle ? ` · ${item.contactTitle}` : ""}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.email || "No verified email"}{item.emailStatus ? ` · ${formatStatusLabel(item.emailStatus)}` : ""}
+                        {item.providerStatus ? ` · Provider ${formatStatusLabel(item.providerStatus)}` : ""}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.campaignName} · Planning {formatStatusLabel(item.planningStatus)}
+                        {item.outreachQueueStatus ? ` · Queue ${formatStatusLabel(item.outreachQueueStatus)}` : ""}
+                        {item.mailboxStatus ? ` · Mailbox ${formatStatusLabel(item.mailboxStatus)}` : ""}
+                      </p>
+                      {item.variantLabel || item.sequenceName ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {item.variantLabel ? `Variant ${item.variantLabel}` : "Template pending"}
+                          {item.sequenceName ? ` · ${item.sequenceName}` : ""}
+                        </p>
+                      ) : null}
+                      {item.blockers.length ? (
+                        <p className="mt-2 text-xs text-destructive">
+                          {item.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Ready for queue planning. Mailbox remains disconnected, so no email can send.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-start gap-2 md:items-end">
+                      <ApprovalStatusBadge status={item.approvalStatus === "approved" ? "approved" : "pending"} />
+                      {item.outreachQueueId ? (
+                        <span className="rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-info">
+                          Queue created
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )) : <EmptyState title="No verified contacts yet" description="Verified contacts will appear here after live enrichment confirms a real email." />}
+            </div>
+          </div>
         </Card>
       </div>
 
@@ -811,8 +877,8 @@ function LeadAgentLoadingState() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
       <Skeleton className="h-36 rounded-[28px]" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, index) => (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+        {Array.from({ length: 8 }).map((_, index) => (
           <Skeleton key={index} className="h-32" />
         ))}
       </div>

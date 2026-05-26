@@ -173,6 +173,34 @@ export interface OutreachQueueRecord {
   scheduledFor?: string;
 }
 
+export interface OutreachBlockerRecord {
+  code: string;
+  count?: number;
+  message?: string;
+}
+
+export interface VerifiedContactPlanningRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  companyName: string;
+  contactName: string;
+  contactTitle: string;
+  email: string;
+  emailStatus: string;
+  providerStatus: string;
+  planningStatus: string;
+  outreachQueueId: string;
+  outreachQueueStatus: string;
+  approvalStatus: string;
+  mailboxStatus: string;
+  variantLabel: string;
+  sequenceName: string;
+  blockers: OutreachBlockerRecord[];
+  verifiedAt?: string;
+  updatedAt?: string;
+}
+
 export interface LeadAgentSummary {
   ok: boolean;
   client: ApiClientSummary;
@@ -203,6 +231,11 @@ export interface LeadAgentSummary {
   outreachQueueCount: number;
   outreachQueueStatusCounts: Array<{ status: string; count: number }>;
   outreachQueue: OutreachQueueRecord[];
+  verifiedContactsCount: number;
+  outreachPlannedCount: number;
+  waitingForMailboxCount: number;
+  outreachBlockers: OutreachBlockerRecord[];
+  verifiedContactsWaitingForOutreach: VerifiedContactPlanningRecord[];
   mailboxStatus: string;
   approvalsWaiting: number;
   approvals: ApprovalRecord[];
@@ -776,6 +809,13 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       count: normalizeCount(count),
     })).sort((a, b) => a.status.localeCompare(b.status)),
     outreachQueue: asArray(record.outreach_queue).map((item, index) => normalizeOutreachQueueItem(item, index)),
+    verifiedContactsCount: normalizeCount(record.verified_contacts_count),
+    outreachPlannedCount: normalizeCount(record.outreach_planned_count),
+    waitingForMailboxCount: normalizeCount(record.waiting_for_mailbox_count),
+    outreachBlockers: asArray(record.outreach_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+    verifiedContactsWaitingForOutreach: asArray(record.verified_contacts_waiting_for_outreach).map((item, index) =>
+      normalizeVerifiedContactPlanning(item, index),
+    ),
     mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "disconnected",
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
@@ -1078,6 +1118,40 @@ function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRec
     leadCompanyName: pickString(record, ["lead_company_name", "leadCompanyName"]) || "",
     rawCompanyName: pickString(record, ["raw_company_name", "rawCompanyName"]) || "",
     scheduledFor: normalizeTimestamp(record.scheduled_for ?? record.scheduledFor),
+  };
+}
+
+function normalizeOutreachBlocker(value: unknown, index = 0): OutreachBlockerRecord {
+  const record = asRecord(value);
+  return {
+    code: pickString(record, ["code"]) || `blocker-${index}`,
+    count: pickNumber(record, ["count"]),
+    message: pickString(record, ["message"]) || "",
+  };
+}
+
+function normalizeVerifiedContactPlanning(value: unknown, index = 0): VerifiedContactPlanningRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `verified-contact-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed company",
+    contactName: pickString(record, ["contact_name", "contactName"]) || "",
+    contactTitle: pickString(record, ["contact_title", "contactTitle"]) || "",
+    email: pickString(record, ["email", "enriched_email", "enrichedEmail"]) || "",
+    emailStatus: pickString(record, ["email_status", "emailStatus", "enriched_email_status", "enrichedEmailStatus"]) || "",
+    providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
+    planningStatus: pickString(record, ["planning_status", "planningStatus"]) || "blocked",
+    outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
+    outreachQueueStatus: pickString(record, ["outreach_queue_status", "outreachQueueStatus"]) || "",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "not_connected",
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
+    blockers: asArray(record.blockers).map((item, blockerIndex) => normalizeOutreachBlocker(item, blockerIndex)),
+    verifiedAt: normalizeTimestamp(record.verified_at ?? record.verifiedAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
 }
 
