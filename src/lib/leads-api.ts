@@ -205,6 +205,13 @@ export interface MailboxConnectionCheck {
   configurationMode: string;
   connected: boolean;
   connectionStatus: string;
+  apiKeyConfigured?: boolean;
+  oauthConfigured?: boolean;
+  encryptionReady?: boolean;
+  credentialsStored?: boolean;
+  senderStatus?: string;
+  senderVerified?: boolean;
+  defaultFromDomain?: string;
   checkedAt?: string;
   blockers: OutreachBlockerRecord[];
 }
@@ -1279,6 +1286,13 @@ function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck
     configurationMode: pickString(record, ["configuration_mode", "configurationMode"]) || "",
     connected: pickBoolean(record, ["connected"]) ?? false,
     connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    apiKeyConfigured: pickBoolean(record, ["api_key_configured", "apiKeyConfigured"]) ?? undefined,
+    oauthConfigured: pickBoolean(record, ["oauth_configured", "oauthConfigured"]) ?? undefined,
+    encryptionReady: pickBoolean(record, ["encryption_ready", "encryptionReady"]) ?? undefined,
+    credentialsStored: pickBoolean(record, ["credentials_stored", "credentialsStored"]) ?? undefined,
+    senderStatus: pickString(record, ["sender_status", "senderStatus"]) || "",
+    senderVerified: pickBoolean(record, ["sender_verified", "senderVerified"]) ?? undefined,
+    defaultFromDomain: pickString(record, ["default_from_domain", "defaultFromDomain"]) || "",
     checkedAt: normalizeTimestamp(record.checked_at ?? record.checkedAt),
     blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
   };

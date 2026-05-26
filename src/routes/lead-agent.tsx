@@ -57,9 +57,8 @@ function LeadAgentPage() {
     }
     return entries;
   }, [data?.approvals]);
-  const connectableMailbox = useMemo(() => {
-    return data?.mailboxes.find((mailbox) => mailbox.providerType === "google_workspace")
-      || data?.mailboxes[0]
+  const googleConnectableMailbox = useMemo(() => {
+    return data?.mailboxes.find((mailbox) => mailbox.providerType === "google_workspace" || mailbox.providerType === "gmail")
       || null;
   }, [data?.mailboxes]);
   const latestReportMetrics = useMemo(() => {
@@ -137,7 +136,7 @@ function LeadAgentPage() {
   };
 
   const handleStartMailboxOAuth = async () => {
-    if (!connectableMailbox) {
+    if (!googleConnectableMailbox) {
       setError("No mailbox is configured for OAuth connection.");
       return;
     }
@@ -146,7 +145,7 @@ function LeadAgentPage() {
     setError(null);
 
     try {
-      const response = await startMailboxOAuthMutation.mutateAsync({ mailboxId: connectableMailbox.id });
+      const response = await startMailboxOAuthMutation.mutateAsync({ mailboxId: googleConnectableMailbox.id });
       const popup = window.open(response.authUrl, "_blank", "noopener,noreferrer");
       if (!popup) {
         window.location.assign(response.authUrl);
@@ -158,6 +157,8 @@ function LeadAgentPage() {
       setError(mutationError instanceof Error ? mutationError.message : "Unable to start mailbox OAuth.");
     }
   };
+
+  const isGoogleMailboxProvider = data.mailboxProviderType === "google_workspace" || data.mailboxProviderType === "gmail";
 
   if (summaryQuery.isLoading) {
     return <LeadAgentLoadingState />;
@@ -689,11 +690,12 @@ function LeadAgentPage() {
               {data.mailboxConnectionCheck ? (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Check {formatStatusLabel(data.mailboxConnectionCheck.connectionStatus)}
-                  {` · Credentials configured ${data.mailboxConnectionCheck.configured ? "yes" : "no"}`}
+                  {` · Configured ${data.mailboxConnectionCheck.configured ? "yes" : "no"}`}
+                  {data.mailboxConnectionCheck.senderStatus ? ` · Sender ${formatStatusLabel(data.mailboxConnectionCheck.senderStatus)}` : ""}
                 </p>
               ) : null}
               <p className="mt-2 text-xs text-muted-foreground">
-                Google connection can complete here, but sending stays disabled until explicitly enabled later.
+                Provider checks stay dry-run only. Real sending remains blocked until provider config, sender approval, queue approval, send-ready state, and an explicit send command all exist.
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
@@ -720,29 +722,31 @@ function LeadAgentPage() {
             <div className="mt-5 rounded-2xl border border-dashed border-border p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h3 className="text-base font-semibold">Google Workspace connection</h3>
+                  <h3 className="text-base font-semibold">Mailbox provider configuration</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Admin-only mailbox OAuth. Tokens stay server-side and sending remains disabled after connection.
+                    Admin-only provider overview. API keys stay server-side and real sending remains disabled.
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={handleStartMailboxOAuth}
-                  disabled={!connectableMailbox || startMailboxOAuthMutation.isPending}
-                  className="gap-2"
-                >
-                  {startMailboxOAuthMutation.isPending ? (
-                    <>
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                      Opening Google OAuth
-                    </>
-                  ) : (
-                    <>
-                      <MailSearch className="h-4 w-4" />
-                      Connect Google Workspace
-                    </>
-                  )}
-                </Button>
+                {isGoogleMailboxProvider ? (
+                  <Button
+                    size="sm"
+                    onClick={handleStartMailboxOAuth}
+                    disabled={!googleConnectableMailbox || startMailboxOAuthMutation.isPending}
+                    className="gap-2"
+                  >
+                    {startMailboxOAuthMutation.isPending ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Opening Google OAuth
+                      </>
+                    ) : (
+                      <>
+                        <MailSearch className="h-4 w-4" />
+                        Connect Google Workspace
+                      </>
+                    )}
+                  </Button>
+                ) : null}
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-border px-4 py-3">
@@ -769,14 +773,22 @@ function LeadAgentPage() {
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending enabled</p>
                   <p className="mt-2 font-medium">{data.sendingEnabled ? "Yes" : "No"}</p>
                 </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider check</p>
+                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxConnectionCheck?.connectionStatus || "not_connected")}</p>
+                </div>
+                <div className="rounded-xl border border-border px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Sender verification</p>
+                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxConnectionCheck?.senderStatus || "pending")}</p>
+                </div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                {connectableMailbox
-                  ? `OAuth will be started for ${connectableMailbox.mailboxName} <${connectableMailbox.fromEmail}>.`
-                  : "No mailbox is available for OAuth connection."}
+                {isGoogleMailboxProvider && googleConnectableMailbox
+                  ? `OAuth will be started for ${googleConnectableMailbox.mailboxName} <${googleConnectableMailbox.fromEmail}>.`
+                  : "Google OAuth is only available when the mailbox provider is Google Workspace or Gmail."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                After Google authorizes the mailbox, the connection status may become connected, but `sending_enabled` remains false.
+                Resend, SMTP, and future providers are surfaced here without exposing credentials in the frontend.
               </p>
             </div>
           ) : null}
