@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
+import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -20,6 +21,7 @@ import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as LeadAgentRouteImport } from './routes/lead-agent'
 import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
+import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLeadsSplatRouteImport } from './routes/api/leads.$'
 import { Route as ApiGmailMessagesRouteImport } from './routes/api/gmail.messages'
@@ -27,6 +29,11 @@ import { Route as ApiGmailMessagesRouteImport } from './routes/api/gmail.message
 const UpdatesRoute = UpdatesRouteImport.update({
   id: '/updates',
   path: '/updates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -79,6 +86,11 @@ const CampaignsRoute = CampaignsRouteImport.update({
   path: '/campaigns',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApprovalsRoute = ApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -97,6 +109,7 @@ const ApiGmailMessagesRoute = ApiGmailMessagesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/email-scripts': typeof EmailScriptsRoute
   '/lead-agent': typeof LeadAgentRoute
@@ -107,12 +120,14 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/email-scripts': typeof EmailScriptsRoute
   '/lead-agent': typeof LeadAgentRoute
@@ -123,6 +138,7 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
@@ -130,6 +146,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/email-scripts': typeof EmailScriptsRoute
   '/lead-agent': typeof LeadAgentRoute
@@ -140,6 +157,7 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
@@ -148,6 +166,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/approvals'
     | '/campaigns'
     | '/email-scripts'
     | '/lead-agent'
@@ -158,12 +177,14 @@ export interface FileRouteTypes {
     | '/reports'
     | '/requests'
     | '/settings'
+    | '/templates'
     | '/updates'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/approvals'
     | '/campaigns'
     | '/email-scripts'
     | '/lead-agent'
@@ -174,12 +195,14 @@ export interface FileRouteTypes {
     | '/reports'
     | '/requests'
     | '/settings'
+    | '/templates'
     | '/updates'
     | '/api/gmail/messages'
     | '/api/leads/$'
   id:
     | '__root__'
     | '/'
+    | '/approvals'
     | '/campaigns'
     | '/email-scripts'
     | '/lead-agent'
@@ -190,6 +213,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/requests'
     | '/settings'
+    | '/templates'
     | '/updates'
     | '/api/gmail/messages'
     | '/api/leads/$'
@@ -197,6 +221,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApprovalsRoute: typeof ApprovalsRoute
   CampaignsRoute: typeof CampaignsRoute
   EmailScriptsRoute: typeof EmailScriptsRoute
   LeadAgentRoute: typeof LeadAgentRoute
@@ -207,6 +232,7 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   RequestsRoute: typeof RequestsRoute
   SettingsRoute: typeof SettingsRoute
+  TemplatesRoute: typeof TemplatesRoute
   UpdatesRoute: typeof UpdatesRoute
   ApiGmailMessagesRoute: typeof ApiGmailMessagesRoute
   ApiLeadsSplatRoute: typeof ApiLeadsSplatRoute
@@ -219,6 +245,13 @@ declare module '@tanstack/react-router' {
       path: '/updates'
       fullPath: '/updates'
       preLoaderRoute: typeof UpdatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -291,6 +324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CampaignsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/approvals': {
+      id: '/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof ApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -317,6 +357,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApprovalsRoute: ApprovalsRoute,
   CampaignsRoute: CampaignsRoute,
   EmailScriptsRoute: EmailScriptsRoute,
   LeadAgentRoute: LeadAgentRoute,
@@ -327,6 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   RequestsRoute: RequestsRoute,
   SettingsRoute: SettingsRoute,
+  TemplatesRoute: TemplatesRoute,
   UpdatesRoute: UpdatesRoute,
   ApiGmailMessagesRoute: ApiGmailMessagesRoute,
   ApiLeadsSplatRoute: ApiLeadsSplatRoute,

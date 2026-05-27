@@ -294,7 +294,16 @@ function RequestsPage() {
                 Original request plus client-visible replies and status updates.
               </p>
             </div>
-            <MessageSquareText className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled>
+                Edit request
+              </Button>
+              <MessageSquareText className="h-5 w-5 text-primary" />
+            </div>
+          </div>
+
+          <div className="mb-6 rounded-2xl border border-border/70 bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
+            Request editing will appear here once a client-safe update endpoint is available. Backend support is not exposed on the current client API.
           </div>
 
           {!selectedRequestId ? (

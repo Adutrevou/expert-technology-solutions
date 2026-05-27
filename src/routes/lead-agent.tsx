@@ -1,33 +1,37 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Bot, CheckCircle2, Clock3, FileBarChart, LoaderCircle, MailSearch, RefreshCcw, Send, ShieldAlert, Sparkles } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import {
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  Clock3,
+  Mail,
+  RefreshCcw,
+  Send,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { ApprovalStatusBadge, LeadStatusBadge } from "@/components/status-badges";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-state";
-import { useApprovalDecisionMutation, useCreateMissionMutation, useEnrichmentCreditApprovalMutation, useLeadAgentSummaryQuery, useOutreachRenderPreviewQuery, useStartMailboxOAuthMutation } from "@/lib/leads-api-hooks";
-import type { LeadAgentSummary } from "@/lib/leads-api";
-import { ApprovalStatusBadge, CampaignStatusBadge, LeadStatusBadge } from "@/components/status-badges";
+import {
+  useApprovalDecisionMutation,
+  useCreateMissionMutation,
+  useEnrichmentCreditApprovalMutation,
+  useLeadAgentSummaryQuery,
+  useOutreachRenderPreviewQuery,
+} from "@/lib/leads-api-hooks";
+import type { ApprovalRecord, LeadAgentSummary } from "@/lib/leads-api";
 
 export const Route = createFileRoute("/lead-agent")({
-  head: () => ({ meta: [{ title: "Lead Agent — Expert Technology Solutions" }] }),
+  head: () => ({ meta: [{ title: "Expert Lead Agent — Expert Technology Solutions" }] }),
   component: LeadAgentPage,
 });
-
-const WORKER_OPTIONS = [
-  "Sourcing Agent",
-  "Qualification Agent",
-  "Enrichment Agent",
-  "Outreach Agent",
-  "Reply Agent",
-  "Reporting Agent",
-  "Approval/Compliance Agent",
-] as const;
 
 const EMPTY_LEAD_AGENT_SUMMARY: LeadAgentSummary = {
   ok: false,
@@ -66,7 +70,7 @@ const EMPTY_LEAD_AGENT_SUMMARY: LeadAgentSummary = {
   waitingForMailboxCount: 0,
   outreachBlockers: [],
   verifiedContactsWaitingForOutreach: [],
-  mailboxStatus: "disconnected",
+  mailboxStatus: "pending",
   mailboxConnected: false,
   sendingEnabled: false,
   sendReady: false,
@@ -92,145 +96,199 @@ const EMPTY_LEAD_AGENT_SUMMARY: LeadAgentSummary = {
   internalNotes: [],
 };
 
+const PROMPT_SUGGESTIONS = [
+  "Find more leads like this",
+  "Prioritise restaurants this week",
+  "Show prepared outreach",
+  "Create a suggested campaign",
+] as const;
+
+const PIPELINE_STAGES = [
+  "Found",
+  "Qualified",
+  "Prepared for Outreach",
+  "Contacted",
+  "Interested",
+  "Meetings / Quote Requests",
+] as const;
+
 function LeadAgentPage() {
   const { user } = useApp();
   const summaryQuery = useLeadAgentSummaryQuery();
   const createMissionMutation = useCreateMissionMutation();
   const approvalDecisionMutation = useApprovalDecisionMutation();
-  const enrichmentCreditApprovalMutation = useEnrichmentCreditApprovalMutation();
-  const startMailboxOAuthMutation = useStartMailboxOAuthMutation();
+  const enrichmentDecisionMutation = useEnrichmentCreditApprovalMutation();
 
-  const [title, setTitle] = useState("");
-  const [instruction, setInstruction] = useState("");
-  const [assignedWorkerType, setAssignedWorkerType] = useState<string>(WORKER_OPTIONS[0]);
-  const [campaignId, setCampaignId] = useState<string>("none");
-  const [selectedQueueItemId, setSelectedQueueItemId] = useState<string>("");
+  const [prompt, setPrompt] = useState("");
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [selectedQueueItemId, setSelectedQueueItemId] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const data = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
   const renderPreviewQuery = useOutreachRenderPreviewQuery(selectedQueueItemId || undefined);
-  const canApprove = user?.role === "client_owner" || user?.role === "manager" || user?.role === "intergrai_admin";
-  const isIntergraiAdmin = user?.role === "intergrai_admin";
-  const approvalsByEntityId = useMemo(() => {
-    const entries = new Map<string, string>();
-    for (const approval of data.approvals || []) {
-      if (approval.entityId) {
-        entries.set(approval.entityId, approval.id);
-      }
-    }
-    return entries;
-  }, [data.approvals]);
-  const googleConnectableMailbox = useMemo(() => {
-    return (data.mailboxes || []).find((mailbox) => mailbox.providerType === "google_workspace" || mailbox.providerType === "gmail")
-      || null;
-  }, [data.mailboxes]);
-  const latestReportMetrics = useMemo(() => {
-    const payload = data?.latestWeeklyReport?.payload || {};
-    const metrics = typeof payload.metrics === "object" && payload.metrics ? payload.metrics as Record<string, unknown> : {};
-    return [
-      ["Leads qualified", normalizeMetric(metrics.leads_qualified)],
-      ["Outreach sent", normalizeMetric(metrics.outreach_sent)],
-      ["Replies received", normalizeMetric(metrics.replies_received)],
-      ["Handoffs", normalizeMetric(metrics.handoffs_to_client)],
-    ];
-  }, [data.latestWeeklyReport?.payload]);
-  const mailboxPrimaryMessage = "Outreach is prepared. Sending is paused until mailbox setup is completed and approved.";
-  const mailboxSetupMessage = getMailboxSetupMessage(data);
-  const mailboxReadinessMessage = getMailboxReadinessMessage(data);
-  const mailboxReadinessTone = getMailboxReadinessTone(data);
+  const isAdmin = user?.role === "intergrai_admin";
+  const canApprove = user?.role === "client_owner" || user?.role === "manager" || isAdmin;
+  const generalApprovals = useMemo(
+    () => data.approvals.filter((approval) => approval.approvalType !== "credit_approval"),
+    [data.approvals],
+  );
+  const pendingApprovals = useMemo(
+    () => generalApprovals.filter((approval) => approval.decisionStatus === "pending"),
+    [generalApprovals],
+  );
 
   useEffect(() => {
     if (!data.outreachQueue.length) {
-      if (selectedQueueItemId) {
-        setSelectedQueueItemId("");
-      }
+      if (selectedQueueItemId) setSelectedQueueItemId("");
       return;
     }
 
     if (!selectedQueueItemId || !data.outreachQueue.some((item) => item.id === selectedQueueItemId)) {
-      setSelectedQueueItemId(data.outreachQueue[0].id);
+      const preferredItem = data.outreachQueue.find((item) => item.renderPreviewAvailable) || data.outreachQueue[0];
+      setSelectedQueueItemId(preferredItem.id);
     }
-  }, [data?.outreachQueue, selectedQueueItemId]);
+  }, [data.outreachQueue, selectedQueueItemId]);
 
-  const handleMissionSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setNotice(null);
-    setError(null);
+  const metrics = useMemo(() => {
+    const qualified = Math.max(
+      data.verifiedContactsCount,
+      sumPipelineKeywords(data, ["qualified", "verified", "approved", "contact_verified"]),
+    );
+    const prepared = Math.max(data.outreachPlannedCount, data.outreachQueueCount);
+    const contacted = Math.max(data.mailboxSentThisMonth, sumPipelineKeywords(data, ["contacted", "sent", "delivered"]));
+    const interested = sumPipelineKeywords(data, ["interested", "positive", "replied"]);
+    const meetings = sumPipelineKeywords(data, ["meeting", "quote", "handoff", "converted"]);
+    const approvalsWaiting = pendingApprovals.length + data.pendingEnrichmentCreditApprovals.length;
 
-    if (!title.trim() || !instruction.trim()) {
-      setError("Enter a mission title and instruction.");
+    return {
+      totalLeadsFound: data.rawLeadsCount,
+      qualifiedLeads: qualified,
+      outreachPrepared: prepared,
+      emailsSent: data.mailboxSentThisMonth,
+      positiveReplies: interested,
+      meetings,
+      approvalsWaiting,
+      pipeline: [
+        { label: PIPELINE_STAGES[0], count: data.rawLeadsCount, note: "New opportunities identified." },
+        { label: PIPELINE_STAGES[1], count: qualified, note: "Leads that match your target profile." },
+        { label: PIPELINE_STAGES[2], count: prepared, note: "Prepared outreach waiting safely in queue." },
+        { label: PIPELINE_STAGES[3], count: contacted, note: "Will remain at 0 until launch approval." },
+        { label: PIPELINE_STAGES[4], count: interested, note: "Positive engagement from outreach." },
+        { label: PIPELINE_STAGES[5], count: meetings, note: "Meetings or quote requests created." },
+      ],
+    };
+  }, [data, pendingApprovals.length]);
+
+  const recentInteractions = useMemo(() => {
+    return [
+      ...data.activeMissions.map((mission) => ({
+        id: `mission-${mission.id}`,
+        title: mission.title,
+        detail: mission.instruction || "Mission created",
+        status: mission.status,
+        createdAt: mission.createdAt || mission.updatedAt,
+        kind: "mission",
+      })),
+      ...data.openRequests.map((request) => ({
+        id: `request-${request.id}`,
+        title: request.title,
+        detail: request.latestReply || request.message || "Request recorded",
+        status: request.clientVisibleStatus,
+        createdAt: request.createdAt || request.latestReplyAt,
+        kind: "request",
+      })),
+    ]
+      .sort((left, right) => compareDatesDesc(left.createdAt, right.createdAt))
+      .slice(0, 5);
+  }, [data.activeMissions, data.openRequests]);
+
+  const quietWorkspace = data.activeMissions.length === 0 || recentInteractions.length <= 1;
+  const showActionableApprovals = canApprove && (pendingApprovals.length > 0 || data.pendingEnrichmentCreditApprovals.length > 0);
+  const mailboxMessage = getMailboxClientMessage(data);
+  const mailboxDetail = getMailboxSetupMessage(data);
+  const selectedQueueItem = data.outreachQueue.find((item) => item.id === selectedQueueItemId) || data.outreachQueue[0] || null;
+
+  const createMissionFromPrompt = async (value: string) => {
+    const nextPrompt = value.trim();
+    if (!nextPrompt) {
+      setError("Enter an instruction for Expert Lead Agent.");
       return;
     }
 
+    setError(null);
+    setNotice(null);
+
     try {
       const mission = await createMissionMutation.mutateAsync({
-        title: title.trim(),
-        instruction: instruction.trim(),
-        assigned_worker_type: assignedWorkerType,
-        campaign_id: campaignId === "none" ? undefined : campaignId,
+        title: buildMissionTitle(nextPrompt),
+        instruction: nextPrompt,
+        assigned_worker_type: inferWorkerType(nextPrompt),
       });
-      setTitle("");
-      setInstruction("");
-      setNotice(`Mission created: ${mission.title}`);
+      setPrompt("");
+      setPendingPrompt(null);
+      setNotice(`Tracked instruction created: ${mission.title}`);
       await summaryQuery.refetch();
     } catch (mutationError) {
-      setError(mutationError instanceof Error ? mutationError.message : "Unable to create mission.");
+      setError(mutationError instanceof Error ? mutationError.message : "Unable to create that instruction.");
     }
   };
 
-  const handleApprovalDecision = async (approvalId: string, decision: "approved" | "rejected") => {
-    setNotice(null);
+  const handlePromptSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextPrompt = prompt.trim();
+
+    if (!nextPrompt) {
+      setError("Enter an instruction for Expert Lead Agent.");
+      return;
+    }
+
+    if (isSimpleQuestion(nextPrompt)) {
+      setPendingPrompt(null);
+      setError(null);
+      setNotice("Question noted. For launch, simple questions are acknowledged here and action requests create tracked missions.");
+      return;
+    }
+
+    if (requiresConfirmation(nextPrompt)) {
+      setPendingPrompt(nextPrompt);
+      setError(null);
+      setNotice("This request affects campaign scope, spend, or launch readiness. Confirm before a mission is created.");
+      return;
+    }
+
+    await createMissionFromPrompt(nextPrompt);
+  };
+
+  const handleApprovalDecision = async (approvalId: string, decision: "approved" | "rejected", note?: string) => {
     setError(null);
+    setNotice(null);
+
     try {
-      await approvalDecisionMutation.mutateAsync({ approvalId, decision });
-      setNotice(`Approval ${decision}.`);
+      await approvalDecisionMutation.mutateAsync({
+        approvalId,
+        decision,
+        decision_note: note,
+      });
+      setNotice(decision === "approved" ? "Approval recorded." : "Change request recorded.");
       await summaryQuery.refetch();
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : "Unable to update approval.");
     }
   };
 
-  const handleEnrichmentApprovalDecision = async (queueItemId: string, decision: "approved" | "rejected") => {
-    setNotice(null);
+  const handleCreditDecision = async (queueItemId: string, decision: "approved" | "rejected") => {
     setError(null);
+    setNotice(null);
+
     try {
-      await enrichmentCreditApprovalMutation.mutateAsync({ queueItemId, decision });
-      setNotice(`Enrichment credit request ${decision}.`);
+      await enrichmentDecisionMutation.mutateAsync({ queueItemId, decision });
+      setNotice(decision === "approved" ? "Approval recorded." : "Change request recorded.");
       await summaryQuery.refetch();
     } catch (mutationError) {
-      setError(mutationError instanceof Error ? mutationError.message : "Unable to update enrichment credit approval.");
+      setError(mutationError instanceof Error ? mutationError.message : "Unable to update approval.");
     }
   };
-
-  const handleStartMailboxOAuth = async () => {
-    if (!googleConnectableMailbox) {
-      setError("No mailbox is configured for OAuth connection.");
-      return;
-    }
-
-    setNotice(null);
-    setError(null);
-
-    try {
-      const response = await startMailboxOAuthMutation.mutateAsync({ mailboxId: googleConnectableMailbox.id });
-      if (!response.authUrl) {
-        throw new Error("Mailbox OAuth is unavailable right now.");
-      }
-
-      const popup = window.open(response.authUrl, "_blank", "noopener,noreferrer");
-      if (!popup) {
-        window.location.assign(response.authUrl);
-        return;
-      }
-
-      setNotice(`Google OAuth opened for ${response.mailboxName}. Connection can complete there, but sending remains disabled.`);
-    } catch (mutationError) {
-      setError(mutationError instanceof Error ? mutationError.message : "Unable to start mailbox OAuth.");
-    }
-  };
-
-  const isGoogleMailboxProvider = data.mailboxProviderType === "google_workspace" || data.mailboxProviderType === "gmail";
 
   if (summaryQuery.isLoading && !summaryQuery.data) {
     return <LeadAgentLoadingState />;
@@ -241,7 +299,7 @@ function LeadAgentPage() {
       {summaryQuery.isError ? (
         <WarningCard
           title="Lead Agent data is partially unavailable"
-          message={(summaryQuery.error as Error | undefined)?.message || "Some workspace data could not be loaded. Fallback values are shown until the next refresh."}
+          message={(summaryQuery.error as Error | undefined)?.message || "Some workspace data could not be loaded. Shown values may be incomplete until the next refresh."}
           action={(
             <Button variant="outline" onClick={() => summaryQuery.refetch()} className="gap-2">
               <RefreshCcw className="h-4 w-4" />
@@ -252,25 +310,27 @@ function LeadAgentPage() {
       ) : null}
 
       <header className="rounded-[28px] border border-border/70 bg-gradient-subtle px-6 py-6 shadow-card md:px-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">Expert Lead Agent</p>
-            <h1 className="mt-3 text-3xl font-bold md:text-4xl">Lead Agent Workspace</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Campaign progress, outreach readiness, pipeline visibility, and weekly reporting in one workspace.
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">Expert Lead Agent</Badge>
+              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Outreach safely paused</Badge>
+            </div>
+            <h1 className="mt-4 text-3xl font-bold md:text-4xl">Pipeline building is active</h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">
+              Expert Lead Agent is building your pipeline. Lead sourcing and qualification are active, outreach is prepared, and sending is safely paused until mailbox setup and launch approval are complete.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-border bg-background/70 px-4 py-3 text-sm">
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-2xl border border-border bg-background/80 px-4 py-3 text-sm shadow-sm">
               <div className="flex items-center gap-2 font-medium">
                 <Bot className="h-4 w-4 text-primary" />
-                {data.agent?.name || "Expert Mr Krabs"}
+                {data.agent?.name || "Expert Lead Agent"}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Status: {data.agent?.status || "Unknown"}
-                {safeDistanceLabel(data.agent?.lastHeartbeatAt)
-                  ? ` · heartbeat ${safeDistanceLabel(data.agent?.lastHeartbeatAt)}`
-                  : ""}
+                {formatFriendlyLabel(data.agent?.status || "active")}
+                {safeDistanceLabel(data.agent?.lastHeartbeatAt) ? ` · updated ${safeDistanceLabel(data.agent?.lastHeartbeatAt)}` : ""}
               </p>
             </div>
             <Button variant="outline" onClick={() => summaryQuery.refetch()} className="gap-2">
@@ -281,918 +341,533 @@ function LeadAgentPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-        <KpiCard label="Active missions" value={data.activeMissions.length} icon={Clock3} />
-        <KpiCard label="Open requests" value={data.openRequests.length} icon={Sparkles} />
-        <KpiCard label="Raw leads" value={data.rawLeadsCount} icon={ShieldAlert} />
-        <KpiCard label="Enrichment queue" value={data.enrichmentQueueCount} icon={LoaderCircle} />
-        <KpiCard label="Outreach queue" value={data.outreachQueueCount} icon={Send} />
-        <KpiCard label="Verified contacts" value={data.verifiedContactsCount} icon={CheckCircle2} />
-        <KpiCard label="Outreach planned" value={data.outreachPlannedCount} icon={Send} />
-        <KpiCard label="Send ready" value={data.sendReadyCount} icon={CheckCircle2} />
-        <KpiCard label="Waiting mailbox" value={data.waitingForMailboxCount} icon={ShieldAlert} />
-        <KpiCard label="Approvals waiting" value={data.approvalsWaiting} icon={CheckCircle2} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        <KpiCard label="Total Leads Found" value={metrics.totalLeadsFound} note="Leads identified for review." />
+        <KpiCard label="Qualified Leads" value={metrics.qualifiedLeads} note="Leads that match your target profile." />
+        <KpiCard label="Outreach Prepared" value={metrics.outreachPrepared} note="Approved outreach prepared, waiting for mailbox setup." />
+        <KpiCard label="Emails Sent" value={metrics.emailsSent} note="Will remain 0 until launch approval." />
+        <KpiCard label="Positive Replies" value={metrics.positiveReplies} note="Positive engagement from outreach." />
+        <KpiCard label="Meetings / Quote Requests" value={metrics.meetings} note="Qualified handoffs ready for follow-up." />
+        <KpiCard label="Approvals Waiting" value={metrics.approvalsWaiting} note="Items waiting for a decision." />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Card className="p-6 shadow-card">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Create a new mission</h2>
+              <h2 className="text-xl font-semibold">Pipeline overview</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Each instruction creates a tracked mission for the Expert Lead Agent.
+                A simple view of where opportunities are moving next.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/leads">View Leads</Link>
+            </Button>
+          </div>
+
+          <div className="mt-6 hidden gap-3 lg:grid lg:grid-cols-6">
+            {metrics.pipeline.map((stage, index) => (
+              <div key={stage.label} className="relative">
+                <div className="rounded-2xl border border-border/70 bg-background px-4 py-4 shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{stage.label}</p>
+                  <p className="mt-3 text-3xl font-semibold tabular-nums">{stage.count}</p>
+                </div>
+                {index < metrics.pipeline.length - 1 ? (
+                  <div className="pointer-events-none absolute left-[calc(100%+0.5rem)] top-1/2 hidden h-px w-3 -translate-y-1/2 bg-border xl:block" />
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {metrics.pipeline.map((stage) => (
+              <div key={stage.label} className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{stage.label}</p>
+                <p className="mt-3 text-2xl font-semibold tabular-nums">{stage.count}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{stage.note}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-6 shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Active work</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your lead generation workflow is active. The agent is preparing qualified opportunities and keeping outreach paused until launch approval.
+              </p>
+            </div>
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <SummaryStat label="Active missions" value={data.activeMissions.length} />
+            <SummaryStat label="Open requests" value={data.openRequests.length} />
+            <SummaryStat label="Prepared previews" value={data.renderPreviewAvailableCount} />
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {data.activeMissions.slice(0, 3).map((mission) => (
+              <div key={mission.id} className="rounded-2xl border border-border/70 bg-background p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{mission.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{mission.instruction}</p>
+                  </div>
+                  <LeadStatusBadge status={mission.status.toLowerCase().replace(/\s+/g, "_")} />
+                </div>
+              </div>
+            ))}
+            {data.activeMissions.length === 0 ? (
+              <EmptyState title="No active missions right now" description="Use the instruction area below to guide what the agent should focus on next." />
+            ) : null}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="p-6 shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Ask Expert Lead Agent what you’d like to focus on next…</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Simple questions get a quick acknowledgement. Action requests create scoped missions. Campaign, cost, and launch-impacting changes require confirmation first.
               </p>
             </div>
             <Send className="h-5 w-5 text-primary" />
           </div>
 
-          <form className="mt-5 space-y-4" onSubmit={handleMissionSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="mission-title">Mission title</Label>
-              <Input
-                id="mission-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Example: Source Midrand manufacturing businesses for proactive IT"
-              />
-            </div>
+          <form onSubmit={handlePromptSubmit} className="mt-5 rounded-[28px] border border-border/70 bg-background p-4 shadow-sm">
+            <Input
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="Example: Find more leads like Liquid Technology in Johannesburg"
+              className="h-12 rounded-2xl border-0 bg-muted/20 px-4 text-sm shadow-none focus-visible:ring-0"
+            />
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Worker type</Label>
-                <Select value={assignedWorkerType} onValueChange={setAssignedWorkerType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {WORKER_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Related campaign</Label>
-                <Select value={campaignId} onValueChange={setCampaignId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No linked campaign</SelectItem>
-                    {data.campaigns.map((campaign) => (
-                      <SelectItem key={campaign.id} value={campaign.id}>
-                        {campaign.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="mission-instruction">Instruction</Label>
-              <Textarea
-                id="mission-instruction"
-                value={instruction}
-                onChange={(event) => setInstruction(event.target.value)}
-                className="min-h-[180px] resize-y"
-                placeholder="Describe the target market, quality standard, budget awareness, outreach constraints, or reporting goal."
-              />
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button type="submit" className="gap-2" disabled={createMissionMutation.isPending}>
+                <Send className="h-4 w-4" />
+                {createMissionMutation.isPending ? "Creating mission..." : "Send instruction"}
+              </Button>
+              {pendingPrompt ? (
+                <>
+                  <Button type="button" variant="outline" onClick={() => createMissionFromPrompt(pendingPrompt)} disabled={createMissionMutation.isPending}>
+                    Confirm scoped mission
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setPendingPrompt(null)}>
+                    Cancel
+                  </Button>
+                </>
+              ) : null}
             </div>
 
             {error ? <InlineMessage tone="error">{error}</InlineMessage> : null}
             {notice ? <InlineMessage tone="success">{notice}</InlineMessage> : null}
-
-            <Button type="submit" className="gap-2" disabled={createMissionMutation.isPending}>
-              <Send className="h-4 w-4" />
-              {createMissionMutation.isPending ? "Creating mission..." : "Create mission"}
-            </Button>
           </form>
+
+          {quietWorkspace ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {PROMPT_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => setPrompt(suggestion)}
+                  className="rounded-full border border-border bg-background px-4 py-2 text-sm text-foreground transition hover:bg-accent"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </Card>
 
         <Card className="p-6 shadow-card">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Latest weekly report</h2>
+              <h2 className="text-xl font-semibold">Recent instructions</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Client-ready summary of progress, pipeline movement, and next steps.
+                Only the latest few interactions are shown here for launch.
               </p>
             </div>
-            <FileBarChart className="h-5 w-5 text-primary" />
+            <Clock3 className="h-5 w-5 text-primary" />
           </div>
 
-          {data.latestWeeklyReport ? (
-            <div className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                <p className="text-sm font-medium">{data.latestWeeklyReport.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatDateRange(data.latestWeeklyReport.periodStart, data.latestWeeklyReport.periodEnd)}
-                </p>
-                <p className="mt-3 text-sm text-muted-foreground">{data.latestWeeklyReport.summary}</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {latestReportMetrics.map(([label, value]) => (
-                  <div key={label} className="rounded-xl border border-border px-4 py-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-                    <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+          <div className="mt-5 space-y-3">
+            {recentInteractions.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-border/70 bg-background p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{item.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{item.detail}</p>
                   </div>
-                ))}
+                  <Badge variant="outline" className="border-border/70 bg-muted/20 text-[10px] uppercase tracking-wide">
+                    {item.kind}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {formatFriendlyLabel(item.status)}{safeDistanceLabel(item.createdAt) ? ` · ${safeDistanceLabel(item.createdAt)}` : ""}
+                </p>
               </div>
-            </div>
-          ) : (
-            <EmptyState title="No weekly report yet" description="Your first weekly update will appear here once the next reporting cycle is published." />
-          )}
+            ))}
+            {recentInteractions.length === 0 ? (
+              <EmptyState title="No recent instructions yet" description="Once an instruction or request is created, the latest activity will appear here." />
+            ) : null}
+          </div>
         </Card>
       </div>
+
+      <Card className="p-6 shadow-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Approvals / Actions Needed</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Client-facing approvals are kept simple here. Full approval history lives on the Approvals page.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/approvals" className="gap-2">
+              Open Approvals
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+
+        {showActionableApprovals ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            {pendingApprovals.slice(0, 2).map((approval) => (
+              <ApprovalCard
+                key={approval.id}
+                approval={approval}
+                canApprove={canApprove}
+                busy={approvalDecisionMutation.isPending}
+                onApprove={() => handleApprovalDecision(approval.id, "approved")}
+                onRequestChanges={() => handleApprovalDecision(approval.id, "rejected", "Client requested changes from the Lead Agent workspace.")}
+              />
+            ))}
+            {data.pendingEnrichmentCreditApprovals.slice(0, 2).map((approval) => (
+              <div key={approval.queueItemId} className="rounded-2xl border border-border/70 bg-background p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{approval.companyName}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Waiting for enrichment approval before any contact verification work can continue.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">{approval.campaignName || "Unassigned campaign"}</p>
+                  </div>
+                  <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Pending</Badge>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => handleCreditDecision(approval.queueItemId, "approved")} disabled={enrichmentDecisionMutation.isPending}>
+                    Approve
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleCreditDecision(approval.queueItemId, "rejected")} disabled={enrichmentDecisionMutation.isPending}>
+                    Request Changes
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-dashed border-border bg-muted/15 px-5 py-6">
+            <p className="font-medium">No approvals waiting</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              New approvals will appear here only when a decision is relevant to your role.
+            </p>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-6 shadow-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Outreach preparation</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Prepared only — not sent yet. Sending is paused until mailbox setup and launch approval are complete.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/templates">Open Templates</Link>
+          </Button>
+        </div>
+
+        {data.outreachQueue.length > 0 ? (
+          <div className="mt-5 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-3">
+              {data.outreachQueue.slice(0, 5).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedQueueItemId(item.id)}
+                  className={`w-full rounded-2xl border p-4 text-left transition ${
+                    selectedQueueItemId === item.id ? "border-primary bg-primary/5 shadow-sm" : "border-border/70 bg-background hover:bg-muted/20"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{item.rawCompanyName || item.leadCompanyName || "Prepared outreach"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{item.campaignName || "No campaign linked"}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.variantLabel ? `Variant ${item.variantLabel}` : "Template variant pending"} · {mapClientStatusLabel(item.mailboxStatus)}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="border-border/70 bg-muted/20 text-[10px] uppercase tracking-wide">
+                      Prepared
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="rounded-[28px] border border-border/70 bg-background p-5">
+              {renderPreviewQuery.isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-56 w-full" />
+                </div>
+              ) : renderPreviewQuery.data?.preview ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-success/30 bg-success/10 text-success">Prepared</Badge>
+                    <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Waiting for mailbox setup</Badge>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <PreviewMeta label="Recipient" value={`${renderPreviewQuery.data.preview.recipientName || "Recipient"}${renderPreviewQuery.data.preview.companyName ? ` · ${renderPreviewQuery.data.preview.companyName}` : ""}`} />
+                    <PreviewMeta label="Campaign" value={selectedQueueItem?.campaignName || "No campaign linked"} />
+                    <PreviewMeta label="Template variant" value={renderPreviewQuery.data.preview.template.variantLabel || "Variant pending"} />
+                    <PreviewMeta label="Status" value="Prepared / waiting for mailbox" />
+                  </div>
+                  <PreviewMeta label="Subject" value={renderPreviewQuery.data.preview.subject || "No subject rendered"} />
+                  <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Body preview</p>
+                    <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">{renderPreviewQuery.data.preview.body || "No body rendered"}</pre>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Prepared only — not sent yet. Sending is paused until mailbox setup and launch approval are complete.
+                  </p>
+                </div>
+              ) : selectedQueueItem ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-success/30 bg-success/10 text-success">Prepared</Badge>
+                    <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Waiting for mailbox setup</Badge>
+                  </div>
+                  <PreviewMeta label="Recipient / company" value={[selectedQueueItem.recipientName, selectedQueueItem.rawCompanyName || selectedQueueItem.leadCompanyName].filter(Boolean).join(" · ") || "Prepared recipient"} />
+                  <PreviewMeta label="Campaign" value={selectedQueueItem.campaignName || "No campaign linked"} />
+                  <PreviewMeta label="Template variant" value={selectedQueueItem.variantLabel || "Variant pending"} />
+                  <PreviewMeta label="Status" value="Prepared / waiting for mailbox" />
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/15 px-5 py-8 text-center">
+                    <p className="font-medium">Preview not available yet</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      The prepared outreach record exists, but the rendered preview is not ready to display yet.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState title="No outreach prepared yet" description="Prepared outreach will appear here once a contact is ready for review." />
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5">
+            <EmptyState title="No outreach prepared yet" description="Prepared outreach will appear here once qualifying leads move into the pre-launch queue." />
+          </div>
+        )}
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Lead pipeline lifecycle</h2>
+          <h2 className="text-xl font-semibold">Mailbox readiness</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Only qualified and client-appropriate records should progress into the visible pipeline.
+            {mailboxMessage}
           </p>
+
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {data.leadPipelineCounts.length ? data.leadPipelineCounts.map((item) => (
-              <div key={item.stage} className="rounded-xl border border-border px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{item.stage}</p>
-                <p className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</p>
+            <SummaryStat label="Prepared outreach" value={metrics.outreachPrepared} />
+            <SummaryStat label="Emails sent" value={data.mailboxSentThisMonth} />
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-border/70 bg-muted/15 p-4">
+            <p className="font-medium">Mailbox setup pending</p>
+            <p className="mt-2 text-sm text-muted-foreground">{mailboxDetail}</p>
+          </div>
+
+          {isAdmin ? (
+            <details className="mt-5 rounded-2xl border border-dashed border-border p-4">
+              <summary className="cursor-pointer list-none text-sm font-semibold">
+                Admin details
+              </summary>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <PreviewMeta label="Provider" value={data.mailboxProviderType ? formatFriendlyLabel(data.mailboxProviderType) : "Resend"} />
+                <PreviewMeta label="Connection" value={mapClientStatusLabel(data.mailboxStatus)} />
+                <PreviewMeta label="Sending" value={data.sendingEnabled ? "Enabled" : "Paused"} />
+                <PreviewMeta label="Send-ready count" value={String(data.sendReadyCount)} />
+                <PreviewMeta label="Blockers" value={getAdminMailboxBlockers(data)} />
+                <PreviewMeta label="Launch-day setup" value="Resend pending until launch day" />
               </div>
-            )) : <EmptyState title="No lifecycle counts yet" description="Lead stages will appear once client-visible leads are promoted through the platform." />}
-          </div>
-        </Card>
-
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Active missions</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Current work assigned through the Expert workspace.
-          </p>
-          <div className="mt-5 space-y-3">
-            {data.activeMissions.length ? data.activeMissions.map((mission) => (
-              <div key={mission.id} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{mission.title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{mission.instruction}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {mission.assignedWorkerType} · {mission.missionType}
-                      {safeDistanceLabel(mission.createdAt) ? ` · ${safeDistanceLabel(mission.createdAt)}` : ""}
-                    </p>
-                  </div>
-                  <LeadStatusBadge status={mission.status.toLowerCase().replace(/\s+/g, "_")} />
-                </div>
-              </div>
-            )) : <EmptyState title="No missions yet" description="Create the first mission to start the Expert agent workflow." />}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Raw lead statuses</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Early-stage sourcing and review progress before leads are promoted into the working pipeline.
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {data.rawLeadStatusCounts.length ? data.rawLeadStatusCounts.map((item) => (
-              <div key={item.status} className="rounded-xl border border-border px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(item.status)}</p>
-                <p className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</p>
-              </div>
-            )) : <EmptyState title="No raw lead statuses yet" description="Raw lead qualification states will appear here once sourcing or review begins." />}
-          </div>
-        </Card>
-
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Latest qualification actions</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Recent qualification decisions, scoring updates, and review outcomes.
-          </p>
-          <div className="mt-5 space-y-3">
-            {data.latestQualificationActions.length ? data.latestQualificationActions.map((action) => (
-              <div key={action.id} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{action.companyName}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{action.qualificationNotes || "Qualification decision recorded."}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Score {action.qualificationScore} · Confidence {action.confidenceScore}
-                      {action.modelRouteUsed ? ` · ${action.modelRouteUsed}` : ""}
-                      {safeDistanceLabel(action.updatedAt) ? ` · ${safeDistanceLabel(action.updatedAt)}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-start gap-2 md:items-end">
-                    <LeadStatusBadge status={action.status} />
-                    {action.escalationRequired ? (
-                      <span className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-warning-foreground">
-                        Escalation flagged
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            )) : <EmptyState title="No qualification actions yet" description="Qualification Agent reviews will appear here after raw leads are scored." />}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Enrichment queue statuses</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Planning, approvals, and provider-readiness before any contact lookup is approved.
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {data.enrichmentQueueStatusCounts.length ? data.enrichmentQueueStatusCounts.map((item) => (
-              <div key={item.status} className="rounded-xl border border-border px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(item.status)}</p>
-                <p className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</p>
-              </div>
-            )) : <EmptyState title="No enrichment queue statuses yet" description="Enrichment planning states will appear here after Qualification Agent moves leads into the queue." />}
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Apollo attempted</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentUsageSummary.apolloAttempted}</p>
-            </div>
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Apollo used</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentUsageSummary.apolloUsed}</p>
-            </div>
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Hunter attempted</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentUsageSummary.hunterAttempted}</p>
-            </div>
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Hunter used</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentUsageSummary.hunterUsed}</p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Apollo allowance</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentBudgetSummary.apolloRemaining}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {data.enrichmentBudgetSummary.apolloUsed} used of {data.enrichmentBudgetSummary.apolloMonthlyLimit}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Hunter allowance</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.enrichmentBudgetSummary.hunterRemaining}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {data.enrichmentBudgetSummary.hunterUsed} used of {data.enrichmentBudgetSummary.hunterMonthlyLimit}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Latest enrichment actions</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Most recent enrichment planning decisions, approval requirements, and routing notes.
-          </p>
-          <div className="mt-5 space-y-3">
-            {data.latestEnrichmentActions.length ? data.latestEnrichmentActions.map((action) => (
-              <div key={action.id} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{formatStatusLabel(action.status)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{action.enrichmentNotes || "Enrichment planning decision recorded."}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Eligibility {formatStatusLabel(action.eligibilityStatus || "unknown")}
-                      {action.budgetCheckStatus ? ` · Budget ${formatStatusLabel(action.budgetCheckStatus)}` : ""}
-                      {action.creditApprovalStatus ? ` · Credit ${formatStatusLabel(action.creditApprovalStatus)}` : ""}
-                      {action.providerStatus ? ` · Provider ${formatStatusLabel(action.providerStatus)}` : ""}
-                      {action.modelRouteUsed ? ` · ${action.modelRouteUsed}` : ""}
-                      {safeDistanceLabel(action.lastProcessedAt) ? ` · ${safeDistanceLabel(action.lastProcessedAt)}` : ""}
-                    </p>
-                    {action.enrichedEmail || action.enrichedContactName ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {action.enrichedContactName ? `${action.enrichedContactName}` : "Contact pending"}
-                        {action.enrichedContactTitle ? ` · ${action.enrichedContactTitle}` : ""}
-                        {action.enrichedEmail ? ` · ${action.enrichedEmail}` : ""}
-                        {action.enrichedEmailStatus ? ` (${formatStatusLabel(action.enrichedEmailStatus)})` : ""}
-                      </p>
-                    ) : null}
-                    {action.providerError ? (
-                      <p className="mt-2 text-xs text-destructive">{action.providerError}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col items-start gap-2 md:items-end">
-                    {action.apolloPlanned || action.hunterPlanned ? (
-                      <span className="rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-info">
-                        {action.apolloPlanned && action.hunterPlanned ? "Apollo + Hunter planned" : action.apolloPlanned ? "Apollo planned" : "Hunter planned"}
-                      </span>
-                    ) : null}
-                    {action.requiresApproval ? (
-                      <span className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-warning-foreground">
-                        Credit approval required
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            )) : <EmptyState title="No enrichment actions yet" description="Enrichment planning updates will appear here once queued records are reviewed." />}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Campaigns</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Current campaign foundations and their approval status.
-          </p>
-          <div className="mt-5 space-y-3">
-            {data.campaigns.length ? data.campaigns.map((campaign) => (
-              <div key={campaign.id} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{campaign.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {campaign.targetNiche} · {campaign.targetLocation}
-                    </p>
-                    <p className="mt-2 text-sm">{campaign.objective}</p>
-                  </div>
-                  <div className="flex flex-col items-start gap-2 md:items-end">
-                    <CampaignStatusBadge status={campaign.status} />
-                    <ApprovalStatusBadge status={campaign.approvalStatus} />
-                  </div>
-                </div>
-              </div>
-            )) : <EmptyState title="No campaigns yet" description="Campaign records will appear here as soon as campaign planning is published into the workspace." />}
-          </div>
-        </Card>
-
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Enrichment credit approvals</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Review enrichment spend requests before any Apollo or Hunter credits are used.
-          </p>
-          <div className="mt-5 space-y-3">
-            {data.pendingEnrichmentCreditApprovals.length ? data.pendingEnrichmentCreditApprovals.map((approval) => (
-              <div key={approval.queueItemId} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{approval.companyName}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Raw lead {formatStatusLabel(approval.rawLeadStatus)} · Queue {formatStatusLabel(approval.queueStatus)}
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Campaign: {approval.campaignName || "No linked campaign"}
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Apollo {approval.apolloPlanned ? "planned" : "off"} · Hunter {approval.hunterPlanned ? "planned" : "off"}
-                      {safeDistanceLabel(approval.createdAt) ? ` · ${safeDistanceLabel(approval.createdAt)}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-start gap-2 md:items-end">
-                    <ApprovalStatusBadge
-                      status={
-                        approval.creditApprovalStatus === "approved"
-                          ? "approved"
-                          : approval.creditApprovalStatus === "declined"
-                            ? "rejected"
-                            : "pending"
-                      }
-                    />
-                    {canApprove ? (
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={enrichmentCreditApprovalMutation.isPending}
-                          onClick={() => handleEnrichmentApprovalDecision(approval.queueItemId, "approved")}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={enrichmentCreditApprovalMutation.isPending}
-                          onClick={() => handleEnrichmentApprovalDecision(approval.queueItemId, "rejected")}
-                        >
-                          Decline
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            )) : <EmptyState title="No enrichment approvals waiting" description="Dry-run enrichment requests will appear here when credits need an explicit approval decision." />}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Outreach templates</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            First-contact drafts stay paused until approvals, follow-up rules, and mailbox setup are complete.
-          </p>
-          <div className="mt-5 space-y-4">
-            {data.outreachTemplates.length ? data.outreachTemplates.map((template) => (
-              <div key={template.id} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{template.campaignName}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {template.name} · {formatStatusLabel(template.templateType)}
-                    </p>
-                  </div>
-                  <ApprovalStatusBadge status={template.approvalStatus === "rejected" ? "rejected" : template.approvalStatus === "approved" ? "approved" : "pending"} />
-                </div>
-                <div className="mt-4 space-y-3">
-                  {template.variants.map((variant) => (
-                    <div key={variant.id} className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <p className="font-medium">Variant {variant.variantLabel}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{variant.subjectTemplate}</p>
-                          <p className="mt-2 text-xs text-muted-foreground line-clamp-3">{variant.bodyTemplate}</p>
-                        </div>
-                        <div className="flex flex-col items-start gap-2 md:items-end">
-                          <ApprovalStatusBadge status={variant.approvalStatus === "rejected" ? "rejected" : variant.approvalStatus === "approved" ? "approved" : "pending"} />
-                          {canApprove && variant.approvalStatus !== "approved" ? (
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(variant.id) || "", "approved")} disabled={!approvalsByEntityId.get(variant.id)}>
-                                Approve
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(variant.id) || "", "rejected")} disabled={!approvalsByEntityId.get(variant.id)}>
-                                Decline
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )) : <EmptyState title="No outreach templates yet" description="Campaign-specific first-contact drafts will appear here once they are prepared." />}
-          </div>
-        </Card>
-
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Follow-up rules and queue</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Mailbox readiness is checked before outreach can move forward. Sending remains paused for pre-launch setup.
-          </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-muted/20 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Mailbox status</p>
-              <p className="mt-2 text-2xl font-semibold">{formatStatusLabel(data.mailboxStatus)}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Connected {data.mailboxConnected ? "yes" : "no"} · Sending enabled {data.sendingEnabled ? "yes" : "no"} · Send-ready {data.sendReady ? "yes" : "no"}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {data.mailboxFromEmail ? `${data.mailboxFromName || "Configured sender"} <${data.mailboxFromEmail}>` : "No sender configured yet"}
-                {data.mailboxProviderType ? ` · ${formatStatusLabel(data.mailboxProviderType)}` : ""}
-              </p>
-              {data.mailboxConnectionCheck ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Check {formatStatusLabel(data.mailboxConnectionCheck.connectionStatus)}
-                  {` · Configured ${data.mailboxConnectionCheck.configured ? "yes" : "no"}`}
-                  {data.mailboxConnectionCheck.senderStatus ? ` · Sender ${formatStatusLabel(data.mailboxConnectionCheck.senderStatus)}` : ""}
-                </p>
-              ) : null}
-              <p className="mt-2 text-xs font-medium text-foreground">
-                {mailboxPrimaryMessage}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {mailboxSetupMessage}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/20 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending limits</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Daily {data.mailboxDailySendLimit ?? "Not set"} · Monthly {data.mailboxMonthlySendLimit ?? "Not set"}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Sent today {data.mailboxSentToday} · Sent this month {data.mailboxSentThisMonth}
-              </p>
-              {mailboxReadinessMessage ? (
-                <p className={`mt-2 text-xs ${mailboxReadinessTone === "warning" ? "text-destructive" : "text-muted-foreground"}`}>
-                  {mailboxReadinessMessage}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">Mailbox readiness checks are clear, but sending remains paused until launch approval.</p>
-              )}
-            </div>
-          </div>
-
-          {isIntergraiAdmin ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-border p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h3 className="text-base font-semibold">Mailbox provider configuration</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Admin-only provider overview. Credentials stay server-side and sending remains paused.
-                  </p>
-                </div>
-                {isGoogleMailboxProvider ? (
-                  <Button
-                    size="sm"
-                    onClick={handleStartMailboxOAuth}
-                    disabled={!googleConnectableMailbox || startMailboxOAuthMutation.isPending}
-                    className="gap-2"
-                  >
-                    {startMailboxOAuthMutation.isPending ? (
-                      <>
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                        Opening Google OAuth
-                      </>
-                    ) : (
-                      <>
-                        <MailSearch className="h-4 w-4" />
-                        Connect Google Workspace
-                      </>
-                    )}
-                  </Button>
-                ) : null}
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider type</p>
-                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxProviderType || "other")}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Connection status</p>
-                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxStatus)}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">From name</p>
-                  <p className="mt-2 font-medium">{data.mailboxFromName || "Not configured"}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">From email</p>
-                  <p className="mt-2 font-medium break-all">{data.mailboxFromEmail || "Not configured"}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Daily / monthly limits</p>
-                  <p className="mt-2 font-medium">{data.mailboxDailySendLimit ?? "Not set"} / {data.mailboxMonthlySendLimit ?? "Not set"}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Sending enabled</p>
-                  <p className="mt-2 font-medium">{data.sendingEnabled ? "Yes" : "No"}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Provider check</p>
-                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxConnectionCheck?.connectionStatus || "not_connected")}</p>
-                </div>
-                <div className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Sender verification</p>
-                  <p className="mt-2 font-medium">{formatStatusLabel(data.mailboxConnectionCheck?.senderStatus || "pending")}</p>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                {isGoogleMailboxProvider && googleConnectableMailbox
-                  ? `OAuth will be started for ${googleConnectableMailbox.mailboxName} <${googleConnectableMailbox.fromEmail}>.`
-                  : "Google OAuth is only available when the mailbox provider is Google Workspace or Gmail."}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Resend, SMTP, and future providers can be reviewed here without exposing credentials in the workspace.
-              </p>
-            </div>
+            </details>
           ) : null}
+        </Card>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Queue waiting for mailbox</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.waitingForMailboxCount}</p>
-            </div>
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Queue send-ready</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.sendReadyCount}</p>
-            </div>
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Render previews available</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{data.renderPreviewAvailableCount}</p>
-            </div>
-          </div>
+        <Card className="p-6 shadow-card">
+          <h2 className="text-xl font-semibold">How Expert Lead Agent works</h2>
           <div className="mt-5 space-y-3">
-            {data.followupSequences.length ? data.followupSequences.map((sequence) => (
-              <div key={sequence.id} className="rounded-2xl border border-border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-medium">{sequence.campaignName}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {sequence.name} · {sequence.followupCount} follow-ups
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-start gap-2 md:items-end">
-                    <ApprovalStatusBadge status={sequence.approvalStatus === "rejected" ? "rejected" : sequence.approvalStatus === "approved" ? "approved" : "pending"} />
-                    {canApprove && sequence.approvalStatus !== "approved" ? (
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(sequence.id) || "", "approved")} disabled={!approvalsByEntityId.get(sequence.id)}>
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approvalsByEntityId.get(sequence.id) || "", "rejected")} disabled={!approvalsByEntityId.get(sequence.id)}>
-                          Decline
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            )) : <EmptyState title="No follow-up rules yet" description="Follow-up approval drafts will appear here once outreach sequencing is prepared." />}
+            <HowItWorksStep
+              number="1"
+              title="Find and qualify leads"
+              description="The agent sources prospects and filters them to your target profile before they appear in the client workspace."
+            />
+            <HowItWorksStep
+              number="2"
+              title="Prepare outreach safely"
+              description="Outreach drafts and approvals are prepared ahead of launch while sending remains paused."
+            />
+            <HowItWorksStep
+              number="3"
+              title="Launch with approval"
+              description="Mailbox activation and sending only move forward after setup is complete and launch approval is given."
+            />
           </div>
 
-          <div className="mt-6">
-            <h3 className="text-base font-semibold">Outreach queue</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {data.outreachQueueStatusCounts.length ? data.outreachQueueStatusCounts.map((item) => (
-                <div key={item.status} className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(item.status)}</p>
-                  <p className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</p>
-                </div>
-              )) : <EmptyState title="No outreach queue statuses yet" description="Outreach planning states will appear here after a verified contact is prepared for review." />}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {data.outreachQueue.length ? data.outreachQueue.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="font-medium">{item.rawCompanyName || item.leadCompanyName || "Unnamed prospect"}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {item.campaignName} · {formatStatusLabel(item.status)}
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Approval {formatStatusLabel(item.approvalStatus)} · Mailbox {formatStatusLabel(item.mailboxStatus)}
-                        {item.variantLabel ? ` · Variant ${item.variantLabel}` : ""}
-                        {item.sequenceName ? ` · ${item.sequenceName}` : ""}
-                      </p>
-                      {item.recipientEmail ? (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          {item.recipientName || "Recipient"} · {item.recipientEmail}
-                        </p>
-                      ) : null}
-                      {item.blockers.length ? (
-                        <p className="mt-2 text-xs text-destructive">
-                          {item.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-col items-start gap-2 md:items-end">
-                      <Button
-                        size="sm"
-                        variant={selectedQueueItemId === item.id ? "default" : "outline"}
-                        onClick={() => setSelectedQueueItemId(item.id)}
-                        className="gap-2"
-                      >
-                        <MailSearch className="h-4 w-4" />
-                        Preview
-                      </Button>
-                      <span className="text-[11px] text-muted-foreground">
-                        {item.renderPreviewAvailable ? "Preview available" : "Preview blocked"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )) : <EmptyState title="No outreach queued yet" description="Planned outreach records will appear here once contacts move into the outreach review queue." />}
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-base font-semibold">Rendered email preview</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Preview approved outreach content here. This view cannot send email.
-            </p>
-            <div className="mt-4 rounded-2xl border border-border p-4">
-              {renderPreviewQuery.isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-4 w-64" />
-                  <Skeleton className="h-32 w-full" />
-                </div>
-              ) : renderPreviewQuery.isError ? (
-                <WarningCard
-                  title="Email preview unavailable"
-                  message={(renderPreviewQuery.error as Error | undefined)?.message || "The selected outreach preview could not be loaded."}
-                  compact
-                  action={selectedQueueItemId ? (
-                    <Button size="sm" variant="outline" onClick={() => renderPreviewQuery.refetch()}>
-                      Retry preview
-                    </Button>
-                  ) : undefined}
-                />
-              ) : renderPreviewQuery.data?.preview ? (
-                <div className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">From</p>
-                      <p className="mt-2 text-sm font-medium">
-                        {renderPreviewQuery.data.preview.fromName || "Configured sender"} &lt;{renderPreviewQuery.data.preview.fromEmail || "-"}&gt;
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">To</p>
-                      <p className="mt-2 text-sm font-medium">
-                        {renderPreviewQuery.data.preview.recipientName || "Recipient"} &lt;{renderPreviewQuery.data.preview.recipientEmail || "-"}&gt;
-                      </p>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Subject</p>
-                    <p className="mt-2 text-sm font-medium">{renderPreviewQuery.data.preview.subject || "No subject rendered"}</p>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Body</p>
-                    <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm text-foreground">{renderPreviewQuery.data.preview.body || "No body rendered"}</pre>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Variant {renderPreviewQuery.data.preview.template.variantLabel || "-"} · {formatStatusLabel(renderPreviewQuery.data.preview.template.type || "email")} · Follow-up {renderPreviewQuery.data.preview.followupSequence.name || "-"} ({renderPreviewQuery.data.preview.followupSequence.followupCount} steps)
-                  </p>
-                  {renderPreviewQuery.data.preview.missingPlaceholders.length ? (
-                    <p className="text-xs text-destructive">
-                      Missing placeholders: {renderPreviewQuery.data.preview.missingPlaceholders.join(", ")}
-                    </p>
-                  ) : null}
-                  <p className="text-xs text-destructive">
-                    {renderPreviewQuery.data.readiness.blockers.length
-                      ? renderPreviewQuery.data.readiness.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")
-                      : "Sending remains paused until launch approval and mailbox setup are complete."}
-                  </p>
-                </div>
-              ) : (
-                <EmptyState title="No preview selected" description="Choose an outreach queue item to render its email preview." />
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-base font-semibold">Verified contacts waiting for outreach planning</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Verified contacts remain paused here until template approval, follow-up approval, and mailbox setup are complete.
-            </p>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {data.outreachBlockers.length ? data.outreachBlockers.map((blocker) => (
-                <div key={blocker.code} className="rounded-xl border border-border px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{formatStatusLabel(blocker.code)}</p>
-                  <p className="mt-2 text-2xl font-semibold tabular-nums">{blocker.count || 0}</p>
-                </div>
-              )) : <EmptyState title="No outreach blockers" description="Verified contacts can move into planning as soon as mailbox setup is completed, with sending still paused." />}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {data.verifiedContactsWaitingForOutreach.length ? data.verifiedContactsWaitingForOutreach.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="font-medium">{item.companyName}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {item.contactName || "Verified contact"}{item.contactTitle ? ` · ${item.contactTitle}` : ""}
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {item.email || "No verified email"}{item.emailStatus ? ` · ${formatStatusLabel(item.emailStatus)}` : ""}
-                        {item.providerStatus ? ` · Provider ${formatStatusLabel(item.providerStatus)}` : ""}
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {item.campaignName} · Planning {formatStatusLabel(item.planningStatus)}
-                        {item.outreachQueueStatus ? ` · Queue ${formatStatusLabel(item.outreachQueueStatus)}` : ""}
-                        {item.mailboxStatus ? ` · Mailbox ${formatStatusLabel(item.mailboxStatus)}` : ""}
-                      </p>
-                      {item.variantLabel || item.sequenceName ? (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          {item.variantLabel ? `Variant ${item.variantLabel}` : "Template pending"}
-                          {item.sequenceName ? ` · ${item.sequenceName}` : ""}
-                        </p>
-                      ) : null}
-                      {item.blockers.length ? (
-                        <p className="mt-2 text-xs text-destructive">
-                          {item.blockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ")}
-                        </p>
-                      ) : (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Ready for queue planning. Sending will remain paused until mailbox setup is completed and approved.
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-start gap-2 md:items-end">
-                      <ApprovalStatusBadge status={item.approvalStatus === "approved" ? "approved" : "pending"} />
-                      {item.outreachQueueId ? (
-                        <span className="rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-info">
-                          Queue created
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              )) : <EmptyState title="No verified contacts yet" description="Verified contacts will appear here after approved enrichment confirms a usable email address." />}
-            </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild variant="outline">
+              <Link to="/campaigns">Campaigns</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/reports">Reports</Link>
+            </Button>
           </div>
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Approvals</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Campaign, template, follow-up, and reply approvals waiting for review.
+      {isAdmin ? (
+        <details className="rounded-[28px] border border-dashed border-border bg-background p-6 shadow-card">
+          <summary className="cursor-pointer list-none text-lg font-semibold">Admin details</summary>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Internal mission history and operational detail remain hidden from client users.
           </p>
-          <div className="mt-5 space-y-3">
-            {data.approvals.filter((approval) => approval.approvalType !== "credit_approval").length ? data.approvals.filter((approval) => approval.approvalType !== "credit_approval").map((approval) => {
-              const badgeStatus = approval.decisionStatus === "approved" ? "approved" : approval.decisionStatus === "rejected" ? "rejected" : "pending";
-              return (
-                <div key={approval.id} className="rounded-2xl border border-border p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+
+          <div className="mt-5 grid gap-6 xl:grid-cols-2">
+            <div className="space-y-3">
+              <h3 className="font-semibold">Mission detail</h3>
+              {data.activeMissions.map((mission) => (
+                <div key={mission.id} className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{mission.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{mission.instruction}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {mission.assignedWorkerType} · {mission.missionType}{safeDistanceLabel(mission.createdAt) ? ` · ${safeDistanceLabel(mission.createdAt)}` : ""}
+                      </p>
+                    </div>
+                    <LeadStatusBadge status={mission.status.toLowerCase().replace(/\s+/g, "_")} />
+                  </div>
+                </div>
+              ))}
+              {data.activeMissions.length === 0 ? <EmptyState title="No active missions" description="Admin mission detail will appear here when work is queued." /> : null}
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="font-semibold">Approval history</h3>
+              {generalApprovals.map((approval) => (
+                <div key={approval.id} className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium">{approval.title}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {approval.entityType} · {approval.approvalType}
-                      </p>
-                      {approval.decisionNote ? (
-                        <p className="mt-2 text-sm text-muted-foreground">{approval.decisionNote}</p>
-                      ) : null}
+                      <p className="mt-1 text-sm text-muted-foreground">{approval.entityType} · {approval.approvalType}</p>
+                      {approval.decisionNote ? <p className="mt-2 text-xs text-muted-foreground">{approval.decisionNote}</p> : null}
                     </div>
-                    <div className="flex flex-col items-start gap-2 md:items-end">
-                      <ApprovalStatusBadge status={badgeStatus} />
-                      {canApprove && approval.decisionStatus === "pending" ? (
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approval.id, "approved")}>
-                            Approve
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleApprovalDecision(approval.id, "rejected")}>
-                            Reject
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
+                    <ApprovalStatusBadge status={toApprovalBadgeStatus(approval.decisionStatus)} />
                   </div>
                 </div>
-              );
-            }) : <EmptyState title="No approvals waiting" description="Approval items will appear here when campaigns, templates, follow-ups, or replies need a decision." />}
+              ))}
+            </div>
           </div>
-        </Card>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function KpiCard({ label, value, note }: { label: string; value: number; note: string }) {
+  return (
+    <Card className="p-5 shadow-card">
+      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tabular-nums">{value.toLocaleString()}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{note}</p>
+    </Card>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background p-4">
+      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
+      <p className="mt-3 text-2xl font-semibold tabular-nums">{value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function PreviewMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-sm leading-6 text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function ApprovalCard({
+  approval,
+  canApprove,
+  busy,
+  onApprove,
+  onRequestChanges,
+}: {
+  approval: ApprovalRecord;
+  canApprove: boolean;
+  busy: boolean;
+  onApprove: () => void;
+  onRequestChanges: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium">{approval.title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{formatFriendlyLabel(approval.approvalType)}</p>
+          {approval.decisionNote ? <p className="mt-2 text-xs text-muted-foreground">{approval.decisionNote}</p> : null}
+        </div>
+        <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Pending</Badge>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="p-6 shadow-card">
-          <h2 className="text-lg font-semibold">Open requests</h2>
-          <div className="mt-5 space-y-3">
-            {data.openRequests.length ? data.openRequests.map((request) => (
-              <div key={request.id} className="rounded-2xl border border-border p-4">
-                <p className="font-medium">{request.title}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{request.message}</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {request.clientVisibleStatus}
-                  {safeDistanceLabel(request.createdAt) ? ` · ${safeDistanceLabel(request.createdAt)}` : ""}
-                </p>
-              </div>
-            )) : <EmptyState title="No open requests" description="Requests created in the existing requests workflow will appear here." />}
-          </div>
-        </Card>
+      {canApprove ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button size="sm" onClick={onApprove} disabled={busy}>Approve</Button>
+          <Button size="sm" variant="outline" onClick={onRequestChanges} disabled={busy}>Request Changes</Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
-        {user?.role === "intergrai_admin" ? (
-          <Card className="p-6 shadow-card">
-            <h2 className="text-lg font-semibold">Internal admin notes</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Notes below are visible only to Intergrai administrators.
-            </p>
-            <div className="mt-5 space-y-3">
-              {data.internalNotes.length ? data.internalNotes.map((note) => (
-                <div key={note.id} className="rounded-2xl border border-border p-4">
-                  <p className="text-sm">{note.note}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {note.createdByName || "Intergrai"}
-                    {note.createdByRole ? ` · ${note.createdByRole}` : ""}
-                    {safeDistanceLabel(note.createdAt) ? ` · ${safeDistanceLabel(note.createdAt)}` : ""}
-                  </p>
-                </div>
-              )) : <EmptyState title="No internal notes" description="Private Intergrai-only notes will appear here." />}
-            </div>
-          </Card>
-        ) : null}
+function HowItWorksStep({ number, title, description }: { number: string; title: string; description: string }) {
+  return (
+    <div className="flex gap-4 rounded-2xl border border-border/70 bg-background p-4">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+        {number}
+      </div>
+      <div>
+        <p className="font-medium">{title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   );
 }
 
-function KpiCard({ label, value, icon: Icon }: { label: string; value: number; icon: ComponentType<{ className?: string }> }) {
-  return (
-    <Card className="p-5 shadow-card">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="mt-2 text-3xl font-bold tabular-nums">{value.toLocaleString()}</p>
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground shadow-glow">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-5 py-8 text-center">
+    <div className="rounded-2xl border border-dashed border-border bg-muted/15 px-5 py-8 text-center">
       <p className="font-medium">{title}</p>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
     </div>
@@ -1201,9 +876,12 @@ function EmptyState({ title, description }: { title: string; description: string
 
 function InlineMessage({ tone, children }: { tone: "success" | "error"; children: ReactNode }) {
   return (
-    <div className={tone === "success"
-      ? "rounded-2xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
-      : "rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"}>
+    <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+      tone === "success"
+        ? "border-success/30 bg-success/10 text-success"
+        : "border-destructive/30 bg-destructive/10 text-destructive"
+    }`}
+    >
       {children}
     </div>
   );
@@ -1213,15 +891,13 @@ function WarningCard({
   title,
   message,
   action,
-  compact = false,
 }: {
   title: string;
   message: string;
   action?: ReactNode;
-  compact?: boolean;
 }) {
   return (
-    <Card className={compact ? "border-warning/40 bg-warning/5 p-4 shadow-card" : "border-warning/40 bg-warning/5 p-5 shadow-card"}>
+    <Card className="border-warning/40 bg-warning/5 p-5 shadow-card">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="font-semibold text-foreground">{title}</p>
@@ -1236,53 +912,64 @@ function WarningCard({
 function LeadAgentLoadingState() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
-      <Skeleton className="h-36 rounded-[28px]" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <Skeleton key={index} className="h-32" />
-        ))}
-      </div>
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Skeleton className="h-[420px]" />
-        <Skeleton className="h-[420px]" />
+      <Skeleton className="h-40 rounded-[28px]" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        {Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-32" />)}
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
-        <Skeleton className="h-[380px]" />
-        <Skeleton className="h-[380px]" />
+        <Skeleton className="h-[360px]" />
+        <Skeleton className="h-[360px]" />
       </div>
+      <Skeleton className="h-[520px]" />
     </div>
   );
 }
 
-function normalizeMetric(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
+function buildMissionTitle(value: string) {
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  if (!trimmed) return "Lead Agent instruction";
+  return trimmed.length > 72 ? `${trimmed.slice(0, 69)}...` : trimmed;
+}
+
+function inferWorkerType(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("campaign")) return "Reporting Agent";
+  if (normalized.includes("outreach") || normalized.includes("email")) return "Outreach Agent";
+  if (normalized.includes("lead") || normalized.includes("find") || normalized.includes("source")) return "Sourcing Agent";
+  if (normalized.includes("qualify") || normalized.includes("verify")) return "Qualification Agent";
+  return "Sourcing Agent";
+}
+
+function isSimpleQuestion(value: string) {
+  return value.endsWith("?") && value.length <= 140;
+}
+
+function requiresConfirmation(value: string) {
+  const normalized = value.toLowerCase();
+  return ["campaign", "budget", "cost", "credit", "mailbox", "resend", "launch", "send"].some((keyword) => normalized.includes(keyword));
+}
+
+function compareDatesDesc(left?: string, right?: string) {
+  const leftTime = left ? new Date(left).getTime() : 0;
+  const rightTime = right ? new Date(right).getTime() : 0;
+  return rightTime - leftTime;
 }
 
 function safeDistanceLabel(value?: string) {
   if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  try {
-    return formatDistanceToNow(date, { addSuffix: true });
-  } catch {
-    return "";
-  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return formatDistanceToNow(parsed, { addSuffix: true });
 }
 
-function formatDateRange(start?: string, end?: string) {
-  const startLabel = start || "Unknown start";
-  const endLabel = end || "Unknown end";
-  return `${startLabel} to ${endLabel}`;
+function sumPipelineKeywords(data: LeadAgentSummary, keywords: string[]) {
+  return data.leadPipelineCounts.reduce((total, item) => {
+    const stage = String(item.stage || "").toLowerCase();
+    return keywords.some((keyword) => stage.includes(keyword)) ? total + item.count : total;
+  }, 0);
 }
 
-function formatStatusLabel(value: string) {
+function formatFriendlyLabel(value: string) {
   return value
     .split("_")
     .filter(Boolean)
@@ -1290,61 +977,49 @@ function formatStatusLabel(value: string) {
     .join(" ") || "Unknown";
 }
 
+function mapClientStatusLabel(value: string) {
+  switch (value) {
+    case "waiting_for_mailbox":
+      return "Waiting for mailbox setup";
+    case "qualified_for_enrichment":
+      return "Qualified for verification";
+    case "approved_for_enrichment":
+      return "Approved for contact verification";
+    case "waiting_for_credit_approval":
+      return "Waiting for enrichment approval";
+    case "no_contact_found":
+      return "No usable contact found";
+    case "verified_real":
+      return "Contact verified";
+    case "pending":
+      return "Pending setup";
+    default:
+      return formatFriendlyLabel(value);
+  }
+}
+
+function getMailboxClientMessage(data: LeadAgentSummary) {
+  if (!data.sendingEnabled) {
+    return "Mailbox setup pending. Outreach is prepared but sending is paused until launch approval.";
+  }
+  return "Mailbox readiness is being checked. Sending remains paused until launch approval.";
+}
+
 function getMailboxSetupMessage(data: LeadAgentSummary) {
-  const check = data.mailboxConnectionCheck;
-  const providerType = String(check?.providerType || data.mailboxProviderType || "").toLowerCase();
-
-  if (providerType === "resend" && check?.apiKeyConfigured === false) {
-    return "Resend launch-day setup is still pending. This is expected before go-live and is not an error.";
-  }
-
+  const providerType = String(data.mailboxConnectionCheck?.providerType || data.mailboxProviderType || "").toLowerCase();
   if (providerType === "resend") {
-    return "Resend remains in pre-launch pending status. Sending will stay paused until launch-day setup and approval are complete.";
+    return "Resend remains pending for launch day. Prepared outreach stays queued and no sending is enabled before go-live.";
   }
-
-  return "Mailbox setup is still being finalized. Sending will stay paused until configuration, approval, and launch-day activation are complete.";
+  return "Prepared outreach is waiting for final mailbox setup and approval before launch.";
 }
 
-function getMailboxReadinessMessage(data: LeadAgentSummary) {
-  const expectedMessage = getExpectedMailboxPendingMessage(data);
-  if (expectedMessage) return expectedMessage;
-  if (data.mailboxLastError) return data.mailboxLastError;
-  if (data.mailboxReadinessBlockers.length) {
-    return data.mailboxReadinessBlockers.map((blocker) => blocker.message || formatStatusLabel(blocker.code)).join(" | ");
-  }
-  return "";
+function getAdminMailboxBlockers(data: LeadAgentSummary) {
+  if (!data.mailboxReadinessBlockers.length) return "None";
+  return data.mailboxReadinessBlockers.map((blocker) => blocker.message || formatFriendlyLabel(blocker.code)).join(" | ");
 }
 
-function getMailboxReadinessTone(data: LeadAgentSummary): "info" | "warning" {
-  return getExpectedMailboxPendingMessage(data) ? "info" : "warning";
-}
-
-function getExpectedMailboxPendingMessage(data: LeadAgentSummary) {
-  const codes = new Set(data.mailboxReadinessBlockers.map((blocker) => blocker.code));
-  const check = data.mailboxConnectionCheck;
-  const providerType = String(check?.providerType || data.mailboxProviderType || "").toLowerCase();
-  const message = String(data.mailboxLastError || "").toLowerCase();
-
-  if (
-    providerType === "resend"
-    && (
-      check?.apiKeyConfigured === false
-      || codes.has("missing_resend_config")
-      || message.includes("resend")
-      || message.includes("api key")
-    )
-  ) {
-    return "Resend API setup is planned for launch day. Outreach stays prepared and no sending is enabled before then.";
-  }
-
-  if (
-    codes.has("mailbox_pending")
-    || codes.has("sending_disabled")
-    || codes.has("sender_not_verified")
-    || data.mailboxStatus === "pending"
-  ) {
-    return "Mailbox approval and verification are still pending, which is expected before launch. Sending remains paused.";
-  }
-
-  return "";
+function toApprovalBadgeStatus(value: string) {
+  if (value === "approved") return "approved";
+  if (value === "rejected") return "rejected";
+  return "pending";
 }

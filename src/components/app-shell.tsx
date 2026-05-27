@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList, Bot } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList, Bot, Mail, CheckSquare } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/lead-agent", label: "Lead Agent", icon: Bot },
+  { to: "/lead-agent", label: "Expert Lead Agent", icon: Bot },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/requests", label: "Requests", icon: ClipboardList },
+  { to: "/approvals", label: "Approvals", icon: CheckSquare },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
+  { to: "/templates", label: "Templates", icon: Mail },
   { to: "/reports", label: "Reports", icon: FileBarChart },
 ] as const;
 
@@ -29,11 +31,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
         <div className="flex h-20 items-center justify-center px-6 border-b border-sidebar-border bg-white">
           <img src={logo} alt="Expert Technology Solutions" className="h-12 w-auto" />
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? path === "/" : path.startsWith(to);
             return (
@@ -58,10 +60,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-            Live leads data connected
+            Client workspace live
           </div>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            Workflow tools continue through Intergrai
+            Outreach stays safely paused until launch approval
           </div>
         </div>
       </aside>

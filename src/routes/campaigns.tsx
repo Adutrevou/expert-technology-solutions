@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +25,7 @@ function CampaignsPage() {
     return (
       <Card className="max-w-[1400px] mx-auto p-10 text-center shadow-card">
         <h1 className="text-2xl font-semibold">Campaigns unavailable</h1>
-        <p className="mt-2 text-sm text-muted-foreground">We couldn’t load live campaign data from Intergrai right now.</p>
+        <p className="mt-2 text-sm text-muted-foreground">We couldn’t load campaign data right now.</p>
         <div className="mt-6 flex justify-center">
           <Button onClick={() => campaignsQuery.refetch()} variant="outline">
             <RefreshCcw className="h-4 w-4 mr-2" /> Try again
@@ -46,12 +46,17 @@ function CampaignsPage() {
         <div>
           <h1 className="text-3xl font-bold">Campaigns</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {campaigns.length} campaigns synced from the Intergrai Leads API
+            {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"} available in your workspace
           </p>
         </div>
-        <Button onClick={() => campaignsQuery.refetch()} variant="outline" className="gap-2">
-          <RefreshCcw className="h-4 w-4" /> Refresh
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link to="/requests">New Campaign</Link>
+          </Button>
+          <Button onClick={() => campaignsQuery.refetch()} variant="outline" className="gap-2">
+            <RefreshCcw className="h-4 w-4" /> Refresh
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -65,7 +70,7 @@ function CampaignsPage() {
         <Card className="p-10 text-center shadow-card">
           <h2 className="text-xl font-semibold">No campaigns available</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            The API is connected, but there are no campaign records for this client yet.
+            Campaign planning will appear here once the first campaign record is published.
           </p>
         </Card>
       ) : (

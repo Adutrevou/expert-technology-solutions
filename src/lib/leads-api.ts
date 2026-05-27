@@ -1146,7 +1146,7 @@ function normalizeAgentRecord(value: unknown) {
 
   return {
     id: pickString(record, ["id", "_id"]) || "agent",
-    name: pickString(record, ["name"]) || "Mr Krabs",
+    name: pickString(record, ["name"]) || "Expert Lead Agent",
     status: pickString(record, ["status"]) || "unknown",
     roleScope: pickString(record, ["role_scope", "roleScope"]) || "client_operator",
     lastHeartbeatAt: normalizeTimestamp(record.last_heartbeat_at ?? record.lastHeartbeatAt),
