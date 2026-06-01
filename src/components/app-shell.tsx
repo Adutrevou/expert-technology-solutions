@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList, Bot, Mail, CheckSquare } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -14,11 +14,13 @@ const BASE_NAV = [
   { to: "/approvals", label: "Approvals", icon: CheckSquare },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
   { to: "/templates", label: "Templates", icon: Mail },
+  { to: "/conversations", label: "Conversations", icon: MessagesSquare },
+  { to: "/agent-training", label: "Agent Training", icon: BrainCircuit },
   { to: "/reports", label: "Reports", icon: FileBarChart },
 ] as const;
 
 const ADMIN_NAV = [
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/settings", label: "Settings/Admin", icon: Settings },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {

@@ -1,11 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addLeadComment,
+  createAgentTrainingEntry,
   createMission,
   createRequest,
   decideApproval,
   decideEnrichmentCreditApproval,
+  getAgentTraining,
   getCampaigns,
+  getConversationDetail,
+  getConversations,
   getDashboard,
   getLeadAgentSummary,
   getLeadActivity,
@@ -15,7 +19,9 @@ import {
   getRequests,
   getReports,
   startMailboxOAuth,
+  updateAgentTrainingEntry,
   updateLeadStatus,
+  type AgentTrainingEntryRecord,
   type LeadUserSummary,
   type LeadWorkflowStatus,
   type MailboxOAuthStartResponse,
@@ -127,6 +133,39 @@ export function useOutreachRenderPreviewQuery(queueItemId?: string) {
   });
 }
 
+export function useConversationsQuery() {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "conversations"],
+    queryFn: getConversations,
+    enabled: isBrowser && isAuthenticated,
+    retry: 1,
+  });
+}
+
+export function useConversationDetailQuery(conversationId?: string) {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "conversation-detail", conversationId],
+    queryFn: () => getConversationDetail(conversationId || ""),
+    enabled: isBrowser && isAuthenticated && Boolean(conversationId),
+    retry: 1,
+  });
+}
+
+export function useAgentTrainingQuery() {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "agent-training"],
+    queryFn: getAgentTraining,
+    enabled: isBrowser && isAuthenticated,
+    retry: 1,
+  });
+}
+
 export function useUpdateLeadStatusMutation() {
   const queryClient = useQueryClient();
 
@@ -230,6 +269,46 @@ export function useEnrichmentCreditApprovalMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useCreateAgentTrainingEntryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      category: string;
+      title?: string;
+      content: string;
+      visibility?: string;
+      status?: string;
+      applies_to?: string;
+    }) => createAgentTrainingEntry(input),
+    onSuccess: (entry: AgentTrainingEntryRecord) => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "agent-training"] });
+      if (entry.campaignId) {
+        void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      }
+    },
+  });
+}
+
+export function useUpdateAgentTrainingEntryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ entryId, ...input }: {
+      entryId: string;
+      title?: string;
+      content?: string;
+      status?: string;
+      visibility?: string;
+      applies_to?: string;
+    }) => updateAgentTrainingEntry(entryId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "agent-training"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
     },
   });
 }

@@ -20,8 +20,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as LeadAgentRouteImport } from './routes/lead-agent'
 import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
+import { Route as ConversationsRouteImport } from './routes/conversations'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AgentTrainingRouteImport } from './routes/agent-training'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLeadsSplatRouteImport } from './routes/api/leads.$'
 import { Route as ApiGmailMessagesRouteImport } from './routes/api/gmail.messages'
@@ -81,6 +83,11 @@ const EmailScriptsRoute = EmailScriptsRouteImport.update({
   path: '/email-scripts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConversationsRoute = ConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CampaignsRoute = CampaignsRouteImport.update({
   id: '/campaigns',
   path: '/campaigns',
@@ -89,6 +96,11 @@ const CampaignsRoute = CampaignsRouteImport.update({
 const ApprovalsRoute = ApprovalsRouteImport.update({
   id: '/approvals',
   path: '/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentTrainingRoute = AgentTrainingRouteImport.update({
+  id: '/agent-training',
+  path: '/agent-training',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -109,8 +121,10 @@ const ApiGmailMessagesRoute = ApiGmailMessagesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agent-training': typeof AgentTrainingRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
+  '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
   '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
@@ -127,8 +141,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agent-training': typeof AgentTrainingRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
+  '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
   '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
@@ -146,8 +162,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agent-training': typeof AgentTrainingRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
+  '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
   '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
@@ -166,8 +184,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agent-training'
     | '/approvals'
     | '/campaigns'
+    | '/conversations'
     | '/email-scripts'
     | '/lead-agent'
     | '/leads'
@@ -184,8 +204,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agent-training'
     | '/approvals'
     | '/campaigns'
+    | '/conversations'
     | '/email-scripts'
     | '/lead-agent'
     | '/leads'
@@ -202,8 +224,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agent-training'
     | '/approvals'
     | '/campaigns'
+    | '/conversations'
     | '/email-scripts'
     | '/lead-agent'
     | '/leads'
@@ -221,8 +245,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentTrainingRoute: typeof AgentTrainingRoute
   ApprovalsRoute: typeof ApprovalsRoute
   CampaignsRoute: typeof CampaignsRoute
+  ConversationsRoute: typeof ConversationsRoute
   EmailScriptsRoute: typeof EmailScriptsRoute
   LeadAgentRoute: typeof LeadAgentRoute
   LeadsRoute: typeof LeadsRoute
@@ -317,6 +343,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmailScriptsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/conversations': {
+      id: '/conversations'
+      path: '/conversations'
+      fullPath: '/conversations'
+      preLoaderRoute: typeof ConversationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/campaigns': {
       id: '/campaigns'
       path: '/campaigns'
@@ -329,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/approvals'
       fullPath: '/approvals'
       preLoaderRoute: typeof ApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent-training': {
+      id: '/agent-training'
+      path: '/agent-training'
+      fullPath: '/agent-training'
+      preLoaderRoute: typeof AgentTrainingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -357,8 +397,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentTrainingRoute: AgentTrainingRoute,
   ApprovalsRoute: ApprovalsRoute,
   CampaignsRoute: CampaignsRoute,
+  ConversationsRoute: ConversationsRoute,
   EmailScriptsRoute: EmailScriptsRoute,
   LeadAgentRoute: LeadAgentRoute,
   LeadsRoute: LeadsRoute,

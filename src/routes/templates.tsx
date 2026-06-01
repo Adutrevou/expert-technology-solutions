@@ -175,6 +175,7 @@ function TemplatesPage() {
                     const body = draft?.body ?? variant.bodyTemplate;
                     const approvalId = approvalsByEntityId.get(variant.id);
                     const showActions = canApprove && variant.approvalStatus !== "approved";
+                    const qualityReview = variant.latestQualityReview;
 
                     return (
                       <div key={variant.id} className="rounded-2xl border border-border/70 bg-muted/15 p-4">
@@ -203,6 +204,39 @@ function TemplatesPage() {
                               className="mt-2 min-h-[220px] resize-y bg-background"
                             />
                           </div>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl border border-border/70 bg-background p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                              Quality score {qualityReview?.score ?? "N/A"}
+                            </Badge>
+                            <Badge variant="outline" className={qualityBadgeClassName(qualityReview?.status || "needs_review")}>
+                              {qualityReview?.status === "improve_before_send" ? "Needs improvement before send" : formatLabel(qualityReview?.status || "needs_review")}
+                            </Badge>
+                          </div>
+                          <p className="mt-3 text-xs uppercase tracking-[0.22em] text-muted-foreground">Sales-quality review</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {qualityReview
+                              ? `Human ${qualityReview.humanSoundingScore}/25 · Specificity ${qualityReview.specificityScore}/25 · Sales clarity ${qualityReview.salesClarityScore}/25 · CTA ${qualityReview.ctaScore}/25`
+                              : "No review stored yet. Run the template quality agent to score this variant."}
+                          </p>
+                          {qualityReview?.riskFlags.length ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {qualityReview.riskFlags.map((flag) => (
+                                <Badge key={`${variant.id}-${flag.code}`} variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">
+                                  {formatLabel(flag.code)}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                          {qualityReview?.recommendations.length ? (
+                            <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                              {qualityReview.recommendations.map((recommendation) => (
+                                <p key={`${variant.id}-${recommendation}`}>- {recommendation}</p>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
 
                         {showActions ? (
@@ -259,6 +293,11 @@ function TemplatesPage() {
                 <p className="font-medium">{item.rawCompanyName || item.leadCompanyName || "Prepared outreach"}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{item.campaignName || "No campaign linked"}</p>
                 <p className="mt-2 text-xs text-muted-foreground">{item.variantLabel ? `Variant ${item.variantLabel}` : "Variant pending"} · Waiting for mailbox</p>
+                {item.latestQualityReview ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Quality {item.latestQualityReview.score}/100 · {formatLabel(item.latestQualityReview.status)}
+                  </p>
+                ) : null}
               </button>
             ))}
           </div>
@@ -275,11 +314,22 @@ function TemplatesPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className="border-success/30 bg-success/10 text-success">Prepared</Badge>
                   <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Waiting for mailbox</Badge>
+                  {selectedQueueItem?.latestQualityReview ? (
+                    <Badge variant="outline" className={qualityBadgeClassName(selectedQueueItem.latestQualityReview.status)}>
+                      Quality {selectedQueueItem.latestQualityReview.score}/100
+                    </Badge>
+                  ) : null}
                 </div>
                 <Meta label="Recipient / company" value={`${renderPreviewQuery.data.preview.recipientName || "Recipient"}${renderPreviewQuery.data.preview.companyName ? ` · ${renderPreviewQuery.data.preview.companyName}` : ""}`} />
                 <Meta label="Subject" value={renderPreviewQuery.data.preview.subject || "No subject rendered"} />
                 <Meta label="Campaign" value={selectedQueueItem?.campaignName || "No campaign linked"} />
                 <Meta label="Template variant" value={renderPreviewQuery.data.preview.template.variantLabel || "Variant pending"} />
+                {selectedQueueItem?.latestQualityReview?.recommendations.length ? (
+                  <Meta
+                    label="Quality recommendations"
+                    value={selectedQueueItem.latestQualityReview.recommendations.join(" | ")}
+                  />
+                ) : null}
                 <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Full body preview</p>
                   <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">{renderPreviewQuery.data.preview.body || "No body rendered"}</pre>
@@ -357,4 +407,10 @@ function toBadgeStatus(value: string) {
   if (value === "approved") return "approved";
   if (value === "rejected") return "rejected";
   return "pending";
+}
+
+function qualityBadgeClassName(status: string) {
+  if (status === "approved") return "border-success/30 bg-success/10 text-success";
+  if (status === "improve_before_send") return "border-destructive/30 bg-destructive/10 text-destructive";
+  return "border-warning/30 bg-warning/10 text-warning-foreground";
 }
