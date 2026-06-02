@@ -31,6 +31,7 @@ function ConversationsPage() {
   const canApproveReplies = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
   const createReplyDraftMutation = useCreateReplyDraftMutation();
   const updateReplyDraftMutation = useUpdateReplyDraftMutation();
+  const [reviewNote, setReviewNote] = useState("");
 
   useEffect(() => {
     if (!conversations.length) {
@@ -72,7 +73,7 @@ function ConversationsPage() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">Conversations</Badge>
-              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Prepared to replied</Badge>
+              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Reply workflow</Badge>
             </div>
             <h1 className="mt-4 text-3xl font-bold md:text-4xl">Outreach history and thread view</h1>
             <p className="mt-2 text-sm text-muted-foreground md:text-base">
@@ -238,6 +239,25 @@ function ConversationsPage() {
                       ) : null}
                     </div>
 
+                    {inboundMessages.length > 0 ? (
+                      <div className="mt-4 rounded-2xl border border-success/20 bg-success/5 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+                            Inbound reply
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDateTime(inboundMessages[inboundMessages.length - 1]?.receivedAt || inboundMessages[inboundMessages.length - 1]?.createdAt)}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm font-medium">
+                          {inboundMessages[inboundMessages.length - 1]?.subject || "No subject"}
+                        </p>
+                        <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
+                          {inboundMessages[inboundMessages.length - 1]?.bodyText || "No inbound body captured."}
+                        </pre>
+                      </div>
+                    ) : null}
+
                     {latestReplyDraft ? (
                       <div className="mt-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
                         <div className="flex flex-wrap items-center gap-2">
@@ -247,6 +267,9 @@ function ConversationsPage() {
                           {latestReplyDraft.modelRouteUsed ? (
                             <span className="text-xs text-muted-foreground">Route {latestReplyDraft.modelRouteUsed}</span>
                           ) : null}
+                          <span className="text-xs text-muted-foreground">
+                            Training notes used {latestReplyDraft.trainingContextUsed.length}
+                          </span>
                         </div>
                         <p className="mt-3 text-sm font-medium">{latestReplyDraft.draftSubject || "Reply draft"}</p>
                         <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
@@ -256,26 +279,45 @@ function ConversationsPage() {
                           <p className="mt-3 text-xs text-muted-foreground">{latestReplyDraft.approvalNote}</p>
                         ) : null}
                         {canApproveReplies ? (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {latestReplyDraft.status !== "approved" ? (
-                              <Button
-                                size="sm"
-                                onClick={() => updateReplyDraftMutation.mutate({ draftId: latestReplyDraft.id, status: "approved" })}
-                                disabled={updateReplyDraftMutation.isPending}
-                              >
-                                Approve
-                              </Button>
-                            ) : null}
-                            {latestReplyDraft.status !== "changes_requested" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => updateReplyDraftMutation.mutate({ draftId: latestReplyDraft.id, status: "changes_requested", approval_note: "Changes requested from the Conversations workspace." })}
-                                disabled={updateReplyDraftMutation.isPending}
-                              >
-                                Request Changes
-                              </Button>
-                            ) : null}
+                          <div className="mt-4 space-y-3">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Reviewer note</p>
+                              <textarea
+                                className="mt-2 min-h-[88px] w-full rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary"
+                                value={reviewNote}
+                                onChange={(event) => setReviewNote(event.target.value)}
+                                placeholder="Optional note for approval or requested changes"
+                              />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {latestReplyDraft.status !== "approved" ? (
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateReplyDraftMutation.mutate({
+                                    draftId: latestReplyDraft.id,
+                                    status: "approved",
+                                    approval_note: reviewNote.trim() || "Approved from the Conversations workspace.",
+                                  })}
+                                  disabled={updateReplyDraftMutation.isPending}
+                                >
+                                  Approve
+                                </Button>
+                              ) : null}
+                              {latestReplyDraft.status !== "changes_requested" ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateReplyDraftMutation.mutate({
+                                    draftId: latestReplyDraft.id,
+                                    status: "changes_requested",
+                                    approval_note: reviewNote.trim() || "Changes requested from the Conversations workspace.",
+                                  })}
+                                  disabled={updateReplyDraftMutation.isPending}
+                                >
+                                  Request Changes
+                                </Button>
+                              ) : null}
+                            </div>
                           </div>
                         ) : null}
                       </div>
@@ -392,7 +434,7 @@ function replyStatusLabel(status: string) {
     case "needs_review":
       return "Needs review";
     case "draft_ready":
-      return "Draft ready";
+      return "Waiting for approval";
     case "approved":
       return "Approved";
     case "sent":
@@ -405,7 +447,7 @@ function replyStatusLabel(status: string) {
 function replyDraftStatusLabel(status: string) {
   switch (status) {
     case "waiting_for_approval":
-      return "Draft ready";
+      return "Waiting for approval";
     case "changes_requested":
       return "Changes requested";
     default:

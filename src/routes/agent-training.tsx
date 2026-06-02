@@ -103,7 +103,13 @@ function AgentTrainingPage() {
       </header>
 
       <Card className="p-6 shadow-card">
-        <div className="flex items-start justify-between gap-3">
+        <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+          <p className="text-sm text-foreground">
+            Reply drafting stays rule-based by default. Active entries marked <span className="font-medium">Replies</span> or <span className="font-medium">All</span> are the training notes used to guide approval-gated reply drafts.
+          </p>
+        </div>
+
+        <div className="mt-6 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">Teach the agent something</h2>
             <p className="mt-1 text-sm text-muted-foreground">
