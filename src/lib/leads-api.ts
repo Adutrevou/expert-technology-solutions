@@ -301,6 +301,9 @@ export interface MailboxConnectionCheck {
   oauthConfigured?: boolean;
   encryptionReady?: boolean;
   credentialsStored?: boolean;
+  expectedMailbox?: string;
+  signedInMailbox?: string;
+  signedInUser?: string;
   senderStatus?: string;
   senderVerified?: boolean;
   defaultFromDomain?: string;
@@ -319,6 +322,20 @@ export interface MailboxOAuthStartResponse {
   scopes: string[];
   sendingEnabled: boolean;
   note: string;
+}
+
+export interface MicrosoftReplySyncStatusRecord {
+  mailboxId: string;
+  mailboxName: string;
+  mailboxEmail: string;
+  providerType: string;
+  connectionStatus: string;
+  connected: boolean;
+  configured: boolean;
+  credentialsStored: boolean;
+  signedInMailbox: string;
+  signedInUser: string;
+  blockers: OutreachBlockerRecord[];
 }
 
 export interface OutreachRenderPreview {
@@ -740,6 +757,16 @@ export function startMailboxOAuth(mailboxId: string) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/mailboxes/${encodeURIComponent(mailboxId)}/oauth/google/start`, {
     method: "POST",
   }).then(normalizeMailboxOAuthStartResponse);
+}
+
+export function startMicrosoftReplySyncOAuth() {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-sync/microsoft/start`, {
+    method: "POST",
+  }).then(normalizeMailboxOAuthStartResponse);
+}
+
+export function getMicrosoftReplySyncStatus() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-sync/microsoft/status`).then(normalizeMicrosoftReplySyncStatus);
 }
 
 export function getEnrichmentApprovals() {
@@ -1565,11 +1592,34 @@ function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck
     oauthConfigured: pickBoolean(record, ["oauth_configured", "oauthConfigured"]) ?? undefined,
     encryptionReady: pickBoolean(record, ["encryption_ready", "encryptionReady"]) ?? undefined,
     credentialsStored: pickBoolean(record, ["credentials_stored", "credentialsStored"]) ?? undefined,
+    expectedMailbox: pickString(record, ["expected_mailbox", "expectedMailbox"]) || "",
+    signedInMailbox: pickString(record, ["signed_in_mailbox", "signedInMailbox"]) || "",
+    signedInUser: pickString(record, ["signed_in_user", "signedInUser"]) || "",
     senderStatus: pickString(record, ["sender_status", "senderStatus"]) || "",
     senderVerified: pickBoolean(record, ["sender_verified", "senderVerified"]) ?? undefined,
     defaultFromDomain: pickString(record, ["default_from_domain", "defaultFromDomain"]) || "",
     checkedAt: normalizeTimestamp(record.checked_at ?? record.checkedAt),
     blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+  };
+}
+
+function normalizeMicrosoftReplySyncStatus(value: unknown): MicrosoftReplySyncStatusRecord {
+  const record = asRecord(value);
+  const mailbox = asRecord(record.mailbox);
+  const connectionCheck = normalizeMailboxConnectionCheck(record.connection_check ?? record.connectionCheck);
+
+  return {
+    mailboxId: pickString(mailbox, ["id", "_id"]) || "",
+    mailboxName: pickString(mailbox, ["mailbox_name", "mailboxName"]) || "Microsoft reply sync mailbox",
+    mailboxEmail: pickString(mailbox, ["from_email", "fromEmail"]) || (connectionCheck?.expectedMailbox ?? ""),
+    providerType: pickString(record, ["provider_type", "providerType"]) || pickString(mailbox, ["provider_type", "providerType"]) || "microsoft",
+    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || connectionCheck?.connectionStatus || "not_connected",
+    connected: pickBoolean(connectionCheck, ["connected"]) ?? false,
+    configured: pickBoolean(connectionCheck, ["oauthConfigured"]) ?? false,
+    credentialsStored: pickBoolean(connectionCheck, ["credentialsStored"]) ?? false,
+    signedInMailbox: connectionCheck?.signedInMailbox || "",
+    signedInUser: connectionCheck?.signedInUser || "",
+    blockers: connectionCheck?.blockers || [],
   };
 }
 

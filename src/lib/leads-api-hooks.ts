@@ -15,10 +15,12 @@ import {
   getLeadAgentSummary,
   getLeadActivity,
   getLeads,
+  getMicrosoftReplySyncStatus,
   getOutreachRenderPreview,
   getRequestDetail,
   getRequests,
   getReports,
+  startMicrosoftReplySyncOAuth,
   startMailboxOAuth,
   updateAgentTrainingEntry,
   updateLeadStatus,
@@ -120,6 +122,17 @@ export function useLeadAgentSummaryQuery() {
   return useQuery({
     queryKey: ["intergrai", "lead-agent"],
     queryFn: getLeadAgentSummary,
+    enabled: isBrowser && isAuthenticated,
+    retry: 1,
+  });
+}
+
+export function useMicrosoftReplySyncStatusQuery() {
+  const { isAuthenticated } = useApp();
+
+  return useQuery({
+    queryKey: ["intergrai", "microsoft-reply-sync-status"],
+    queryFn: getMicrosoftReplySyncStatus,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
   });
@@ -269,6 +282,17 @@ export function useCreateMissionMutation() {
 export function useStartMailboxOAuthMutation() {
   return useMutation<MailboxOAuthStartResponse, Error, { mailboxId: string }>({
     mutationFn: ({ mailboxId }) => startMailboxOAuth(mailboxId),
+  });
+}
+
+export function useStartMicrosoftReplySyncOAuthMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<MailboxOAuthStartResponse, Error, void>({
+    mutationFn: () => startMicrosoftReplySyncOAuth(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "microsoft-reply-sync-status"] });
+    },
   });
 }
 
