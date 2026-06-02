@@ -92,7 +92,7 @@ function AgentTrainingPage() {
             </div>
             <h1 className="mt-4 text-3xl font-bold md:text-4xl">Train the agent over time</h1>
             <p className="mt-2 text-sm text-muted-foreground md:text-base">
-              Store tone, objection handling, services, reply rules, and campaign learnings without triggering expensive model work.
+              Store tone, objection handling, service guidance, do-not-say rules, and approved reply examples for both outreach and reply drafting.
             </p>
           </div>
           <Button variant="outline" className="gap-2" onClick={() => trainingQuery.refetch()}>

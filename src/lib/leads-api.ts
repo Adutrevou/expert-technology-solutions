@@ -200,6 +200,7 @@ export interface ConversationMessageRecord {
   outreachQueueId: string;
   direction: string;
   provider: string;
+  providerMessageId: string;
   subject: string;
   bodyText: string;
   fromEmail: string;
@@ -208,6 +209,22 @@ export interface ConversationMessageRecord {
   sentAt?: string;
   receivedAt?: string;
   createdAt?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ReplyDraftRecord {
+  id: string;
+  conversationId: string;
+  inboundMessageId: string;
+  draftSubject: string;
+  draftBody: string;
+  status: string;
+  modelRouteUsed: string;
+  approvalNote: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy: Record<string, unknown>;
+  trainingContextUsed: Array<Record<string, unknown>>;
   metadata: Record<string, unknown>;
 }
 
@@ -229,6 +246,8 @@ export interface ConversationRecord {
   createdAt?: string;
   updatedAt?: string;
   latestQualityReview: TemplateQualityReviewRecord | null;
+  latestReplyDraft: ReplyDraftRecord | null;
+  replyDrafts: ReplyDraftRecord[];
   messages: ConversationMessageRecord[];
 }
 
@@ -670,6 +689,19 @@ export function getConversationDetail(conversationId: string) {
   );
 }
 
+export function createReplyDraft(conversationId: string) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}/reply-drafts`, {
+    method: "POST",
+  }).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+}
+
+export function updateReplyDraft(draftId: string, input: { status: string; approval_note?: string }) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-drafts/${encodeURIComponent(draftId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+}
+
 export function getAgentTraining() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/agent-training`).then((value) => {
     const record = asRecord(value);
@@ -791,6 +823,14 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function normalizeNullableRecord<T>(value: unknown, normalizer: (value: unknown) => T): T | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  return normalizer(value);
 }
 
 function resolveApiBaseUrl(value: string): string {
@@ -1404,6 +1444,7 @@ function normalizeConversationMessage(value: unknown, index = 0): ConversationMe
     outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
     direction: pickString(record, ["direction"]) || "outbound",
     provider: pickString(record, ["provider"]) || "other",
+    providerMessageId: pickString(record, ["provider_message_id", "providerMessageId"]) || "",
     subject: pickString(record, ["subject"]) || "",
     bodyText: pickString(record, ["body_text", "bodyText"]) || "",
     fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
@@ -1412,6 +1453,25 @@ function normalizeConversationMessage(value: unknown, index = 0): ConversationMe
     sentAt: normalizeTimestamp(record.sent_at ?? record.sentAt),
     receivedAt: normalizeTimestamp(record.received_at ?? record.receivedAt),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    metadata: asRecord(record.metadata),
+  };
+}
+
+function normalizeReplyDraft(value: unknown, index = 0): ReplyDraftRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `reply-draft-${index}`,
+    conversationId: pickString(record, ["conversation_id", "conversationId"]) || "",
+    inboundMessageId: pickString(record, ["inbound_message_id", "inboundMessageId"]) || "",
+    draftSubject: pickString(record, ["draft_subject", "draftSubject"]) || "",
+    draftBody: pickString(record, ["draft_body", "draftBody"]) || "",
+    status: pickString(record, ["status"]) || "drafted",
+    modelRouteUsed: pickString(record, ["model_route_used", "modelRouteUsed"]) || "",
+    approvalNote: pickString(record, ["approval_note", "approvalNote"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+    createdBy: asRecord(record.created_by ?? record.createdBy),
+    trainingContextUsed: asArray(record.training_context_used ?? record.trainingContextUsed).map((item) => asRecord(item)),
     metadata: asRecord(record.metadata),
   };
 }
@@ -1436,6 +1496,8 @@ function normalizeConversation(value: unknown, index = 0): ConversationRecord {
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
     latestQualityReview: normalizeTemplateQualityReview(record.latest_quality_review ?? record.latestQualityReview),
+    latestReplyDraft: normalizeNullableRecord(record.latest_reply_draft ?? record.latestReplyDraft, normalizeReplyDraft),
+    replyDrafts: asArray(record.reply_drafts ?? record.replyDrafts).map((item, draftIndex) => normalizeReplyDraft(item, draftIndex)),
     messages: asArray(record.messages).map((item, messageIndex) => normalizeConversationMessage(item, messageIndex)),
   };
 }

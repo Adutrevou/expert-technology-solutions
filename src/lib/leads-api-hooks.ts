@@ -3,6 +3,7 @@ import {
   addLeadComment,
   createAgentTrainingEntry,
   createMission,
+  createReplyDraft,
   createRequest,
   decideApproval,
   decideEnrichmentCreditApproval,
@@ -26,7 +27,9 @@ import {
   type LeadWorkflowStatus,
   type MailboxOAuthStartResponse,
   type MissionRecord,
+  type ReplyDraftRecord,
   type RequestDetailRecord,
+  updateReplyDraft,
 } from "@/lib/leads-api";
 import { useApp } from "@/lib/app-state";
 
@@ -152,6 +155,34 @@ export function useConversationDetailQuery(conversationId?: string) {
     queryFn: () => getConversationDetail(conversationId || ""),
     enabled: isBrowser && isAuthenticated && Boolean(conversationId),
     retry: 1,
+  });
+}
+
+export function useCreateReplyDraftMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ReplyDraftRecord, Error, { conversationId: string }>({
+    mutationFn: ({ conversationId }) => createReplyDraft(conversationId),
+    onSuccess: (draft) => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "conversations"] });
+      if (draft.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ["intergrai", "conversation-detail", draft.conversationId] });
+      }
+    },
+  });
+}
+
+export function useUpdateReplyDraftMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ReplyDraftRecord, Error, { draftId: string; status: string; approval_note?: string }>({
+    mutationFn: ({ draftId, status, approval_note }) => updateReplyDraft(draftId, { status, approval_note }),
+    onSuccess: (draft) => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "conversations"] });
+      if (draft.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ["intergrai", "conversation-detail", draft.conversationId] });
+      }
+    },
   });
 }
 
