@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ResponsesRulesRouteImport } from './routes/responses-rules'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ProgressRouteImport } from './routes/progress'
@@ -19,6 +21,7 @@ import { Route as MeetingsRouteImport } from './routes/meetings'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as LeadAgentRouteImport } from './routes/lead-agent'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
 import { Route as ConversationsRouteImport } from './routes/conversations'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
@@ -41,6 +44,16 @@ const TemplatesRoute = TemplatesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResponsesRulesRoute = ResponsesRulesRouteImport.update({
+  id: '/responses-rules',
+  path: '/responses-rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RequestsRoute = RequestsRouteImport.update({
@@ -76,6 +89,11 @@ const LeadsRoute = LeadsRouteImport.update({
 const LeadAgentRoute = LeadAgentRouteImport.update({
   id: '/lead-agent',
   path: '/lead-agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmailScriptsRoute = EmailScriptsRouteImport.update({
@@ -126,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
@@ -133,6 +152,8 @@ export interface FileRoutesByFullPath {
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/responses-rules': typeof ResponsesRulesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
@@ -146,6 +167,7 @@ export interface FileRoutesByTo {
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
@@ -153,6 +175,8 @@ export interface FileRoutesByTo {
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/responses-rules': typeof ResponsesRulesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
@@ -167,6 +191,7 @@ export interface FileRoutesById {
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
@@ -174,6 +199,8 @@ export interface FileRoutesById {
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/responses-rules': typeof ResponsesRulesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
@@ -189,6 +216,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/conversations'
     | '/email-scripts'
+    | '/forgot-password'
     | '/lead-agent'
     | '/leads'
     | '/login'
@@ -196,6 +224,8 @@ export interface FileRouteTypes {
     | '/progress'
     | '/reports'
     | '/requests'
+    | '/reset-password'
+    | '/responses-rules'
     | '/settings'
     | '/templates'
     | '/updates'
@@ -209,6 +239,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/conversations'
     | '/email-scripts'
+    | '/forgot-password'
     | '/lead-agent'
     | '/leads'
     | '/login'
@@ -216,6 +247,8 @@ export interface FileRouteTypes {
     | '/progress'
     | '/reports'
     | '/requests'
+    | '/reset-password'
+    | '/responses-rules'
     | '/settings'
     | '/templates'
     | '/updates'
@@ -229,6 +262,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/conversations'
     | '/email-scripts'
+    | '/forgot-password'
     | '/lead-agent'
     | '/leads'
     | '/login'
@@ -236,6 +270,8 @@ export interface FileRouteTypes {
     | '/progress'
     | '/reports'
     | '/requests'
+    | '/reset-password'
+    | '/responses-rules'
     | '/settings'
     | '/templates'
     | '/updates'
@@ -250,6 +286,7 @@ export interface RootRouteChildren {
   CampaignsRoute: typeof CampaignsRoute
   ConversationsRoute: typeof ConversationsRoute
   EmailScriptsRoute: typeof EmailScriptsRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LeadAgentRoute: typeof LeadAgentRoute
   LeadsRoute: typeof LeadsRoute
   LoginRoute: typeof LoginRoute
@@ -257,6 +294,8 @@ export interface RootRouteChildren {
   ProgressRoute: typeof ProgressRoute
   ReportsRoute: typeof ReportsRoute
   RequestsRoute: typeof RequestsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  ResponsesRulesRoute: typeof ResponsesRulesRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   UpdatesRoute: typeof UpdatesRoute
@@ -285,6 +324,20 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/responses-rules': {
+      id: '/responses-rules'
+      path: '/responses-rules'
+      fullPath: '/responses-rules'
+      preLoaderRoute: typeof ResponsesRulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/requests': {
@@ -334,6 +387,13 @@ declare module '@tanstack/react-router' {
       path: '/lead-agent'
       fullPath: '/lead-agent'
       preLoaderRoute: typeof LeadAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/email-scripts': {
@@ -402,6 +462,7 @@ const rootRouteChildren: RootRouteChildren = {
   CampaignsRoute: CampaignsRoute,
   ConversationsRoute: ConversationsRoute,
   EmailScriptsRoute: EmailScriptsRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LeadAgentRoute: LeadAgentRoute,
   LeadsRoute: LeadsRoute,
   LoginRoute: LoginRoute,
@@ -409,6 +470,8 @@ const rootRouteChildren: RootRouteChildren = {
   ProgressRoute: ProgressRoute,
   ReportsRoute: ReportsRoute,
   RequestsRoute: RequestsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  ResponsesRulesRoute: ResponsesRulesRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   UpdatesRoute: UpdatesRoute,

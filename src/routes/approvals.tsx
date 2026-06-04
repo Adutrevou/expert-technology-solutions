@@ -1,15 +1,27 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CheckSquare, RefreshCcw } from "lucide-react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
 import { ApprovalStatusBadge } from "@/components/status-badges";
-import { Badge } from "@/components/ui/badge";
+import { EmptyCard, formatPortalDate, PageIntro, SectionCard, StatCard } from "@/components/client-portal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
+import { buildApprovalHubItems, getActionableApprovalItems, type ApprovalHubItem } from "@/lib/approval-hub";
 import {
   useApprovalDecisionMutation,
+  useCampaignApprovalDecisionMutation,
+  useConversationsQuery,
   useEnrichmentCreditApprovalMutation,
+  useFollowupSequenceApprovalDecisionMutation,
   useLeadAgentSummaryQuery,
+  useRequestsQuery,
+  useTemplateVariantApprovalDecisionMutation,
+  useUpdateReplyDraftMutation,
 } from "@/lib/leads-api-hooks";
 
 export const Route = createFileRoute("/approvals")({
@@ -20,207 +32,310 @@ export const Route = createFileRoute("/approvals")({
 function ApprovalsPage() {
   const { user } = useApp();
   const summaryQuery = useLeadAgentSummaryQuery();
+  const conversationsQuery = useConversationsQuery();
+  const requestsQuery = useRequestsQuery();
   const approvalDecisionMutation = useApprovalDecisionMutation();
+  const campaignDecisionMutation = useCampaignApprovalDecisionMutation();
+  const templateVariantDecisionMutation = useTemplateVariantApprovalDecisionMutation();
+  const followupSequenceDecisionMutation = useFollowupSequenceApprovalDecisionMutation();
   const enrichmentDecisionMutation = useEnrichmentCreditApprovalMutation();
-  const isAdmin = user?.role === "intergrai_admin";
-  const canApprove = user?.role === "client_owner" || user?.role === "manager" || isAdmin;
+  const replyDraftDecisionMutation = useUpdateReplyDraftMutation();
+  const canApprove = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
+  const [requestChangesItem, setRequestChangesItem] = useState<ApprovalHubItem | null>(null);
+  const [requestChangesNote, setRequestChangesNote] = useState("");
 
-  if (summaryQuery.isLoading && !summaryQuery.data) {
+  const items = useMemo(() => {
+    if (!summaryQuery.data) return [];
+    return buildApprovalHubItems(summaryQuery.data, conversationsQuery.data || [], requestsQuery.data?.requests || []);
+  }, [summaryQuery.data, conversationsQuery.data, requestsQuery.data]);
+
+  const pendingItems = getActionableApprovalItems(items);
+  const completedItems = items.filter((item) => item.status !== "pending");
+
+  async function refreshAll() {
+    await Promise.all([summaryQuery.refetch(), conversationsQuery.refetch(), requestsQuery.refetch()]);
+  }
+
+  async function handleDecision(item: ApprovalHubItem, decision: "approved" | "changes_requested", note?: string) {
+    const decisionNote = note?.trim() || defaultDecisionNote(item, decision);
+    try {
+      switch (item.kind) {
+        case "campaign":
+          await campaignDecisionMutation.mutateAsync({ campaignId: item.id, decision, decision_note: decisionNote });
+          break;
+        case "template_variant":
+          await templateVariantDecisionMutation.mutateAsync({ variantId: item.id, decision, decision_note: decisionNote });
+          break;
+        case "followup_sequence":
+          await followupSequenceDecisionMutation.mutateAsync({ sequenceId: item.id, decision, decision_note: decisionNote });
+          break;
+        case "credit_approval":
+          await enrichmentDecisionMutation.mutateAsync({ queueItemId: item.id, decision: decision === "approved" ? "approved" : "rejected", decision_note: decisionNote });
+          break;
+        case "reply_draft":
+          await replyDraftDecisionMutation.mutateAsync({
+            draftId: item.id,
+            status: decision === "approved" ? "approved" : "changes_requested",
+            approval_note: decisionNote,
+          });
+          break;
+        case "response_rule":
+        case "asset_approval":
+        case "approval_record":
+          if (!item.approvalId) return;
+          await approvalDecisionMutation.mutateAsync({ approvalId: item.approvalId, decision, decision_note: decisionNote });
+          break;
+        default:
+          return;
+      }
+
+      toast.success(decision === "approved" ? "Approval saved." : "Changes requested.");
+      await refreshAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save that decision.");
+    }
+  }
+
+  async function submitRequestChanges() {
+    if (!requestChangesItem) return;
+    if (!requestChangesNote.trim()) {
+      toast.error("Add a short note so the requested changes are clear.");
+      return;
+    }
+
+    await handleDecision(requestChangesItem, "changes_requested", requestChangesNote);
+    setRequestChangesItem(null);
+    setRequestChangesNote("");
+  }
+
+  if ((summaryQuery.isLoading && !summaryQuery.data) || conversationsQuery.isLoading) {
     return <ApprovalsLoadingState />;
   }
 
-  const data = summaryQuery.data;
-  if (!data) {
+  if (!summaryQuery.data) {
     return (
-      <Card className="mx-auto max-w-[1200px] p-10 text-center shadow-card">
-        <h1 className="text-2xl font-semibold">Approvals unavailable</h1>
-        <p className="mt-2 text-sm text-muted-foreground">The approval workspace could not be loaded.</p>
-      </Card>
+      <div className="mx-auto max-w-[1240px]">
+        <Card className="rounded-[28px] p-10 text-center shadow-card">
+          <h1 className="text-2xl font-semibold">Approvals unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">The approval hub could not be loaded.</p>
+        </Card>
+      </div>
     );
   }
 
-  const generalApprovals = data.approvals.filter((approval) => approval.approvalType !== "credit_approval");
-  const pendingApprovals = generalApprovals.filter((approval) => approval.decisionStatus === "pending");
-  const pendingCreditApprovals = data.pendingEnrichmentCreditApprovals;
-
   return (
-    <div className="mx-auto max-w-[1280px] space-y-6">
-      <header className="rounded-[28px] border border-border/70 bg-gradient-subtle px-6 py-6 shadow-card md:px-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">Approvals</Badge>
-              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Client-safe actions</Badge>
-            </div>
-            <h1 className="mt-4 text-3xl font-bold md:text-4xl">Review actions waiting for approval</h1>
-            <p className="mt-2 text-sm text-muted-foreground md:text-base">
-              Approvals are handled here so the Lead Agent page can stay focused on live progress. Outreach remains paused until the required approvals and launch steps are complete.
-            </p>
-          </div>
-          <Button variant="outline" onClick={() => summaryQuery.refetch()} className="gap-2">
-            <RefreshCcw className="h-4 w-4" />
+    <div className="mx-auto max-w-[1240px] space-y-6">
+      <PageIntro
+        badge="Approvals"
+        title="What needs my decision right now?"
+        description="This is the central approval hub for campaigns, email templates, follow-ups, reply drafts, response rules, images, and approval-related requests."
+        actions={(
+          <Button variant="outline" onClick={() => void refreshAll()}>
+            <RefreshCcw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
-        </div>
-      </header>
+        )}
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Pending approvals" value={pendingApprovals.length} />
-        <SummaryCard label="Pending enrichment approvals" value={pendingCreditApprovals.length} />
-        <SummaryCard label="Total approval history" value={generalApprovals.length} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Needs approval" value={pendingItems.length} detail="Only real client decisions appear here." />
+        <StatCard label="Email reviews" value={items.filter((item) => item.typeLabel === "Email Template" || item.typeLabel === "Follow-up").length} detail="Templates and follow-up decisions." />
+        <StatCard label="Reply reviews" value={items.filter((item) => item.typeLabel === "Reply Draft").length} detail="Draft replies stay approval-gated." />
+        <StatCard label="Completed" value={completedItems.length} detail="Approved and change-requested history." />
       </div>
 
-      <Card className="p-6 shadow-card">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold">Actions needed</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Client-facing actions use simple approve and request changes controls.
-            </p>
+      <SectionCard title="Needs approval now" description="Each card explains what is being approved and why it matters.">
+        {pendingItems.length ? (
+          <div className="grid gap-4">
+            {pendingItems.map((item) => (
+              <ApprovalDecisionCard
+                key={item.key}
+                item={item}
+                canApprove={canApprove && item.actionable}
+                busy={
+                  approvalDecisionMutation.isPending
+                  || campaignDecisionMutation.isPending
+                  || templateVariantDecisionMutation.isPending
+                  || followupSequenceDecisionMutation.isPending
+                  || enrichmentDecisionMutation.isPending
+                  || replyDraftDecisionMutation.isPending
+                }
+                onApprove={() => void handleDecision(item, "approved")}
+                onRequestChanges={() => {
+                  setRequestChangesItem(item);
+                  setRequestChangesNote(item.latestNote && item.status !== "approved" ? item.latestNote : "");
+                }}
+              />
+            ))}
           </div>
-          <CheckSquare className="h-5 w-5 text-primary" />
-        </div>
+        ) : (
+          <EmptyCard
+            title="All clear"
+            description="No approvals need your attention right now."
+          />
+        )}
+      </SectionCard>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
-          {pendingApprovals.map((approval) => (
-            <Card key={approval.id} className="border-border/70 p-5 shadow-none">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold">{approval.title}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{formatLabel(approval.approvalType)}</p>
-                  {isAdmin ? <p className="mt-2 text-xs text-muted-foreground">{approval.entityType} · {approval.entityId}</p> : null}
+      <SectionCard title="Recent approval history" description="Approved items and change requests stay visible for context.">
+        {completedItems.length ? (
+          <div className="grid gap-3">
+            {completedItems.map((item) => (
+              <div key={item.key} className="rounded-[24px] border border-border/70 bg-background px-5 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ApprovalStatusBadge status={item.status} />
+                      <span className="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground">{item.typeLabel}</span>
+                    </div>
+                    <p className="mt-3 font-medium">{item.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{item.shortContext}</p>
+                    {item.latestNote ? <p className="mt-3 text-sm text-muted-foreground">{item.latestNote}</p> : null}
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={item.previewHref}>{item.previewLabel}</Link>
+                  </Button>
                 </div>
-                <ApprovalStatusBadge status="pending" />
               </div>
-
-              {canApprove ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => approvalDecisionMutation.mutate({ approvalId: approval.id, decision: "approved" })}
-                    disabled={approvalDecisionMutation.isPending}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => approvalDecisionMutation.mutate({
-                      approvalId: approval.id,
-                      decision: "rejected",
-                      decision_note: "Client requested changes from the approvals workspace.",
-                    })}
-                    disabled={approvalDecisionMutation.isPending}
-                  >
-                    Request Changes
-                  </Button>
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-muted-foreground">This approval is visible here, but your current role cannot action it.</p>
-              )}
-            </Card>
-          ))}
-
-          {pendingCreditApprovals.map((approval) => (
-            <Card key={approval.queueItemId} className="border-border/70 p-5 shadow-none">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold">{approval.companyName}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Waiting for contact verification approval</p>
-                  <p className="mt-2 text-xs text-muted-foreground">{approval.campaignName || "No linked campaign"}</p>
-                </div>
-                <ApprovalStatusBadge status="pending" />
-              </div>
-
-              {canApprove ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => enrichmentDecisionMutation.mutate({ queueItemId: approval.queueItemId, decision: "approved" })}
-                    disabled={enrichmentDecisionMutation.isPending}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => enrichmentDecisionMutation.mutate({ queueItemId: approval.queueItemId, decision: "rejected" })}
-                    disabled={enrichmentDecisionMutation.isPending}
-                  >
-                    Request Changes
-                  </Button>
-                </div>
-              ) : null}
-            </Card>
-          ))}
-        </div>
-
-        {pendingApprovals.length === 0 && pendingCreditApprovals.length === 0 ? (
-          <div className="mt-5 rounded-2xl border border-dashed border-border bg-muted/15 px-5 py-10 text-center">
-            <p className="font-medium">No approvals waiting</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              New approval items will appear here when they need client or admin review.
-            </p>
+            ))}
           </div>
-        ) : null}
-      </Card>
+        ) : (
+          <EmptyCard title="No completed approvals yet" description="Approved items and change history will appear here over time." />
+        )}
+      </SectionCard>
 
-      <Card className="p-6 shadow-card">
-        <h2 className="text-xl font-semibold">Approval history</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A simple record of previous approval decisions.
-        </p>
-
-        <div className="mt-5 grid gap-3">
-          {generalApprovals.map((approval) => (
-            <div key={approval.id} className="rounded-2xl border border-border/70 bg-background p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">{approval.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{formatLabel(approval.approvalType)}</p>
-                  {approval.decisionNote ? <p className="mt-2 text-xs text-muted-foreground">{approval.decisionNote}</p> : null}
-                </div>
-                <ApprovalStatusBadge status={toBadgeStatus(approval.decisionStatus)} />
-              </div>
+      <Dialog open={Boolean(requestChangesItem)} onOpenChange={(open) => {
+        if (!open) {
+          setRequestChangesItem(null);
+          setRequestChangesNote("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Request changes</DialogTitle>
+            <DialogDescription>
+              Explain what should change so the next version is clear and actionable.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-[20px] border border-border/70 bg-muted/15 px-4 py-4">
+              <p className="font-medium">{requestChangesItem?.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{requestChangesItem?.shortContext}</p>
             </div>
-          ))}
-        </div>
-      </Card>
+            <div>
+              <p className="text-sm font-medium">What should change?</p>
+              <Textarea
+                className="mt-2 min-h-[140px]"
+                value={requestChangesNote}
+                onChange={(event) => setRequestChangesNote(event.target.value)}
+                placeholder="Example: tighten the subject line, remove the broad claim in paragraph two, and make the CTA more specific."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setRequestChangesItem(null);
+              setRequestChangesNote("");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={() => void submitRequestChanges()}>
+              Save request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+function ApprovalDecisionCard({
+  item,
+  canApprove,
+  busy,
+  onApprove,
+  onRequestChanges,
+}: {
+  item: ApprovalHubItem;
+  canApprove: boolean;
+  busy: boolean;
+  onApprove: () => void;
+  onRequestChanges: () => void;
+}) {
   return (
-    <Card className="p-5 shadow-card">
+    <div className="rounded-[28px] border border-border/70 bg-background px-5 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <ApprovalStatusBadge status={item.status} />
+            <span className="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground">{item.typeLabel}</span>
+          </div>
+          <h3 className="mt-4 text-xl font-semibold">{item.title}</h3>
+          <p className="mt-2 text-sm text-muted-foreground">{item.shortContext}</p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to={item.previewHref}>{item.previewLabel}</Link>
+        </Button>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <ApprovalMeta label="What is being approved" value={item.previewSummary} />
+        <ApprovalMeta label="Why approval is needed" value={item.reason} />
+        <ApprovalMeta label="Requested by" value={item.requestedBy} />
+        <ApprovalMeta label="Created" value={formatPortalDate(item.createdAt)} />
+      </div>
+
+      {item.latestNote ? (
+        <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
+          Latest note: {item.latestNote}
+        </div>
+      ) : null}
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {canApprove ? (
+          <>
+            <Button onClick={onApprove} disabled={busy}>
+              Approve
+            </Button>
+            <Button variant="outline" onClick={onRequestChanges} disabled={busy}>
+              Request changes
+            </Button>
+          </>
+        ) : (
+          <Button variant="outline" disabled>
+            You do not have permission to decide this item
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ApprovalMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[20px] border border-border/70 bg-muted/10 px-4 py-4">
       <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tabular-nums">{value}</p>
-    </Card>
+      <p className="mt-2 text-sm">{value}</p>
+    </div>
   );
 }
 
 function ApprovalsLoadingState() {
   return (
-    <div className="mx-auto max-w-[1280px] space-y-6">
-      <Skeleton className="h-40 rounded-[28px]" />
-      <div className="grid gap-4 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-28" />)}
+    <div className="mx-auto max-w-[1240px] space-y-6">
+      <Skeleton className="h-44 rounded-[32px]" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-32 rounded-[24px]" />
+        ))}
       </div>
-      <Skeleton className="h-[420px]" />
+      <Skeleton className="h-[520px] rounded-[28px]" />
+      <Skeleton className="h-[320px] rounded-[28px]" />
     </div>
   );
 }
 
-function formatLabel(value: string) {
-  return value
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || "Unknown";
-}
-
-function toBadgeStatus(value: string) {
-  if (value === "approved") return "approved";
-  if (value === "rejected") return "rejected";
-  return "pending";
+function defaultDecisionNote(item: ApprovalHubItem, decision: "approved" | "changes_requested") {
+  return decision === "approved"
+    ? `Approved from the ${item.typeLabel.toLowerCase()} hub.`
+    : `Changes requested from the ${item.typeLabel.toLowerCase()} hub.`;
 }

@@ -25,9 +25,16 @@ const CAMP: Record<CampaignStatus, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-muted text-muted-foreground" },
 };
 const APPROVAL: Record<CampaignApprovalStatus, { label: string; cls: string }> = {
-  pending: { label: "Pending approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  pending: { label: "Waiting for approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  pending_client_approval: { label: "Waiting for approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  pending_review: { label: "Waiting for approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  pending_approval: { label: "Waiting for approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  waiting_for_approval: { label: "Waiting for approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   approved: { label: "Approved", cls: "bg-success/15 text-success border-success/30" },
-  rejected: { label: "Rejected", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  changes_requested: { label: "Changes requested", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  rejected: { label: "Changes requested", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  archived: { label: "Archived", cls: "bg-muted text-muted-foreground" },
+  draft: { label: "Draft", cls: "bg-muted text-muted-foreground" },
   none: { label: "No approval", cls: "bg-muted text-muted-foreground" },
 };
 const MEET: Record<MeetingStatus, { label: string; cls: string }> = {
@@ -44,12 +51,20 @@ export function LeadStatusBadge({ status }: { status: LeadStatus | LeadQualifica
   };
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
-export function CampaignStatusBadge({ status }: { status: CampaignStatus | CampaignLifecycleStatus }) {
-  const s = CAMP[status];
+export function CampaignStatusBadge({ status }: { status: CampaignStatus | CampaignLifecycleStatus | string }) {
+  const normalized = typeof status === "string" ? status.toLowerCase() : status;
+  const s = CAMP[normalized as keyof typeof CAMP] || {
+    label: formatStatusLabel(String(status || "unknown")),
+    cls: "bg-muted text-muted-foreground",
+  };
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
-export function ApprovalStatusBadge({ status }: { status: CampaignApprovalStatus }) {
-  const s = APPROVAL[status];
+export function ApprovalStatusBadge({ status }: { status: CampaignApprovalStatus | string }) {
+  const normalized = typeof status === "string" ? status.toLowerCase() : status;
+  const s = APPROVAL[normalized as keyof typeof APPROVAL] || {
+    label: formatStatusLabel(String(status || "unknown")),
+    cls: "bg-muted text-muted-foreground",
+  };
   return <Badge variant="outline" className={`${s.cls} font-medium text-[10px] uppercase tracking-wide`}>{s.label}</Badge>;
 }
 export function MeetingStatusBadge({ status }: { status: MeetingStatus }) {

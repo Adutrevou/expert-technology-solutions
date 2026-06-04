@@ -84,7 +84,11 @@ export interface ApprovalRecord {
   status: string;
   decisionStatus: string;
   decisionNote: string;
+  requestedByName: string;
   decidedByName: string;
+  decidedAt?: string;
+  details: Record<string, unknown>;
+  metadata: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -131,9 +135,21 @@ export interface OutreachTemplateVariantRecord {
   variantLabel: string;
   status: string;
   approvalStatus: string;
+  approvalId: string;
+  approvalDecisionStatus: string;
+  approvalDecisionNote: string;
   subjectTemplate: string;
   bodyTemplate: string;
+  imageSettings: TemplateImageSettings;
+  selectedImageAsset: OutreachAssetRecord | null;
+  imageValidation: TemplateImageValidation;
   latestQualityReview: TemplateQualityReviewRecord | null;
+  metadata: Record<string, unknown>;
+  callToAction: string;
+  signature: string;
+  previousSubject: string;
+  previousBody: string;
+  previousApprovalStatus: string;
 }
 
 export interface OutreachTemplateRecord {
@@ -147,6 +163,8 @@ export interface OutreachTemplateRecord {
   approvalStatus: string;
   subjectTemplate: string;
   bodyTemplate: string;
+  campaignImagesEnabled: boolean;
+  metadata: Record<string, unknown>;
   variants: OutreachTemplateVariantRecord[];
 }
 
@@ -157,7 +175,11 @@ export interface FollowupSequenceRecord {
   name: string;
   status: string;
   approvalStatus: string;
+  approvalId: string;
+  approvalDecisionStatus: string;
+  approvalDecisionNote: string;
   followupCount: number;
+  metadata: Record<string, unknown>;
 }
 
 export interface OutreachQueueRecord {
@@ -175,8 +197,73 @@ export interface OutreachQueueRecord {
   recipientName: string;
   renderPreviewAvailable: boolean;
   blockers: OutreachBlockerRecord[];
+  resolvedImage: ResolvedImagePreview | null;
   latestQualityReview: TemplateQualityReviewRecord | null;
   scheduledFor?: string;
+}
+
+export interface TemplateImageSettings {
+  includeImage: boolean;
+  assetId: string;
+  placement: string;
+  altText: string;
+  fallbackText: string;
+  maxWidth?: number | null;
+  imagePurpose: string;
+  approvalNotes: string;
+  allowInEmailBody: boolean;
+}
+
+export interface TemplateImageValidation {
+  valid: boolean;
+  included: boolean;
+  campaignImagesEnabled: boolean;
+  blockers: OutreachBlockerRecord[];
+  warnings: OutreachBlockerRecord[];
+}
+
+export interface OutreachAssetRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  templateVariantId: string;
+  templateName: string;
+  variantLabel: string;
+  assetType: string;
+  title: string;
+  description: string;
+  fileUrl: string;
+  altText: string;
+  placement: string;
+  status: string;
+  visibility: string;
+  imageWidth?: number | null;
+  imageMaxWidth?: number | null;
+  imagePurpose: string;
+  approvalNotes: string;
+  allowInEmailBody: boolean;
+  approvalId: string;
+  approvalStatus: string;
+  approvalDecisionNote: string;
+  createdByName: string;
+  approvedByName: string;
+  createdAt?: string;
+  updatedAt?: string;
+  approvedAt?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ResolvedImagePreview {
+  required: boolean;
+  included: boolean;
+  placement: string;
+  altText: string;
+  fallbackText: string;
+  maxWidth?: number | null;
+  blockers: OutreachBlockerRecord[];
+  warnings: OutreachBlockerRecord[];
+  asset: OutreachAssetRecord | null;
+  campaignImagesEnabled: boolean;
 }
 
 export interface TemplateQualityReviewRecord {
@@ -269,6 +356,63 @@ export interface AgentTrainingEntryRecord {
   metadata: Record<string, unknown>;
 }
 
+export interface ResponseRuleCategoryRecord {
+  key: string;
+  label: string;
+  description: string;
+  triggerPhrases: string[];
+  actionType: string;
+  defaultSubject: string;
+  defaultBody: string;
+  requiresHumanReview: boolean;
+  manualReplyRequired: boolean;
+  draftReplyEnabled: boolean;
+}
+
+export interface ResponseRuleRecord {
+  id: string;
+  approvalId: string;
+  campaignId: string;
+  campaignName: string;
+  campaignVariantId: string;
+  templateName: string;
+  variantLabel: string;
+  ruleKey: string;
+  ruleKind: string;
+  name: string;
+  description: string;
+  category: string;
+  categoryLabel: string;
+  triggerType: string;
+  triggerPhrases: string[];
+  conditions: Record<string, unknown>;
+  actionType: string;
+  manualReplyRequired: boolean;
+  draftReplyEnabled: boolean;
+  autoReplyEnabled: boolean;
+  autoReplyStatus: string;
+  autoReplyDelayMinutes?: number | null;
+  autoReplyWindowStart: string;
+  autoReplyWindowEnd: string;
+  autoReplyDurationDays?: number | null;
+  maxAutoRepliesPerConversation: number;
+  replyTemplateSubject: string;
+  replyTemplateBody: string;
+  requiresApproval: boolean;
+  status: string;
+  visibility: string;
+  priority: number;
+  scopeLevel: string;
+  appliesToLabel: string;
+  createdByName: string;
+  updatedByName: string;
+  approvedByName: string;
+  approvedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  metadata: Record<string, unknown>;
+}
+
 export interface OutreachBlockerRecord {
   code: string;
   count?: number;
@@ -348,6 +492,8 @@ export interface OutreachRenderPreview {
   companyName: string;
   subject: string;
   body: string;
+  htmlBody: string;
+  image: ResolvedImagePreview | null;
   missingPlaceholders: string[];
   template: {
     name: string;
@@ -387,6 +533,25 @@ export interface VerifiedContactPlanningRecord {
   blockers: OutreachBlockerRecord[];
   verifiedAt?: string;
   updatedAt?: string;
+}
+
+export interface LeadAgentClientFacingCounts {
+  totalLeadsFound: number;
+  qualifiedLeads: number;
+  outreachPrepared: number;
+  emailsSent: number;
+  positiveReplies: number;
+  meetingsQuoteRequests: number;
+}
+
+export interface LeadAgentAdminSummary {
+  rawLeadsCount: number;
+  enrichmentQueueCount: number;
+  totalApprovalsCount: number;
+  archivedMissionsCount: number;
+  internalRequestsCount: number;
+  testConversationsCount: number;
+  enrichmentProviderStatusSummary: Array<{ status: string; count: number }>;
 }
 
 export interface LeadAgentSummary {
@@ -441,10 +606,19 @@ export interface LeadAgentSummary {
   mailboxReadinessBlockers: OutreachBlockerRecord[];
   mailboxConnectionCheck: MailboxConnectionCheck | null;
   renderPreviewAvailableCount: number;
+  outreachAssets: OutreachAssetRecord[];
+  responseRules: ResponseRuleRecord[];
+  responseRuleCategories: ResponseRuleCategoryRecord[];
+  responseRulesCount: number;
+  approvedResponseRulesCount: number;
+  autoReplyRulesConfiguredCount: number;
+  autoReplyRulesEnabledCount: number;
   mailboxes: MailboxRecord[];
   approvalsWaiting: number;
   approvals: ApprovalRecord[];
   pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
+  clientFacingCounts: LeadAgentClientFacingCounts;
+  adminSummary: LeadAgentAdminSummary;
   latestQualificationActions: Array<{
     id: string;
     companyName: string;
@@ -502,7 +676,18 @@ export type LeadWorkflowStatus =
   | "converted"
   | "rejected";
 export type CampaignLifecycleStatus = "active" | "paused" | "completed" | "draft";
-export type CampaignApprovalStatus = "pending" | "approved" | "rejected" | "none";
+export type CampaignApprovalStatus =
+  | "pending"
+  | "pending_client_approval"
+  | "pending_review"
+  | "pending_approval"
+  | "waiting_for_approval"
+  | "approved"
+  | "rejected"
+  | "changes_requested"
+  | "archived"
+  | "draft"
+  | "none";
 export type RequestCategory =
   | "new_campaign"
   | "campaign_change"
@@ -562,6 +747,7 @@ export interface CampaignRecord {
   targetNiche: string;
   targetLocation: string;
   objective: string;
+  imagesEnabled: boolean;
   leadCount?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -689,6 +875,20 @@ export function getLeadAgentSummary() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(normalizeLeadAgentSummary);
 }
 
+export function getResponseRules() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/response-rules`).then((value) => {
+    const record = asRecord(value);
+    return {
+      rules: asArray(record.response_rules).map((item, index) => normalizeResponseRule(item, index)),
+      categories: asArray(record.response_rule_categories).map((item, index) => normalizeResponseRuleCategory(item, index)),
+      responseRulesCount: normalizeCount(record.response_rules_count ?? record.responseRulesCount),
+      approvedResponseRulesCount: normalizeCount(record.approved_response_rules_count ?? record.approvedResponseRulesCount),
+      autoReplyRulesConfiguredCount: normalizeCount(record.auto_reply_rules_configured_count ?? record.autoReplyRulesConfiguredCount),
+      autoReplyRulesEnabledCount: normalizeCount(record.auto_reply_rules_enabled_count ?? record.autoReplyRulesEnabledCount),
+    };
+  });
+}
+
 export function getOutreachRenderPreview(queueItemId: string) {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-queue/${encodeURIComponent(queueItemId)}/render-preview`).then(normalizeOutreachRenderPreviewResponse);
 }
@@ -717,6 +917,20 @@ export function updateReplyDraft(draftId: string, input: { status: string; appro
     method: "PATCH",
     body: JSON.stringify(input),
   }).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+}
+
+export function createResponseRule(input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/response-rules`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeResponseRule(asRecord(asRecord(value).response_rule)));
+}
+
+export function updateResponseRule(ruleId: string, input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/response-rules/${encodeURIComponent(ruleId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeResponseRule(asRecord(asRecord(value).response_rule)));
 }
 
 export function getAgentTraining() {
@@ -788,8 +1002,47 @@ export function createMission(input: {
   }).then((value) => normalizeMission(asRecord(asRecord(value).mission)));
 }
 
-export function decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decision_note?: string }) {
+export function decideApproval(approvalId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/approvals/${encodeURIComponent(approvalId)}/decision`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+}
+
+export function decideCampaignApproval(campaignId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns/${encodeURIComponent(campaignId)}/approval`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeCampaign(asRecord(asRecord(value).campaign)));
+}
+
+export function decideTemplateVariantApproval(variantId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+  const normalizedDecision = input.decision === "request_changes" ? "changes_requested" : input.decision;
+  const action = normalizedDecision === "approved" ? "approve" : normalizedDecision === "changes_requested" ? "request-changes" : "decline";
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-template-variants/${encodeURIComponent(variantId)}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+}
+
+export function requestTemplateVariantChanges(variantId: string, input: { decision_note?: string }) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-template-variants/${encodeURIComponent(variantId)}/request-changes`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+}
+
+export function decideFollowupSequenceApproval(sequenceId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+  const normalizedDecision = input.decision === "request_changes" ? "changes_requested" : input.decision;
+  const action = normalizedDecision === "approved" ? "approve" : normalizedDecision === "changes_requested" ? "request-changes" : "decline";
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+}
+
+export function requestFollowupSequenceChanges(sequenceId: string, input: { decision_note?: string }) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/request-changes`, {
     method: "POST",
     body: JSON.stringify(input),
   }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
@@ -815,6 +1068,41 @@ export function createRequest(input: {
     method: "POST",
     body: JSON.stringify(input),
   }).then(normalizeRequestDetail);
+}
+
+export function createOutreachAsset(input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-assets`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeOutreachAsset(asRecord(asRecord(value).outreach_asset)));
+}
+
+export function updateOutreachAsset(assetId: string, input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-assets/${encodeURIComponent(assetId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeOutreachAsset(asRecord(asRecord(value).outreach_asset)));
+}
+
+export function updateCampaignImageSettings(campaignId: string, input: { images_enabled: boolean }) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns/${encodeURIComponent(campaignId)}/image-settings`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeCampaign(asRecord(asRecord(value).campaign)));
+}
+
+export function updateTemplateVariantImageSettings(variantId: string, input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-template-variants/${encodeURIComponent(variantId)}/image-settings`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeOutreachTemplateVariant(asRecord(asRecord(value).template_variant)));
+}
+
+export function updateTemplateVariantContent(variantId: string, input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-template-variants/${encodeURIComponent(variantId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeOutreachTemplateVariant(asRecord(asRecord(value).template_variant)));
 }
 
 export function updateLeadStatus(leadId: string, status: LeadWorkflowStatus, user: LeadUserSummary) {
@@ -929,6 +1217,68 @@ function normalizeCount(value: unknown): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
+}
+
+function normalizeStatusCounts(value: unknown): Array<{ status: string; count: number }> {
+  if (asArray(value).length) {
+    return asArray(value)
+      .map((item) => {
+        const record = asRecord(item);
+        return {
+          status: pickString(record, ["status", "label", "name", "stage"]) || "",
+          count: normalizeCount(record.count ?? record.value ?? record.total),
+        };
+      })
+      .filter((entry) => Boolean(entry.status));
+  }
+
+  return Object.entries(asRecord(value))
+    .map(([status, count]) => ({
+      status,
+      count: normalizeCount(count),
+    }))
+    .filter((entry) => Boolean(entry.status));
+}
+
+function normalizeStageLabel(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function leadPipelineStageRank(value: string) {
+  switch (normalizeStageLabel(value)) {
+    case "found":
+      return 0;
+    case "qualified":
+      return 1;
+    case "prepared":
+      return 2;
+    case "contacted":
+      return 3;
+    case "interested":
+      return 4;
+    case "meetings / quotes":
+    case "meetings quotes":
+    case "meetings":
+    case "quotes":
+      return 5;
+    default:
+      return 99;
+  }
+}
+
+function ensurePipelineStages(
+  pipelineEntries: Array<{ stage: string; count: number }>,
+  fallbackCounts: Record<"Found" | "Qualified" | "Prepared" | "Contacted" | "Interested" | "Meetings / Quotes", number>,
+) {
+  const byStage = new Map(pipelineEntries.map((entry) => [normalizeStageLabel(entry.stage), entry.count] as const));
+  return [
+    { stage: "Found", count: byStage.get("found") ?? fallbackCounts.Found },
+    { stage: "Qualified", count: byStage.get("qualified") ?? fallbackCounts.Qualified },
+    { stage: "Prepared", count: byStage.get("prepared") ?? fallbackCounts.Prepared },
+    { stage: "Contacted", count: byStage.get("contacted") ?? fallbackCounts.Contacted },
+    { stage: "Interested", count: byStage.get("interested") ?? fallbackCounts.Interested },
+    { stage: "Meetings / Quotes", count: byStage.get("meetings / quotes") ?? byStage.get("meetings quotes") ?? byStage.get("meetings") ?? byStage.get("quotes") ?? fallbackCounts["Meetings / Quotes"] },
+  ];
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
@@ -1053,20 +1403,32 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
   const pipelineRecord = asRecord(record.lead_pipeline_counts);
   const rawLeadStatusRecord = asRecord(record.raw_leads_by_status);
   const enrichmentQueueStatusRecord = asRecord(record.enrichment_queue_by_status);
-  const pipelineEntries = Object.entries(pipelineRecord).map(([stage, count]) => ({
+  const leadPipelineFromArray = asArray(record.lead_pipeline_counts)
+    .map((item) => {
+      const stageRecord = asRecord(item);
+      return {
+        stage: pickString(stageRecord, ["stage", "label", "name"]) || "",
+        count: normalizeCount(stageRecord.count ?? stageRecord.value ?? stageRecord.total),
+      };
+    })
+    .filter((item) => Boolean(item.stage));
+  const pipelineEntries = (leadPipelineFromArray.length ? leadPipelineFromArray : Object.entries(pipelineRecord).map(([stage, count]) => ({
     stage,
     count: normalizeCount(count),
-  }));
-  const rawLeadStatusEntries = Object.entries(rawLeadStatusRecord).map(([status, count]) => ({
-    status,
-    count: normalizeCount(count),
-  }));
-  const enrichmentQueueStatusEntries = Object.entries(enrichmentQueueStatusRecord).map(([status, count]) => ({
-    status,
-    count: normalizeCount(count),
-  }));
+  }))).sort((a, b) => leadPipelineStageRank(a.stage) - leadPipelineStageRank(b.stage));
+  const rawLeadStatusEntries = normalizeStatusCounts(record.raw_leads_by_status ?? rawLeadStatusRecord);
+  const enrichmentQueueStatusEntries = normalizeStatusCounts(record.enrichment_queue_by_status ?? enrichmentQueueStatusRecord);
   const usageSummary = asRecord(record.enrichment_usage_summary);
   const budgetSummary = asRecord(record.enrichment_budget_summary);
+  const clientFacingCounts = asRecord(record.client_facing_counts);
+  const adminSummary = asRecord(record.admin_summary);
+  const pipelineCount = (stageName: string) => pipelineEntries.find((entry) => normalizeStageLabel(entry.stage) === stageName)?.count ?? 0;
+  const foundCount = normalizeCount(clientFacingCounts.total_leads_found ?? clientFacingCounts.totalLeadsFound) || pipelineCount("Found");
+  const qualifiedCount = normalizeCount(clientFacingCounts.qualified_leads ?? clientFacingCounts.qualifiedLeads) || pipelineCount("Qualified");
+  const preparedCount = normalizeCount(clientFacingCounts.outreach_prepared ?? clientFacingCounts.outreachPrepared) || pipelineCount("Prepared");
+  const contactedCount = normalizeCount(clientFacingCounts.emails_sent ?? clientFacingCounts.emailsSent) || pipelineCount("Contacted");
+  const interestedCount = normalizeCount(clientFacingCounts.positive_replies ?? clientFacingCounts.positiveReplies) || pipelineCount("Interested");
+  const meetingsCount = normalizeCount(clientFacingCounts.meetings_quote_requests ?? clientFacingCounts.meetingsQuoteRequests) || pipelineCount("Meetings / Quotes");
 
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
@@ -1075,7 +1437,14 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     activeMissions: asArray(record.active_missions).map((item, index) => normalizeMission(item, index)),
     openRequests: asArray(record.open_requests).map((item, index) => normalizeRequestHistory(item, index)),
     campaigns: asArray(record.campaigns).map((item, index) => normalizeCampaign(item, index)),
-    leadPipelineCounts: pipelineEntries.sort((a, b) => a.stage.localeCompare(b.stage)),
+    leadPipelineCounts: ensurePipelineStages(pipelineEntries, {
+      Found: foundCount,
+      Qualified: qualifiedCount,
+      Prepared: preparedCount,
+      Contacted: contactedCount,
+      Interested: interestedCount,
+      "Meetings / Quotes": meetingsCount,
+    }),
     rawLeadsCount: normalizeCount(record.raw_leads_count),
     rawLeadStatusCounts: rawLeadStatusEntries.sort((a, b) => a.status.localeCompare(b.status)),
     enrichmentQueueCount: normalizeCount(record.enrichment_queue_count),
@@ -1126,12 +1495,38 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
     mailboxConnectionCheck: normalizeMailboxConnectionCheck(record.mailbox_connection_check ?? record.mailboxConnectionCheck),
     renderPreviewAvailableCount: normalizeCount(record.render_preview_available_count ?? record.renderPreviewAvailableCount),
+    outreachAssets: asArray(record.outreach_assets).map((item) => normalizeOutreachAsset(item)),
+    responseRules: asArray(record.response_rules ?? record.responseRules).map((item, index) => normalizeResponseRule(item, index)),
+    responseRuleCategories: asArray(record.response_rule_categories ?? record.responseRuleCategories).map((item, index) => normalizeResponseRuleCategory(item, index)),
+    responseRulesCount: normalizeCount(record.response_rules_count ?? record.responseRulesCount),
+    approvedResponseRulesCount: normalizeCount(record.approved_response_rules_count ?? record.approvedResponseRulesCount),
+    autoReplyRulesConfiguredCount: normalizeCount(record.auto_reply_rules_configured_count ?? record.autoReplyRulesConfiguredCount),
+    autoReplyRulesEnabledCount: normalizeCount(record.auto_reply_rules_enabled_count ?? record.autoReplyRulesEnabledCount),
     mailboxes: asArray(record.mailboxes).map((item, index) => normalizeMailbox(item, index)),
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
     pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map((item, index) =>
       normalizeEnrichmentCreditApproval(item, index),
     ),
+    clientFacingCounts: {
+      totalLeadsFound: foundCount,
+      qualifiedLeads: qualifiedCount,
+      outreachPrepared: preparedCount,
+      emailsSent: contactedCount,
+      positiveReplies: interestedCount,
+      meetingsQuoteRequests: meetingsCount,
+    },
+    adminSummary: {
+      rawLeadsCount: normalizeCount(adminSummary.raw_leads_count ?? adminSummary.rawLeadsCount),
+      enrichmentQueueCount: normalizeCount(adminSummary.enrichment_queue_count ?? adminSummary.enrichmentQueueCount),
+      totalApprovalsCount: normalizeCount(adminSummary.total_approvals_count ?? adminSummary.totalApprovalsCount),
+      archivedMissionsCount: normalizeCount(adminSummary.archived_missions_count ?? adminSummary.archivedMissionsCount),
+      internalRequestsCount: normalizeCount(adminSummary.internal_requests_count ?? adminSummary.internalRequestsCount),
+      testConversationsCount: normalizeCount(adminSummary.test_conversations_count ?? adminSummary.testConversationsCount),
+      enrichmentProviderStatusSummary: normalizeStatusCounts(
+        adminSummary.enrichment_provider_status_summary ?? adminSummary.enrichmentProviderStatusSummary,
+      ).sort((a, b) => a.status.localeCompare(b.status)),
+    },
     latestQualificationActions: asArray(record.latest_qualification_actions).map((item, index) =>
       normalizeQualificationAction(item, index),
     ),
@@ -1217,11 +1612,20 @@ function mapApprovalStatus(value?: string): CampaignApprovalStatus {
   switch ((value || "").toLowerCase()) {
     case "pending":
     case "pending_review":
+    case "pending_client_approval":
+    case "pending_approval":
+    case "waiting_for_approval":
       return "pending";
     case "approved":
       return "approved";
+    case "changes_requested":
+    case "request_changes":
     case "rejected":
-      return "rejected";
+      return "changes_requested";
+    case "archived":
+      return "archived";
+    case "draft":
+      return "draft";
     default:
       return "none";
   }
@@ -1282,6 +1686,7 @@ export function normalizeCampaign(value: unknown, index = 0): CampaignRecord {
     targetNiche: pickString(record, ["target_niche", "targetNiche"]) || "Not specified",
     targetLocation: pickString(record, ["target_location", "targetLocation"]) || "Not specified",
     objective: pickString(record, ["objective", "goal"]) || "No objective provided yet.",
+    imagesEnabled: pickBoolean(record, ["images_enabled", "imagesEnabled"]) ?? false,
     leadCount: pickNumber(record, ["lead_count", "leadCount"]),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
@@ -1366,22 +1771,117 @@ function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
     status: pickString(record, ["status"]) || "pending",
     decisionStatus: pickString(record, ["decision_status", "decisionStatus"]) || "pending",
     decisionNote: pickString(record, ["decision_note", "decisionNote"]) || "",
+    requestedByName: pickString(record, ["requested_by_name", "requestedByName"]) || "",
     decidedByName: pickString(record, ["decided_by_name", "decidedByName"]) || "",
+    decidedAt: normalizeTimestamp(record.decided_at ?? record.decidedAt),
+    details: asRecord(record.details),
+    metadata: asRecord(record.metadata),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
 }
 
+function normalizeTemplateImageSettings(value: unknown): TemplateImageSettings {
+  const record = asRecord(value);
+  return {
+    includeImage: pickBoolean(record, ["include_image", "includeImage"]) ?? false,
+    assetId: pickString(record, ["asset_id", "assetId"]) || "",
+    placement: pickString(record, ["placement"]) || "inline",
+    altText: pickString(record, ["alt_text", "altText"]) || "",
+    fallbackText: pickString(record, ["fallback_text", "fallbackText"]) || "",
+    maxWidth: pickNumber(record, ["max_width", "maxWidth"]),
+    imagePurpose: pickString(record, ["image_purpose", "imagePurpose", "purpose"]) || "",
+    approvalNotes: pickString(record, ["approval_notes", "approvalNotes"]) || "",
+    allowInEmailBody: pickBoolean(record, ["allow_in_email_body", "allowInEmailBody"]) ?? true,
+  };
+}
+
+function normalizeOutreachAsset(value: unknown): OutreachAssetRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || "",
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    templateVariantId: pickString(record, ["template_variant_id", "templateVariantId"]) || "",
+    templateName: pickString(record, ["template_name", "templateName"]) || "",
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    assetType: pickString(record, ["asset_type", "assetType"]) || "image",
+    title: pickString(record, ["title"]) || "Untitled asset",
+    description: pickString(record, ["description"]) || "",
+    fileUrl: pickString(record, ["file_url", "fileUrl"]) || "",
+    altText: pickString(record, ["alt_text", "altText"]) || "",
+    placement: pickString(record, ["placement"]) || "inline",
+    status: pickString(record, ["status"]) || "draft",
+    visibility: pickString(record, ["visibility"]) || "client_visible",
+    imageWidth: pickNumber(record, ["image_width", "imageWidth"]),
+    imageMaxWidth: pickNumber(record, ["image_max_width", "imageMaxWidth"]),
+    imagePurpose: pickString(record, ["image_purpose", "imagePurpose"]) || "",
+    approvalNotes: pickString(record, ["approval_notes", "approvalNotes"]) || "",
+    allowInEmailBody: pickBoolean(record, ["allow_in_email_body", "allowInEmailBody"]) ?? true,
+    approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "",
+    approvalDecisionNote: pickString(record, ["approval_decision_note", "approvalDecisionNote"]) || "",
+    createdByName: pickString(record, ["created_by_name", "createdByName"]) || "",
+    approvedByName: pickString(record, ["approved_by_name", "approvedByName"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+    approvedAt: normalizeTimestamp(record.approved_at ?? record.approvedAt),
+    metadata: asRecord(record.metadata),
+  };
+}
+
+function normalizeTemplateImageValidation(value: unknown): TemplateImageValidation {
+  const record = asRecord(value);
+  return {
+    valid: pickBoolean(record, ["valid"]) ?? true,
+    included: pickBoolean(record, ["included"]) ?? false,
+    campaignImagesEnabled: pickBoolean(record, ["campaign_images_enabled", "campaignImagesEnabled"]) ?? false,
+    blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+    warnings: asArray(record.warnings).map((item, index) => normalizeOutreachBlocker(item, index)),
+  };
+}
+
+function normalizeResolvedImagePreview(value: unknown): ResolvedImagePreview | null {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    required: pickBoolean(record, ["required"]) ?? false,
+    included: pickBoolean(record, ["included"]) ?? false,
+    placement: pickString(record, ["placement"]) || "inline",
+    altText: pickString(record, ["alt_text", "altText"]) || "",
+    fallbackText: pickString(record, ["fallback_text", "fallbackText"]) || "",
+    maxWidth: pickNumber(record, ["max_width", "maxWidth"]),
+    blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+    warnings: asArray(record.warnings).map((item, index) => normalizeOutreachBlocker(item, index)),
+    asset: record.asset ? normalizeOutreachAsset(record.asset) : null,
+    campaignImagesEnabled: pickBoolean(record, ["campaign_images_enabled", "campaignImagesEnabled"]) ?? false,
+  };
+}
+
 function normalizeOutreachTemplateVariant(value: unknown, index = 0): OutreachTemplateVariantRecord {
   const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
   return {
     id: pickString(record, ["id", "_id"]) || `template-variant-${index}`,
     variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
     status: pickString(record, ["status"]) || "draft",
     approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
+    approvalDecisionStatus: pickString(record, ["approval_decision_status", "approvalDecisionStatus"]) || "",
+    approvalDecisionNote: pickString(record, ["approval_decision_note", "approvalDecisionNote"]) || "",
     subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
     bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
+    imageSettings: normalizeTemplateImageSettings(record.image_settings ?? record.imageSettings),
+    selectedImageAsset: record.selected_image_asset || record.selectedImageAsset ? normalizeOutreachAsset(record.selected_image_asset ?? record.selectedImageAsset) : null,
+    imageValidation: normalizeTemplateImageValidation(record.image_validation ?? record.imageValidation),
     latestQualityReview: normalizeTemplateQualityReview(record.latest_quality_review ?? record.latestQualityReview),
+    metadata,
+    callToAction: pickString(metadata, ["cta", "call_to_action", "callToAction"]) || "",
+    signature: pickString(metadata, ["signature"]) || "",
+    previousSubject: pickString(metadata, ["previous_subject", "previousSubject"]) || "",
+    previousBody: pickString(metadata, ["previous_body", "previousBody"]) || "",
+    previousApprovalStatus: pickString(metadata, ["previous_approval_status", "previousApprovalStatus"]) || "",
   };
 }
 
@@ -1398,6 +1898,8 @@ function normalizeOutreachTemplate(value: unknown, index = 0): OutreachTemplateR
     approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
     subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
     bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
+    campaignImagesEnabled: pickBoolean(record, ["campaign_images_enabled", "campaignImagesEnabled"]) ?? false,
+    metadata: asRecord(record.metadata),
     variants: asArray(record.variants).map((item, variantIndex) => normalizeOutreachTemplateVariant(item, variantIndex)),
   };
 }
@@ -1411,7 +1913,11 @@ function normalizeFollowupSequence(value: unknown, index = 0): FollowupSequenceR
     name: pickString(record, ["name"]) || "Untitled follow-up sequence",
     status: pickString(record, ["status"]) || "draft",
     approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
+    approvalDecisionStatus: pickString(record, ["approval_decision_status", "approvalDecisionStatus"]) || "",
+    approvalDecisionNote: pickString(record, ["approval_decision_note", "approvalDecisionNote"]) || "",
     followupCount: normalizeCount(record.followup_count ?? record.followupCount),
+    metadata: asRecord(record.metadata),
   };
 }
 
@@ -1432,6 +1938,7 @@ function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRec
     recipientName: pickString(record, ["recipient_name", "recipientName", "enriched_contact_name", "enrichedContactName", "lead_contact_name", "leadContactName"]) || "",
     renderPreviewAvailable: pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
     blockers: asArray(record.blockers).map((item, blockerIndex) => normalizeOutreachBlocker(item, blockerIndex)),
+    resolvedImage: normalizeResolvedImagePreview(record.resolved_image ?? record.resolvedImage),
     latestQualityReview: normalizeTemplateQualityReview(record.latest_quality_review ?? record.latestQualityReview),
     scheduledFor: normalizeTimestamp(record.scheduled_for ?? record.scheduledFor),
   };
@@ -1550,6 +2057,69 @@ function normalizeAgentTrainingEntry(value: unknown, index = 0): AgentTrainingEn
   };
 }
 
+function normalizeResponseRuleCategory(value: unknown, index = 0): ResponseRuleCategoryRecord {
+  const record = asRecord(value);
+  return {
+    key: pickString(record, ["key"]) || `response-rule-category-${index}`,
+    label: pickString(record, ["label"]) || "Reply category",
+    description: pickString(record, ["description"]) || "",
+    triggerPhrases: asArray(record.triggerPhrases ?? record.trigger_phrases).map((item) => String(item || "")).filter(Boolean),
+    actionType: pickString(record, ["actionType", "action_type"]) || "prepare_reply_draft",
+    defaultSubject: pickString(record, ["defaultSubject", "default_subject"]) || "",
+    defaultBody: pickString(record, ["defaultBody", "default_body"]) || "",
+    requiresHumanReview: pickBoolean(record, ["requiresHumanReview", "requires_human_review"]) ?? false,
+    manualReplyRequired: pickBoolean(record, ["manualReplyRequired", "manual_reply_required"]) ?? true,
+    draftReplyEnabled: pickBoolean(record, ["draftReplyEnabled", "draft_reply_enabled"]) ?? true,
+  };
+}
+
+function normalizeResponseRule(value: unknown, index = 0): ResponseRuleRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `response-rule-${index}`,
+    approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
+    campaignVariantId: pickString(record, ["campaign_variant_id", "campaignVariantId"]) || "",
+    templateName: pickString(record, ["template_name", "templateName"]) || "",
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    ruleKey: pickString(record, ["rule_key", "ruleKey"]) || "",
+    ruleKind: pickString(record, ["rule_kind", "ruleKind"]) || "response_rule",
+    name: pickString(record, ["name"]) || "Response rule",
+    description: pickString(record, ["description"]) || "",
+    category: pickString(record, ["category"]) || "",
+    categoryLabel: pickString(record, ["category_label", "categoryLabel"]) || "",
+    triggerType: pickString(record, ["trigger_type", "triggerType"]) || "category_match",
+    triggerPhrases: asArray(record.trigger_phrases ?? record.triggerPhrases).map((item) => String(item || "")).filter(Boolean),
+    conditions: asRecord(record.conditions),
+    actionType: pickString(record, ["action_type", "actionType"]) || "prepare_reply_draft",
+    manualReplyRequired: pickBoolean(record, ["manual_reply_required", "manualReplyRequired"]) ?? true,
+    draftReplyEnabled: pickBoolean(record, ["draft_reply_enabled", "draftReplyEnabled"]) ?? true,
+    autoReplyEnabled: pickBoolean(record, ["auto_reply_enabled", "autoReplyEnabled"]) ?? false,
+    autoReplyStatus: pickString(record, ["auto_reply_status", "autoReplyStatus"]) || "off",
+    autoReplyDelayMinutes: pickNumber(record, ["auto_reply_delay_minutes", "autoReplyDelayMinutes"]),
+    autoReplyWindowStart: pickString(record, ["auto_reply_window_start", "autoReplyWindowStart"]) || "",
+    autoReplyWindowEnd: pickString(record, ["auto_reply_window_end", "autoReplyWindowEnd"]) || "",
+    autoReplyDurationDays: pickNumber(record, ["auto_reply_duration_days", "autoReplyDurationDays"]),
+    maxAutoRepliesPerConversation: normalizeCount(record.max_auto_replies_per_conversation ?? record.maxAutoRepliesPerConversation) || 1,
+    replyTemplateSubject: pickString(record, ["reply_template_subject", "replyTemplateSubject"]) || "",
+    replyTemplateBody: pickString(record, ["reply_template_body", "replyTemplateBody"]) || "",
+    requiresApproval: pickBoolean(record, ["requires_approval", "requiresApproval"]) ?? true,
+    status: pickString(record, ["status"]) || "draft",
+    visibility: pickString(record, ["visibility"]) || "client_visible",
+    priority: normalizeCount(record.priority) || 100,
+    scopeLevel: pickString(record, ["scope_level", "scopeLevel"]) || "general",
+    appliesToLabel: pickString(record, ["applies_to_label", "appliesToLabel"]) || "All campaigns",
+    createdByName: pickString(record, ["created_by_name", "createdByName"]) || "",
+    updatedByName: pickString(record, ["updated_by_name", "updatedByName"]) || "",
+    approvedByName: pickString(record, ["approved_by_name", "approvedByName"]) || "",
+    approvedAt: normalizeTimestamp(record.approved_at ?? record.approvedAt),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+    metadata: asRecord(record.metadata),
+  };
+}
+
 function normalizeOutreachBlocker(value: unknown, index = 0): OutreachBlockerRecord {
   const record = asRecord(value);
   return {
@@ -1655,6 +2225,8 @@ function normalizeOutreachRenderPreview(value: unknown): OutreachRenderPreview {
     companyName: pickString(record, ["company_name", "companyName"]) || "",
     subject: pickString(record, ["subject"]) || "",
     body: pickString(record, ["body"]) || "",
+    htmlBody: pickString(record, ["html_body", "htmlBody"]) || "",
+    image: normalizeResolvedImagePreview(record.image),
     missingPlaceholders: asArray(record.missing_placeholders).map((item) => String(item || "")).filter(Boolean),
     template: {
       name: pickString(template, ["name"]) || "",
