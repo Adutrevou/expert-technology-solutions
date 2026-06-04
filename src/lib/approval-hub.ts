@@ -34,17 +34,27 @@ export function buildApprovalHubItems(
   requests: RequestHistoryRecord[] = [],
 ) {
   const items: ApprovalHubItem[] = [];
+  const approvalsByEntityKey = new Map<string, ApprovalRecord>();
+
+  for (const approval of summary.approvals || []) {
+    if (!approval.entityType || !approval.entityId) continue;
+    const key = `${approval.entityType}:${approval.entityId}`;
+    if (!approvalsByEntityKey.has(key)) {
+      approvalsByEntityKey.set(key, approval);
+    }
+  }
 
   for (const campaign of summary.campaigns) {
     const status = normalizeApprovalStatus(campaign.approvalStatus);
     if (status === "archived" || status === "draft") continue;
+    const approval = approvalsByEntityKey.get(`campaign:${campaign.id}`);
 
     items.push({
       key: `campaign:${campaign.id}`,
       id: campaign.id,
       kind: "campaign",
       status,
-      title: `Campaign approval — ${campaign.name || "Campaign"}`,
+      title: approvalTitleFallback("campaign", { campaignName: campaign.name }),
       typeLabel: "Campaign",
       shortContext: `This campaign targets ${campaign.targetNiche || "your selected audience"} in ${campaign.targetLocation || "the selected market"}.`,
       previewSummary: campaign.objective || "Campaign direction and launch readiness review.",
@@ -55,7 +65,7 @@ export function buildApprovalHubItems(
       createdAt: campaign.updatedAt || campaign.createdAt,
       previewHref: "/campaigns",
       previewLabel: "Review campaign",
-      latestNote: "",
+      latestNote: approval?.decisionNote || "",
       actionable: true,
     });
   }
@@ -70,7 +80,12 @@ export function buildApprovalHubItems(
         id: variant.id,
         kind: "template_variant",
         status,
-        title: buildEmailTitle(template.campaignName, template.name, template.templateType, variant.variantLabel),
+        title: approvalTitleFallback("template_variant", {
+          campaignName: template.campaignName,
+          templateName: template.name,
+          templateType: template.templateType,
+          variantLabel: variant.variantLabel,
+        }),
         typeLabel: template.templateType === "follow_up" ? "Follow-up" : "Email Template",
         shortContext: `This email will be used for the ${template.campaignName || "linked"} campaign.`,
         previewSummary: `${variant.subjectTemplate || "No subject line"}${template.name ? ` · ${template.name}` : ""}${variant.variantLabel ? ` · Variant ${variant.variantLabel}` : ""}`,
@@ -98,7 +113,7 @@ export function buildApprovalHubItems(
       id: sequence.id,
       kind: "followup_sequence",
       status,
-      title: `Approve follow-up email sequence for ${sequence.campaignName || "campaign"}`,
+      title: approvalTitleFallback("followup_sequence", { campaignName: sequence.campaignName, sequenceName: sequence.name }),
       typeLabel: "Follow-up",
       shortContext: `This follow-up sequence supports the ${sequence.campaignName || "linked"} campaign.`,
       previewSummary: `${sequence.followupCount} follow-up step${sequence.followupCount === 1 ? "" : "s"}${sequence.name ? ` · ${sequence.name}` : ""}`,
@@ -141,6 +156,7 @@ export function buildApprovalHubItems(
   }
 
   for (const rule of summary.responseRules) {
+    if (!rule.requiresApproval) continue;
     const status = normalizeApprovalStatus(rule.status);
     if (status === "archived" || status === "draft") continue;
 
@@ -218,29 +234,11 @@ export function buildApprovalHubItems(
     const status = String(request.clientVisibleStatus || "").toLowerCase();
     if (!ATTENTION_REQUEST_STATUSES.has(status)) continue;
     if (hasInternalVisibilityKeyword(request.title) || hasInternalVisibilityKeyword(request.message)) continue;
-
-    items.push({
-      key: `request:${request.id}`,
-      id: request.id,
-      kind: "request_notice",
-      status: "pending",
-      title: request.title || "Client request",
-      typeLabel: "Request",
-      shortContext: "This request may affect campaign or template decisions.",
-      previewSummary: request.message || "Open request",
-      reason: "This request needs review before related work can continue.",
-      requestedBy: request.createdByName || "Expert",
-      createdAt: request.createdAt,
-      previewHref: "/requests",
-      previewLabel: "Open request",
-      latestNote: request.latestReply || "",
-      actionable: false,
-    });
   }
 
   return items
     .filter((item) => !hasInternalVisibilityKeyword(item.title))
-    .filter((item) => item.status !== "archived" && item.status !== "draft")
+    .filter((item) => item.status !== "draft")
     .sort((left, right) => {
       if (left.status !== right.status) {
         if (left.status === "pending") return -1;
@@ -260,7 +258,15 @@ export function buildApprovalHubItems(
 }
 
 export function getActionableApprovalItems(items: ApprovalHubItem[]) {
-  return items.filter((item) => item.status === "pending");
+  return items.filter(actionableApprovalFilter);
+}
+
+export function normalizeApproval(value?: string) {
+  return normalizeApprovalStatus(value);
+}
+
+export function actionableApprovalFilter(item: ApprovalHubItem) {
+  return item.actionable && normalizeApprovalStatus(item.status) === "pending";
 }
 
 export function normalizeApprovalStatus(value?: string): "pending" | "approved" | "changes_requested" | "archived" | "draft" {
@@ -306,9 +312,45 @@ function normalizeReplyDraftStatus(value?: string): "pending" | "approved" | "ch
 
 function buildEmailTitle(campaignName: string, templateName: string, templateType: string, variantLabel: string) {
   const typeLabel = friendlyTemplateType(templateType);
-  const baseName = campaignName || templateName || "Campaign";
-  const variant = variantLabel ? ` ${variantLabel}` : "";
-  return `Approve ${typeLabel.toLowerCase()} for ${baseName}${variant ? ` — Variant ${variantLabel}` : ""}`;
+  const baseName = campaignName || "Campaign";
+  const templateLabel = templateName || typeLabel;
+  return `Email approval — ${baseName} — ${templateLabel}${variantLabel ? ` — Variant ${variantLabel}` : ""}`;
+}
+
+export function approvalTitleFallback(
+  kind: ApprovalHubItem["kind"],
+  context: {
+    campaignName?: string;
+    templateName?: string;
+    templateType?: string;
+    variantLabel?: string;
+    sequenceName?: string;
+    contactName?: string;
+    companyName?: string;
+    ruleName?: string;
+  } = {},
+) {
+  switch (kind) {
+    case "campaign":
+      return `Campaign approval — ${context.campaignName || "Campaign"}`;
+    case "template_variant":
+      return buildEmailTitle(
+        context.campaignName || "",
+        context.templateName || "",
+        context.templateType || "",
+        context.variantLabel || "",
+      );
+    case "reply_draft":
+      return `Reply approval — ${context.contactName || context.companyName || "Conversation"}`;
+    case "asset_approval":
+      return `Image approval — ${context.campaignName || "Campaign"} — ${context.templateName || "Email image"}`;
+    case "response_rule":
+      return `Rule approval — ${context.ruleName || "Rule"}`;
+    case "followup_sequence":
+      return `Follow-up approval — ${context.campaignName || "Campaign"}${context.sequenceName ? ` — ${context.sequenceName}` : ""}`;
+    default:
+      return "Approval item";
+  }
 }
 
 function friendlyTemplateType(value: string) {
@@ -446,6 +488,10 @@ export function statusLabel(value: ApprovalHubItem["status"]) {
     default:
       return "Needs approval";
   }
+}
+
+export function friendlyApprovalStatus(value: ApprovalHubItem["status"]) {
+  return statusLabel(value);
 }
 
 export function findApprovalByEntity(approvals: ApprovalRecord[], entityType: string, entityId: string) {

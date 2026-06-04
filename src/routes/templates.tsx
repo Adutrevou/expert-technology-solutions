@@ -547,7 +547,7 @@ function TemplatesPage() {
 
                             {currentAssetDraft.fileUrl ? (
                               <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/10 px-4 py-4">
-                                <img src={currentAssetDraft.fileUrl} alt={currentAssetDraft.altText || current.altText} className="max-h-56 w-full rounded-2xl object-contain bg-white p-3" />
+                                <img src={currentAssetDraft.fileUrl} alt={currentAssetDraft.altText || current.altText} className="max-h-56 w-full rounded-2xl bg-background/80 p-3 object-contain" />
                                 <p className="mt-3 text-sm font-medium">{currentAssetDraft.title || "Linked image"}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                   {currentAssetDraft.originalFilename || "Uploaded image"} · {friendlyPlacement(currentAssetDraft.placement || current.placement)}
@@ -743,7 +743,7 @@ function TemplatesPage() {
                               {selectedAsset ? `${selectedAsset.title || "Linked image"} · ${friendlyPlacement(selectedAsset.placement || current.placement)} · ${statusLabel(imageStatus)}` : "No image selected"}
                             </p>
                             {selectedAsset?.fileUrl ? (
-                              <img src={selectedAsset.fileUrl} alt={selectedAsset.altText || current.altText} className="mt-4 max-h-56 w-full rounded-2xl object-contain bg-white p-3" />
+                              <img src={selectedAsset.fileUrl} alt={selectedAsset.altText || current.altText} className="mt-4 max-h-56 w-full rounded-2xl bg-background/80 p-3 object-contain" />
                             ) : null}
                             {selectedAsset?.altText ? (
                               <p className="mt-3 text-sm text-muted-foreground">Alt text: {selectedAsset.altText}</p>

@@ -402,6 +402,8 @@ export interface ResponseRuleRecord {
   maxAutoRepliesPerConversation: number;
   replyTemplateSubject: string;
   replyTemplateBody: string;
+  enabled: boolean;
+  defaultRule: boolean;
   requiresApproval: boolean;
   status: string;
   visibility: string;
@@ -2124,6 +2126,8 @@ function normalizeResponseRule(value: unknown, index = 0): ResponseRuleRecord {
     maxAutoRepliesPerConversation: normalizeCount(record.max_auto_replies_per_conversation ?? record.maxAutoRepliesPerConversation) || 1,
     replyTemplateSubject: pickString(record, ["reply_template_subject", "replyTemplateSubject"]) || "",
     replyTemplateBody: pickString(record, ["reply_template_body", "replyTemplateBody"]) || "",
+    enabled: pickBoolean(record, ["rule_enabled", "enabled"]) ?? (pickBoolean(asRecord(record.metadata), ["rule_enabled", "ruleEnabled"]) ?? true),
+    defaultRule: pickBoolean(record, ["default_rule", "defaultRule"]) ?? (pickBoolean(asRecord(record.metadata), ["default_rule", "defaultRule", "seeded_default"]) ?? false),
     requiresApproval: pickBoolean(record, ["requires_approval", "requiresApproval"]) ?? true,
     status: pickString(record, ["status"]) || "draft",
     visibility: pickString(record, ["visibility"]) || "client_visible",

@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-sidebar-border/80 bg-sidebar/85 backdrop-blur lg:flex">
-        <div className="flex h-24 items-center justify-center border-b border-sidebar-border/80 bg-white/90 px-6">
+        <div className="flex h-24 items-center justify-center border-b border-sidebar-border/80 bg-sidebar/95 px-6">
           <img src={logo} alt="Expert Technology Solutions" className="h-12 w-auto" />
         </div>
         <div className="px-5 pt-5">
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-smooth ${
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-card"
-                    : "text-sidebar-foreground/70 hover:bg-white/70 hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
                 }`}
               >
                 <Icon className="h-4 w-4" />

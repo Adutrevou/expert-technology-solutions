@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { Lock, Plus, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
-import { ApprovalStatusBadge } from "@/components/status-badges";
 import { EmptyCard, PageIntro, SafetyBanner, SectionCard, StatCard, StatusMessage, formatPortalDate } from "@/components/client-portal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,10 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
 import {
-  useApprovalDecisionMutation,
   useCreateResponseRuleMutation,
   useLeadAgentSummaryQuery,
   useResponseRulesQuery,
@@ -82,7 +81,7 @@ const SECTION_COPY: Record<RuleSectionKey, { title: string; description: string;
   },
   manual: {
     title: "Manual Replies",
-    description: "Manual replies are approved response templates the agent can suggest when a prospect replies.",
+    description: "Manual replies are prepared response templates the agent can suggest when a prospect replies.",
     actionLabel: "Add manual reply",
   },
   auto: {
@@ -108,12 +107,8 @@ function ResponsesRulesPage() {
   const responseRulesQuery = useResponseRulesQuery();
   const createMutation = useCreateResponseRuleMutation();
   const updateMutation = useUpdateResponseRuleMutation();
-  const approvalDecisionMutation = useApprovalDecisionMutation();
   const canEdit = ["client_owner", "manager", "sales_user", "intergrai_admin"].includes(user?.role || "");
-  const canApprove = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
   const [editor, setEditor] = useState<RuleEditorState | null>(null);
-  const [requestChangesRule, setRequestChangesRule] = useState<ResponseRuleRecord | null>(null);
-  const [requestChangesNote, setRequestChangesNote] = useState("");
 
   const summary = summaryQuery.data;
   const responseRulesData = responseRulesQuery.data;
@@ -185,28 +180,13 @@ function ResponsesRulesPage() {
       }
       toast.success(
         editedApprovedRule
-          ? "Changes saved. This rule needs approval before it becomes active."
+          ? "Changes saved. Review the updated rule before launch."
           : "Response rule saved.",
       );
       setEditor(null);
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save that rule.");
-    }
-  }
-
-  async function handleApprove(rule: ResponseRuleRecord) {
-    if (!rule.approvalId) return;
-    try {
-      await approvalDecisionMutation.mutateAsync({
-        approvalId: rule.approvalId,
-        decision: "approved",
-        decision_note: "Approved from Responses + Rules.",
-      });
-      toast.success("Approval saved.");
-      await refreshAll();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to approve that rule.");
     }
   }
 
@@ -223,24 +203,23 @@ function ResponsesRulesPage() {
     }
   }
 
-  async function submitRequestChanges() {
-    if (!requestChangesRule?.approvalId || !requestChangesNote.trim()) {
-      toast.error("Add a short note so the requested changes are clear.");
-      return;
-    }
-
+  async function handleToggleRule(rule: ResponseRuleRecord, enabled: boolean) {
     try {
-      await approvalDecisionMutation.mutateAsync({
-        approvalId: requestChangesRule.approvalId,
-        decision: "changes_requested",
-        decision_note: requestChangesNote.trim(),
+      await updateMutation.mutateAsync({
+        ruleId: rule.id,
+        input: {
+          enabled,
+          requires_approval: false,
+          metadata: {
+            ...(rule.metadata || {}),
+            rule_enabled: enabled,
+          },
+        },
       });
-      toast.success("Changes requested.");
-      setRequestChangesRule(null);
-      setRequestChangesNote("");
+      toast.success(enabled ? "Rule turned on." : "Rule turned off.");
       await refreshAll();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to request changes.");
+      toast.error(error instanceof Error ? error.message : "Unable to update that rule.");
     }
   }
 
@@ -291,27 +270,22 @@ function ResponsesRulesPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total rules" value={responseRulesData?.responseRulesCount ?? summary.responseRulesCount} detail="General, campaign, variant, manual, and auto-reply setup." />
-        <StatCard label="Approved rules" value={responseRulesData?.approvedResponseRulesCount ?? summary.approvedResponseRulesCount} detail="Approved rules can guide classification and drafts." />
+        <StatCard label="Rules turned on" value={rules.filter((rule) => rule.status !== "archived" && rule.enabled).length} detail="Only turned-on rules guide reply classification and draft suggestions." />
         <StatCard label="Manual replies" value={groupedRules.manual.length} detail="Approved reply templates the agent can suggest." />
         <StatCard label="Auto-reply setup" value={responseRulesData?.autoReplyRulesConfiguredCount ?? summary.autoReplyRulesConfiguredCount} detail="Prepared only. Automatic replies remain off." />
       </div>
 
       <StatusMessage tone="warning">
-        Start with General Rules. Campaign-specific rules are optional. Most replies should become drafts for approval.
+        Start with General Rules. Campaign-specific rules are optional. Most replies should become drafts for approval. Auto-replies are off globally. These rules prepare future behaviour but will not send automatically.
       </StatusMessage>
 
       <ResponsesRuleSection
         section="general"
         rules={groupedRules.general}
         canEdit={canEdit}
-        canApprove={canApprove}
         onAdd={() => openCreate("general")}
         onEdit={(rule) => openEdit(rule, "general")}
-        onApprove={handleApprove}
-        onRequestChanges={(rule) => {
-          setRequestChangesRule(rule);
-          setRequestChangesNote("");
-        }}
+        onToggle={handleToggleRule}
         onArchive={handleArchive}
       />
 
@@ -319,14 +293,9 @@ function ResponsesRulesPage() {
         section="campaign"
         rules={groupedRules.campaign}
         canEdit={canEdit}
-        canApprove={canApprove}
         onAdd={() => openCreate("campaign")}
         onEdit={(rule) => openEdit(rule, "campaign")}
-        onApprove={handleApprove}
-        onRequestChanges={(rule) => {
-          setRequestChangesRule(rule);
-          setRequestChangesNote("");
-        }}
+        onToggle={handleToggleRule}
         onArchive={handleArchive}
       />
 
@@ -334,14 +303,9 @@ function ResponsesRulesPage() {
         section="variant"
         rules={groupedRules.variant}
         canEdit={canEdit}
-        canApprove={canApprove}
         onAdd={() => openCreate("variant")}
         onEdit={(rule) => openEdit(rule, "variant")}
-        onApprove={handleApprove}
-        onRequestChanges={(rule) => {
-          setRequestChangesRule(rule);
-          setRequestChangesNote("");
-        }}
+        onToggle={handleToggleRule}
         onArchive={handleArchive}
       />
 
@@ -349,14 +313,9 @@ function ResponsesRulesPage() {
         section="manual"
         rules={groupedRules.manual}
         canEdit={canEdit}
-        canApprove={canApprove}
         onAdd={() => openCreate("manual")}
         onEdit={(rule) => openEdit(rule, "manual")}
-        onApprove={handleApprove}
-        onRequestChanges={(rule) => {
-          setRequestChangesRule(rule);
-          setRequestChangesNote("");
-        }}
+        onToggle={handleToggleRule}
         onArchive={handleArchive}
       />
 
@@ -364,18 +323,13 @@ function ResponsesRulesPage() {
         section="auto"
         rules={groupedRules.auto}
         canEdit={canEdit}
-        canApprove={canApprove}
         onAdd={() => openCreate("auto")}
         onEdit={(rule) => openEdit(rule, "auto")}
-        onApprove={handleApprove}
-        onRequestChanges={(rule) => {
-          setRequestChangesRule(rule);
-          setRequestChangesNote("");
-        }}
+        onToggle={handleToggleRule}
         onArchive={handleArchive}
         headerTone={(
           <div className="rounded-[20px] border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning-foreground">
-            Auto-replies are disabled by default. You can prepare rules here, but Intergrai must enable them before any automatic replies are sent.
+            Auto-replies are off globally. You can prepare rules here, but they will not send automatically.
           </div>
         )}
       />
@@ -421,49 +375,6 @@ function ResponsesRulesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={Boolean(requestChangesRule)} onOpenChange={(open) => {
-        if (!open) {
-          setRequestChangesRule(null);
-          setRequestChangesNote("");
-        }
-      }}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Request changes</DialogTitle>
-            <DialogDescription>
-              Explain what should change so the next version is clear and safe.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-[20px] border border-border/70 bg-muted/15 px-4 py-4">
-              <p className="font-medium">{requestChangesRule?.name}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{requestChangesRule?.appliesToLabel}</p>
-            </div>
-            <div>
-              <Label htmlFor="request-changes-note">What should change?</Label>
-              <Textarea
-                id="request-changes-note"
-                className="mt-2 min-h-[140px]"
-                value={requestChangesNote}
-                onChange={(event) => setRequestChangesNote(event.target.value)}
-                placeholder="Example: keep the category, but make the response softer and leave auto-reply off."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setRequestChangesRule(null);
-              setRequestChangesNote("");
-            }}>
-              Cancel
-            </Button>
-            <Button onClick={() => void submitRequestChanges()}>
-              Request changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -472,22 +383,18 @@ function ResponsesRuleSection({
   section,
   rules,
   canEdit,
-  canApprove,
   onAdd,
   onEdit,
-  onApprove,
-  onRequestChanges,
+  onToggle,
   onArchive,
   headerTone,
 }: {
   section: RuleSectionKey;
   rules: ResponseRuleRecord[];
   canEdit: boolean;
-  canApprove: boolean;
   onAdd: () => void;
   onEdit: (rule: ResponseRuleRecord) => void;
-  onApprove: (rule: ResponseRuleRecord) => void;
-  onRequestChanges: (rule: ResponseRuleRecord) => void;
+  onToggle: (rule: ResponseRuleRecord, enabled: boolean) => void;
   onArchive: (rule: ResponseRuleRecord) => void;
   headerTone?: ReactNode;
 }) {
@@ -512,10 +419,8 @@ function ResponsesRuleSection({
               key={rule.id}
               rule={rule}
               canEdit={canEdit}
-              canApprove={canApprove}
               onEdit={() => onEdit(rule)}
-              onApprove={() => onApprove(rule)}
-              onRequestChanges={() => onRequestChanges(rule)}
+              onToggle={(enabled) => onToggle(rule, enabled)}
               onArchive={() => onArchive(rule)}
             />
           ))}
@@ -535,63 +440,66 @@ function ResponsesRuleSection({
 function ResponseRuleCard({
   rule,
   canEdit,
-  canApprove,
   onEdit,
-  onApprove,
-  onRequestChanges,
+  onToggle,
   onArchive,
 }: {
   rule: ResponseRuleRecord;
   canEdit: boolean;
-  canApprove: boolean;
   onEdit: () => void;
-  onApprove: () => void;
-  onRequestChanges: () => void;
+  onToggle: (enabled: boolean) => void;
   onArchive: () => void;
 }) {
-  const approveReason = getApproveDisabledReason(rule, canApprove);
-  const requestChangesReason = getRequestChangesDisabledReason(rule, canApprove);
   const archiveReason = !canEdit ? "You do not have permission to archive rules." : rule.status === "archived" ? "This rule is already archived." : "";
+  const toggleReason = !canEdit ? "You do not have permission to change this rule." : rule.status === "archived" ? "Archived rules cannot be turned on." : "";
 
   return (
     <div className="rounded-[24px] border border-border/70 bg-background px-5 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <ApprovalStatusBadge status={rule.status} />
+            <Badge variant="outline" className={rule.enabled ? "border-success/30 bg-success/10 text-success" : "border-border/70 bg-muted/15 text-muted-foreground"}>
+              {rule.enabled ? "On" : "Off"}
+            </Badge>
             <Badge variant="outline" className="border-border/70 bg-muted/15 text-muted-foreground">
               {friendlyScope(rule.scopeLevel)}
             </Badge>
+            {rule.defaultRule ? (
+              <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
+                Default rule
+              </Badge>
+            ) : null}
             <Badge variant="outline" className={autoReplyBadgeClass(rule.autoReplyStatus)}>
-              {friendlyAutoReplyStatus(rule.autoReplyStatus)}
+              Auto-reply {friendlyAutoReplyStatus(rule.autoReplyStatus).toLowerCase()}
             </Badge>
           </div>
           <h3 className="mt-3 text-lg font-semibold">{rule.name}</h3>
           {rule.description ? <p className="mt-2 text-sm text-muted-foreground">{rule.description}</p> : null}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={onEdit} disabled={!canEdit} title={!canEdit ? "You do not have permission to edit rules." : undefined}>
-            Edit
-          </Button>
-          <Button size="sm" onClick={onApprove} disabled={Boolean(approveReason)} title={approveReason || undefined}>
-            Approve
-          </Button>
-          <Button size="sm" variant="outline" onClick={onRequestChanges} disabled={Boolean(requestChangesReason)} title={requestChangesReason || undefined}>
-            Request Changes
-          </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 rounded-full border border-border/70 bg-muted/10 px-3 py-1.5">
+            <span className="text-xs text-muted-foreground">On / Off</span>
+            <Switch checked={rule.enabled} onCheckedChange={onToggle} disabled={Boolean(toggleReason)} aria-label={`Toggle ${rule.name}`} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={onEdit} disabled={!canEdit} title={!canEdit ? "You do not have permission to edit rules." : undefined}>
+              Edit
+            </Button>
           <Button size="sm" variant="outline" onClick={onArchive} disabled={Boolean(archiveReason)} title={archiveReason || undefined}>
             Archive
           </Button>
         </div>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <RuleFact label="Rule name" value={rule.name} />
+        <RuleFact label="Category" value={rule.categoryLabel || friendlyCategory(rule.category)} />
         <RuleFact label="Applies to" value={rule.appliesToLabel} />
-        <RuleFact label="When this type of reply is received" value={rule.categoryLabel || friendlyCategory(rule.category)} />
         <RuleFact label="Action" value={friendlyRuleAction(rule.actionType)} />
-        <RuleFact label="Approval requirement" value={rule.requiresApproval ? "Approval required" : "No approval required"} />
         <RuleFact label="Draft behavior" value={rule.draftReplyEnabled ? "Prepare a reply draft" : "Do not prepare a draft"} />
+        <RuleFact label="Approval workflow" value="Not required right now" />
         <RuleFact label="Last updated" value={formatPortalDate(rule.updatedAt || rule.createdAt)} />
       </div>
 
@@ -717,16 +625,10 @@ function RuleEditorForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="rule-approval">Approval required</Label>
-          <Select value={isAutoSection ? "yes" : form.requiresApproval} onValueChange={(value) => !isAutoSection && onChange("requiresApproval", value)}>
-            <SelectTrigger id="rule-approval" className="mt-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Yes</SelectItem>
-              {!isAutoSection ? <SelectItem value="no">No</SelectItem> : null}
-            </SelectContent>
-          </Select>
+          <Label>Approval workflow</Label>
+          <div className="mt-2 rounded-[14px] border border-border/70 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
+            Rule approvals are not required right now. Save changes when the rule is ready.
+          </div>
         </div>
       </div>
 
@@ -913,7 +815,7 @@ function buildRuleForm(section: RuleSectionKey, rule: ResponseRuleRecord | null,
     triggerPhrases: (rule?.triggerPhrases || categoryFallback?.triggerPhrases || []).join("\n"),
     replyTemplateSubject: rule?.replyTemplateSubject || categoryFallback?.defaultSubject || "",
     replyTemplateBody: rule?.replyTemplateBody || categoryFallback?.defaultBody || "",
-    requiresApproval: rule?.requiresApproval === false ? "no" : "yes",
+    requiresApproval: "no",
     manualReplyRequired: rule?.manualReplyRequired === false ? "no" : "yes",
     draftReplyEnabled: rule?.draftReplyEnabled === false ? "no" : "yes",
     autoReplyDelayMode,
@@ -959,11 +861,12 @@ function buildRulePayload(section: RuleSectionKey, form: RuleFormState, rule: Re
     trigger_phrases: triggerPhrases,
     reply_template_subject: form.replyTemplateSubject.trim(),
     reply_template_body: form.replyTemplateBody.trim(),
-    requires_approval: section === "auto" ? true : form.requiresApproval === "yes",
+    requires_approval: false,
     manual_reply_required: form.manualReplyRequired === "yes",
     draft_reply_enabled: section === "auto" ? true : form.draftReplyEnabled === "yes",
     auto_reply_enabled: false,
     auto_reply_prepared: section === "auto",
+    enabled: rule?.enabled ?? true,
     auto_reply_delay_minutes: autoReplyDelayMinutes,
     auto_reply_window_start: section === "auto" ? normalizeNullableString(form.autoReplyWindowStart) : null,
     auto_reply_window_end: section === "auto" ? normalizeNullableString(form.autoReplyWindowEnd) : null,
@@ -976,6 +879,8 @@ function buildRulePayload(section: RuleSectionKey, form: RuleFormState, rule: Re
       auto_reply_date_end: section === "auto" ? normalizeNullableString(form.autoReplyDateEnd) : undefined,
       escalation_rule: section === "auto" ? normalizeNullableString(form.escalationRule) : undefined,
       safety_note: section === "auto" ? normalizeNullableString(form.safetyNote) : undefined,
+      rule_enabled: rule?.enabled ?? true,
+      default_rule: rule?.defaultRule ?? false,
     },
   };
 }
@@ -1040,19 +945,4 @@ function autoReplyBadgeClass(status: string) {
     default:
       return "border-success/30 bg-success/10 text-success";
   }
-}
-
-function getApproveDisabledReason(rule: ResponseRuleRecord, canApprove: boolean) {
-  if (!canApprove) return "You do not have permission to approve rules.";
-  if (!rule.approvalId) return "No approval request is pending for this rule.";
-  if (rule.status === "approved") return "This rule is already approved.";
-  if (rule.status === "archived") return "Archived rules cannot be approved.";
-  return "";
-}
-
-function getRequestChangesDisabledReason(rule: ResponseRuleRecord, canApprove: boolean) {
-  if (!canApprove) return "You do not have permission to request changes.";
-  if (!rule.approvalId) return "No approval request is pending for this rule.";
-  if (rule.status === "archived") return "Archived rules cannot be changed.";
-  return "";
 }
