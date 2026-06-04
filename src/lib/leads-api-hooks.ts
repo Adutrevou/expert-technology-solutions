@@ -28,6 +28,7 @@ import {
   getResponseRules,
   startMicrosoftReplySyncOAuth,
   startMailboxOAuth,
+  uploadOutreachAssetFile,
   updateCampaignImageSettings,
   updateAgentTrainingEntry,
   updateLeadStatus,
@@ -435,6 +436,18 @@ export function useCreateOutreachAssetMutation() {
 
   return useMutation<OutreachAssetRecord, Error, Record<string, unknown>>({
     mutationFn: (input) => createOutreachAsset(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useUploadOutreachAssetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<OutreachAssetRecord, Error, FormData>({
+    mutationFn: (formData) => uploadOutreachAssetFile(formData),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });

@@ -233,11 +233,15 @@ export interface OutreachAssetRecord {
   title: string;
   description: string;
   fileUrl: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize?: number | null;
   altText: string;
   placement: string;
   status: string;
   visibility: string;
   imageWidth?: number | null;
+  imageHeight?: number | null;
   imageMaxWidth?: number | null;
   imagePurpose: string;
   approvalNotes: string;
@@ -799,11 +803,12 @@ export interface RequestDetailRecord extends RequestHistoryRecord {
 
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = buildApiUrl(path);
+  const isMultipartBody = isFormDataBody(init.body);
   let response: Response;
   try {
     response = await fetch(url, {
       ...init,
-      headers: buildHeaders(init.headers, init.body !== undefined),
+      headers: buildHeaders(init.headers, init.body !== undefined, isMultipartBody),
     });
   } catch (e: any) {
     const msg = `Leads API network error at ${url}: ${e?.message ?? String(e)}`;
@@ -1077,6 +1082,13 @@ export function createOutreachAsset(input: Record<string, unknown>) {
   }).then((value) => normalizeOutreachAsset(asRecord(asRecord(value).outreach_asset)));
 }
 
+export function uploadOutreachAssetFile(formData: FormData) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-assets/upload`, {
+    method: "POST",
+    body: formData,
+  }).then((value) => normalizeOutreachAsset(asRecord(asRecord(value).outreach_asset)));
+}
+
 export function updateOutreachAsset(assetId: string, input: Record<string, unknown>) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-assets/${encodeURIComponent(assetId)}`, {
     method: "PATCH",
@@ -1169,10 +1181,10 @@ function buildApiUrl(path: string): string {
   return `${LEADS_API_BASE_URL}${normalizedPath}`;
 }
 
-function buildHeaders(headers: HeadersInit | undefined, hasBody: boolean): Headers {
+function buildHeaders(headers: HeadersInit | undefined, hasBody: boolean, isMultipartBody = false): Headers {
   const next = new Headers(headers);
   if (!next.has("Accept")) next.set("Accept", "application/json");
-  if (hasBody && !next.has("Content-Type")) next.set("Content-Type", "application/json");
+  if (hasBody && !isMultipartBody && !next.has("Content-Type")) next.set("Content-Type", "application/json");
 
   const authToken = getStoredAuthToken();
   if (authToken && !next.has("Authorization")) {
@@ -1180,6 +1192,10 @@ function buildHeaders(headers: HeadersInit | undefined, hasBody: boolean): Heade
   }
 
   return next;
+}
+
+function isFormDataBody(body: RequestInit["body"]) {
+  return typeof FormData !== "undefined" && body instanceof FormData;
 }
 
 function pickString(record: Record<string, unknown>, keys: string[]): string | undefined {
@@ -1809,11 +1825,15 @@ function normalizeOutreachAsset(value: unknown): OutreachAssetRecord {
     title: pickString(record, ["title"]) || "Untitled asset",
     description: pickString(record, ["description"]) || "",
     fileUrl: pickString(record, ["file_url", "fileUrl"]) || "",
+    originalFilename: pickString(record, ["original_filename", "originalFilename"]) || "",
+    mimeType: pickString(record, ["mime_type", "mimeType"]) || "",
+    fileSize: pickNumber(record, ["file_size", "fileSize"]),
     altText: pickString(record, ["alt_text", "altText"]) || "",
     placement: pickString(record, ["placement"]) || "inline",
     status: pickString(record, ["status"]) || "draft",
     visibility: pickString(record, ["visibility"]) || "client_visible",
     imageWidth: pickNumber(record, ["image_width", "imageWidth"]),
+    imageHeight: pickNumber(record, ["image_height", "imageHeight"]),
     imageMaxWidth: pickNumber(record, ["image_max_width", "imageMaxWidth"]),
     imagePurpose: pickString(record, ["image_purpose", "imagePurpose"]) || "",
     approvalNotes: pickString(record, ["approval_notes", "approvalNotes"]) || "",

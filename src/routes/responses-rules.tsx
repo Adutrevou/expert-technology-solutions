@@ -175,6 +175,7 @@ function ResponsesRulesPage() {
   async function handleSaveRule() {
     if (!editor) return;
     const payload = buildRulePayload(editor.section, editor.form, editor.rule);
+    const editedApprovedRule = editor.mode === "edit" && normalizeApprovalStatus(editor.rule?.status) === "approved";
 
     try {
       if (editor.mode === "edit" && editor.rule) {
@@ -182,7 +183,11 @@ function ResponsesRulesPage() {
       } else {
         await createMutation.mutateAsync(payload);
       }
-      toast.success("Response rule saved.");
+      toast.success(
+        editedApprovedRule
+          ? "Changes saved. This rule needs approval before it becomes active."
+          : "Response rule saved.",
+      );
       setEditor(null);
       await refreshAll();
     } catch (error) {

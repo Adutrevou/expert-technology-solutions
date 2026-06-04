@@ -124,10 +124,10 @@ export function buildApprovalHubItems(
       approvalId: asset.approvalId,
       kind: "asset_approval",
       status,
-      title: `Image approval — ${asset.title || asset.templateName || "Email image"}`,
+      title: buildAssetApprovalTitle(asset),
       typeLabel: "Image",
       shortContext: `Optional image for ${asset.campaignName || "the linked campaign"}${asset.templateName ? ` · ${asset.templateName}` : ""}.`,
-      previewSummary: `${asset.altText || "Alt text required"} · ${friendlyPlacement(asset.placement)} · ${asset.fileUrl || "No image URL"}`,
+      previewSummary: buildAssetApprovalPreview(asset),
       reason: status === "pending"
         ? "Optional images require approval before they are linked into outreach emails."
         : "Image approval history.",
@@ -345,6 +345,33 @@ function friendlyPlacement(value: string) {
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ") || "Inline";
   }
+}
+
+function buildAssetApprovalTitle(asset: {
+  campaignName?: string;
+  templateName?: string;
+  title?: string;
+}) {
+  return [
+    "Image approval",
+    asset.campaignName || "Campaign",
+    asset.templateName || asset.title || "Email image",
+  ].join(" — ");
+}
+
+function buildAssetApprovalPreview(asset: {
+  title?: string;
+  altText?: string;
+  placement?: string;
+  approvalStatus?: string;
+  status?: string;
+}) {
+  return [
+    asset.title || "Optional image",
+    friendlyPlacement(asset.placement || "inline"),
+    asset.altText ? "Alt text ready" : "Alt text still needed",
+    statusLabel(normalizeApprovalStatus(asset.approvalStatus || asset.status)),
+  ].join(" · ");
 }
 
 function buildResponseRuleTitle(rule: ResponseRuleRecord) {
