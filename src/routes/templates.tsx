@@ -16,6 +16,8 @@ import { useApp } from "@/lib/app-state";
 import type { ApprovalRecord, FollowupSequenceRecord, OutreachAssetRecord, OutreachTemplateRecord, OutreachTemplateVariantRecord } from "@/lib/leads-api";
 import {
   useApprovalDecisionMutation,
+  useArchiveOutreachTemplateVariantMutation,
+  useCreateOutreachTemplateMutation,
   useFollowupSequenceApprovalDecisionMutation,
   useLeadAgentSummaryQuery,
   useTemplateVariantApprovalDecisionMutation,
@@ -63,12 +65,41 @@ type RequestTarget =
   | { kind: "sequence"; title: string; id: string }
   | { kind: "asset"; title: string; approvalId: string };
 
+type TemplateCreateState = {
+  campaignId: string;
+  campaignName: string;
+} | null;
+
+type TemplateCreateForm = {
+  templateType: string;
+  name: string;
+  variantLabel: string;
+  subject: string;
+  body: string;
+  cta: string;
+  signature: string;
+  notes: string;
+};
+
+const EMPTY_TEMPLATE_FORM: TemplateCreateForm = {
+  templateType: "first_contact",
+  name: "",
+  variantLabel: "A",
+  subject: "",
+  body: "",
+  cta: "",
+  signature: "",
+  notes: "",
+};
+
 function TemplatesPage() {
   const { user } = useApp();
   const summaryQuery = useLeadAgentSummaryQuery();
   const templateVariantDecisionMutation = useTemplateVariantApprovalDecisionMutation();
   const followupSequenceDecisionMutation = useFollowupSequenceApprovalDecisionMutation();
   const updateTemplateVariantContentMutation = useUpdateTemplateVariantContentMutation();
+  const createOutreachTemplateMutation = useCreateOutreachTemplateMutation();
+  const archiveTemplateVariantMutation = useArchiveOutreachTemplateVariantMutation();
   const approvalDecisionMutation = useApprovalDecisionMutation();
   const updateOutreachAssetMutation = useUpdateOutreachAssetMutation();
   const uploadOutreachAssetMutation = useUploadOutreachAssetMutation();
@@ -79,6 +110,8 @@ function TemplatesPage() {
   const [assetDrafts, setAssetDrafts] = useState<Record<string, AssetDraftState>>({});
   const [requestChangesTarget, setRequestChangesTarget] = useState<RequestTarget | null>(null);
   const [requestChangesNote, setRequestChangesNote] = useState("");
+  const [templateCreateState, setTemplateCreateState] = useState<TemplateCreateState>(null);
+  const [templateCreateForm, setTemplateCreateForm] = useState<TemplateCreateForm>(EMPTY_TEMPLATE_FORM);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const data = summaryQuery.data;
@@ -93,24 +126,42 @@ function TemplatesPage() {
 
   const campaigns = useMemo(() => {
     if (!data) return [];
-    const grouped = new Map<string, { campaignName: string; templates: OutreachTemplateRecord[]; sequences: FollowupSequenceRecord[] }>();
+    const grouped = new Map<string, { campaignId: string; campaignName: string; templates: OutreachTemplateRecord[]; sequences: FollowupSequenceRecord[] }>();
+
+    for (const campaign of data.campaigns.filter((item) => item.status !== "archived")) {
+      grouped.set(campaign.id, {
+        campaignId: campaign.id,
+        campaignName: campaign.name || "Campaign",
+        templates: [],
+        sequences: [],
+      });
+    }
 
     for (const template of data.outreachTemplates) {
-      const key = template.campaignName || "Unassigned campaign";
-      const existing = grouped.get(key) || { campaignName: key, templates: [], sequences: [] };
+      const key = template.campaignId || template.campaignName || "unassigned";
+      const existing = grouped.get(key) || { campaignId: template.campaignId || "", campaignName: template.campaignName || "Unassigned campaign", templates: [], sequences: [] };
       existing.templates.push(template);
       grouped.set(key, existing);
     }
 
     for (const sequence of data.followupSequences) {
-      const key = sequence.campaignName || "Unassigned campaign";
-      const existing = grouped.get(key) || { campaignName: key, templates: [], sequences: [] };
+      const key = sequence.campaignId || sequence.campaignName || "unassigned";
+      const existing = grouped.get(key) || { campaignId: sequence.campaignId || "", campaignName: sequence.campaignName || "Unassigned campaign", templates: [], sequences: [] };
       existing.sequences.push(sequence);
       grouped.set(key, existing);
     }
 
-    return Array.from(grouped.values()).sort((left, right) => left.campaignName.localeCompare(right.campaignName));
+    return Array.from(grouped.values())
+      .filter((group) => group.campaignName && !/(demo|mock|placeholder|untitled)/i.test(group.campaignName))
+      .sort((left, right) => left.campaignName.localeCompare(right.campaignName));
   }, [data]);
+
+  const availableCampaigns = useMemo(() => {
+    return (data?.campaigns || [])
+      .filter((campaign) => campaign.status !== "archived")
+      .filter((campaign) => !/(demo|mock|placeholder|untitled)/i.test(campaign.name))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [data?.campaigns]);
 
   function startEditing(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord) {
     const selectedAsset = findSelectedAsset(
@@ -363,6 +414,69 @@ function TemplatesPage() {
     }
   }
 
+  function openTemplateCreate(campaignId: string, campaignName: string) {
+    setTemplateCreateState({ campaignId, campaignName });
+    setTemplateCreateForm({
+      ...EMPTY_TEMPLATE_FORM,
+      name: campaignName ? `${campaignName} outreach email` : "",
+    });
+  }
+
+  function closeTemplateCreate() {
+    setTemplateCreateState(null);
+    setTemplateCreateForm(EMPTY_TEMPLATE_FORM);
+  }
+
+  async function saveTemplateCreate() {
+    if (!templateCreateState?.campaignId) {
+      toast.error("Choose a campaign first.");
+      return;
+    }
+    if (!templateCreateForm.name.trim()) {
+      toast.error("Template name is required.");
+      return;
+    }
+    if (!templateCreateForm.body.trim()) {
+      toast.error("Template body is required.");
+      return;
+    }
+
+    try {
+      await createOutreachTemplateMutation.mutateAsync({
+        campaign_id: templateCreateState.campaignId,
+        name: templateCreateForm.name.trim(),
+        template_type: templateCreateForm.templateType,
+        variant_label: templateCreateForm.variantLabel.trim() || "A",
+        subject_template: templateCreateForm.subject.trim() || null,
+        body_template: templateCreateForm.body.trim(),
+        cta: templateCreateForm.cta.trim() || null,
+        signature: templateCreateForm.signature.trim() || null,
+        notes: templateCreateForm.notes.trim() || null,
+      });
+      toast.success("Template saved as draft. It now needs approval before the agent can use it.");
+      closeTemplateCreate();
+      await summaryQuery.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save that template.");
+    }
+  }
+
+  async function archiveTemplateVariant(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord) {
+    const confirmed = window.confirm("This will stop the template from being used going forward. Past messages stay in history.");
+    if (!confirmed) return;
+
+    try {
+      await archiveTemplateVariantMutation.mutateAsync({ variantId: variant.id });
+      if (editingVariantId === variant.id) {
+        stopEditing(variant.id);
+      }
+      toast.success(`Archived ${buildVariantTitle(template, variant)}.`);
+      await summaryQuery.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to archive that template.");
+    }
+  }
+
   async function submitRequestChanges() {
     if (!requestChangesTarget) return;
     if (!requestChangesNote.trim()) {
@@ -450,11 +564,18 @@ function TemplatesPage() {
       {campaigns.length ? (
         campaigns.map((campaign) => (
           <SectionCard
-            key={campaign.campaignName}
+            key={campaign.campaignId || campaign.campaignName}
             title={campaign.campaignName}
             description={describeCampaignTemplates(campaign.templates, campaign.sequences)}
+            action={canEdit && campaign.campaignId ? <Button size="sm" onClick={() => openTemplateCreate(campaign.campaignId, campaign.campaignName)}>Add template</Button> : undefined}
           >
             <div className="space-y-4">
+              {!campaign.templates.length && !campaign.sequences.length ? (
+                <EmptyCard
+                  title="No templates here yet"
+                  description="Add a template when you want the agent to prepare outreach for this campaign."
+                />
+              ) : null}
               {campaign.templates.flatMap((template) =>
                 template.variants.map((variant) => {
                   const approvalRecord = approvalsByEntityKey.get(`outreach_template_variant:${variant.id}`);
@@ -722,6 +843,9 @@ function TemplatesPage() {
                             <Button variant="outline" onClick={() => stopEditing(variant.id)}>
                               Cancel
                             </Button>
+                            <Button variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
+                              Archive template
+                            </Button>
                             {!dirty ? (
                               <Badge variant="outline" className="border-border/70 bg-muted/10 text-muted-foreground">
                                 No unsaved changes
@@ -778,6 +902,11 @@ function TemplatesPage() {
 
                           <div className="flex flex-wrap gap-2">
                             {canEdit ? <Button variant="outline" onClick={() => startEditing(template, variant)}>Edit</Button> : null}
+                            {canEdit ? (
+                              <Button variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
+                                Archive template
+                              </Button>
+                            ) : null}
                             {canApprove && status === "pending" ? (
                               <>
                                 <Button onClick={() => void approveVariant(variant.id)}>Approve</Button>
@@ -861,6 +990,90 @@ function TemplatesPage() {
           description="Prepared outreach templates will appear here once campaign drafts are ready."
         />
       )}
+
+      <Dialog open={Boolean(templateCreateState)} onOpenChange={(open) => { if (!open) closeTemplateCreate(); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add template</DialogTitle>
+            <DialogDescription>
+              Templates must be approved before the agent can use them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="text-sm font-medium">Campaign</p>
+              <Select
+                value={templateCreateState?.campaignId || "__none__"}
+                onValueChange={(value) => {
+                  const nextCampaign = availableCampaigns.find((campaign) => campaign.id === value) || null;
+                  setTemplateCreateState(nextCampaign ? { campaignId: nextCampaign.id, campaignName: nextCampaign.name } : null);
+                }}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCampaigns.map((campaign) => (
+                    <SelectItem key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Template type</p>
+              <Select value={templateCreateForm.templateType} onValueChange={(value) => setTemplateCreateForm((current) => ({ ...current, templateType: value }))}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="first_contact">First outreach</SelectItem>
+                  <SelectItem value="follow_up">Follow-up</SelectItem>
+                  <SelectItem value="reply">Reply</SelectItem>
+                  <SelectItem value="manual_reply">Manual reply</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Template name</p>
+              <Input className="mt-2" value={templateCreateForm.name} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, name: event.target.value }))} placeholder="Example: Managed IT first outreach" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Variant name</p>
+              <Input className="mt-2" value={templateCreateForm.variantLabel} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, variantLabel: event.target.value }))} placeholder="Example: A" />
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-sm font-medium">Subject line</p>
+              <Input className="mt-2" value={templateCreateForm.subject} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, subject: event.target.value }))} placeholder="Optional subject line" />
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-sm font-medium">Body</p>
+              <Textarea className="mt-2 min-h-[220px]" value={templateCreateForm.body} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, body: event.target.value }))} placeholder="Write the email body here." />
+            </div>
+            <div>
+              <p className="text-sm font-medium">CTA</p>
+              <Input className="mt-2" value={templateCreateForm.cta} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, cta: event.target.value }))} placeholder="Optional CTA" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Signature</p>
+              <Input className="mt-2" value={templateCreateForm.signature} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, signature: event.target.value }))} placeholder="Optional signature" />
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-sm font-medium">Notes</p>
+              <Textarea className="mt-2 min-h-[100px]" value={templateCreateForm.notes} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional internal guidance for this template." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeTemplateCreate}>
+              Cancel
+            </Button>
+            <Button onClick={() => void saveTemplateCreate()} disabled={createOutreachTemplateMutation.isPending}>
+              Save template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(requestChangesTarget)} onOpenChange={(open) => {
         if (!open) {
@@ -1043,6 +1256,8 @@ function friendlyTemplateType(value: string) {
       return "Follow-up email";
     case "reply":
       return "Reply template";
+    case "manual_reply":
+      return "Manual reply";
     case "variant":
       return "Variant";
     default:

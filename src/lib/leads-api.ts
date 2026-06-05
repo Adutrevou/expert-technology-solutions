@@ -46,7 +46,7 @@ export interface CampaignsResponse {
   ok: boolean;
   client: ApiClientSummary;
   count: number;
-  campaigns: unknown[];
+  campaigns: CampaignRecord[];
 }
 
 export interface ReportsResponse {
@@ -358,6 +358,13 @@ export interface AgentTrainingEntryRecord {
   createdAt?: string;
   updatedAt?: string;
   metadata: Record<string, unknown>;
+}
+
+export interface TrainingClassificationSuggestion {
+  category: string;
+  appliesTo: string;
+  confidence: number;
+  reason: string;
 }
 
 export interface ResponseRuleCategoryRecord {
@@ -753,7 +760,14 @@ export interface CampaignRecord {
   targetNiche: string;
   targetLocation: string;
   objective: string;
+  targetDecisionMakers: string[];
+  servicesOffers: string[];
+  qualificationQuestions: string[];
+  keySellingPoints: string[];
+  callToAction: string;
+  notes: string;
   imagesEnabled: boolean;
+  hiddenFromClient: boolean;
   leadCount?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -862,8 +876,13 @@ export function getLeads() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads`).then(normalizeLeadsResponse);
 }
 
-export function getCampaigns() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`).then(normalizeCampaignsResponse);
+export function getCampaigns(options: { includeArchived?: boolean } = {}) {
+  const params = new URLSearchParams();
+  if (options.includeArchived) {
+    params.set("include_archived", "1");
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns${suffix}`).then(normalizeCampaignsResponse);
 }
 
 export function getReports() {
@@ -961,7 +980,15 @@ export function createAgentTrainingEntry(input: {
   }).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
 }
 
+export function classifyAgentTrainingContent(content: string) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/agent-training/classify`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  }).then((value) => normalizeTrainingClassificationSuggestion(asRecord(asRecord(value).suggestion)));
+}
+
 export function updateAgentTrainingEntry(entryId: string, input: {
+  category?: string;
   title?: string;
   content?: string;
   status?: string;
@@ -972,6 +999,26 @@ export function updateAgentTrainingEntry(entryId: string, input: {
     method: "PATCH",
     body: JSON.stringify(input),
   }).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
+}
+
+export function createCampaign(input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeCampaign(asRecord(asRecord(value).campaign)));
+}
+
+export function updateCampaign(campaignId: string, input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns/${encodeURIComponent(campaignId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeCampaign(asRecord(asRecord(value).campaign)));
+}
+
+export function archiveCampaign(campaignId: string) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns/${encodeURIComponent(campaignId)}/archive`, {
+    method: "POST",
+  }).then((value) => normalizeCampaign(asRecord(asRecord(value).campaign)));
 }
 
 export function startMailboxOAuth(mailboxId: string) {
@@ -1119,6 +1166,19 @@ export function updateTemplateVariantContent(variantId: string, input: Record<st
   }).then((value) => normalizeOutreachTemplateVariant(asRecord(asRecord(value).template_variant)));
 }
 
+export function createOutreachTemplate(input: Record<string, unknown>) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-templates`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeOutreachTemplateVariant(asRecord(asRecord(value).template_variant)));
+}
+
+export function archiveOutreachTemplateVariant(variantId: string) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-template-variants/${encodeURIComponent(variantId)}/archive`, {
+    method: "POST",
+  }).then((value) => normalizeOutreachTemplateVariant(asRecord(asRecord(value).template_variant)));
+}
+
 export function updateLeadStatus(leadId: string, status: LeadWorkflowStatus, user: LeadUserSummary) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/status`, {
     method: "PATCH",
@@ -1226,6 +1286,18 @@ function pickBoolean(record: Record<string, unknown>, keys: string[]): boolean |
     if (typeof value === "boolean") return value;
   }
   return undefined;
+}
+
+function pickStringArray(record: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean);
+    }
+  }
+  return [];
 }
 
 function normalizeCount(value: unknown): number {
@@ -1407,7 +1479,7 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
 
 function normalizeCampaignsResponse(value: unknown): CampaignsResponse {
   const record = asRecord(value);
-  const campaigns = asArray(record.campaigns);
+  const campaigns = asArray(record.campaigns).map((item, index) => normalizeCampaign(item, index));
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client),
@@ -1696,6 +1768,7 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
 
 export function normalizeCampaign(value: unknown, index = 0): CampaignRecord {
   const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
   return {
     id: pickString(record, ["id", "_id"]) || `campaign-${index}`,
     name: pickString(record, ["name"]) || "Untitled campaign",
@@ -1704,7 +1777,14 @@ export function normalizeCampaign(value: unknown, index = 0): CampaignRecord {
     targetNiche: pickString(record, ["target_niche", "targetNiche"]) || "Not specified",
     targetLocation: pickString(record, ["target_location", "targetLocation"]) || "Not specified",
     objective: pickString(record, ["objective", "goal"]) || "No objective provided yet.",
+    targetDecisionMakers: pickStringArray(metadata, ["target_decision_makers", "targetDecisionMakers"]),
+    servicesOffers: pickStringArray(metadata, ["services_offers", "servicesOffers"]),
+    qualificationQuestions: pickStringArray(metadata, ["qualification_questions", "qualificationQuestions"]),
+    keySellingPoints: pickStringArray(metadata, ["key_selling_points", "keySellingPoints"]),
+    callToAction: pickString(metadata, ["cta", "call_to_action", "callToAction"]) || "",
+    notes: pickString(metadata, ["notes"]) || "",
     imagesEnabled: pickBoolean(record, ["images_enabled", "imagesEnabled"]) ?? false,
+    hiddenFromClient: pickBoolean(metadata, ["hidden_from_client", "hiddenFromClient"]) ?? false,
     leadCount: pickNumber(record, ["lead_count", "leadCount"]),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
@@ -2076,6 +2156,16 @@ function normalizeAgentTrainingEntry(value: unknown, index = 0): AgentTrainingEn
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
     metadata: asRecord(record.metadata),
+  };
+}
+
+function normalizeTrainingClassificationSuggestion(value: unknown): TrainingClassificationSuggestion {
+  const record = asRecord(value);
+  return {
+    category: pickString(record, ["category"]) || "client_preference",
+    appliesTo: pickString(record, ["applies_to", "appliesTo"]) || "all",
+    confidence: pickNumber(record, ["confidence"]) || 0,
+    reason: pickString(record, ["reason"]) || "Please review this suggestion before saving.",
   };
 }
 

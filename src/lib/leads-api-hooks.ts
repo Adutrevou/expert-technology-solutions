@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addLeadComment,
+  archiveCampaign,
+  archiveOutreachTemplateVariant,
+  classifyAgentTrainingContent,
+  createCampaign,
+  createOutreachTemplate,
   createResponseRule,
   createAgentTrainingEntry,
   decideCampaignApproval,
@@ -29,6 +34,7 @@ import {
   startMicrosoftReplySyncOAuth,
   startMailboxOAuth,
   uploadOutreachAssetFile,
+  updateCampaign,
   updateCampaignImageSettings,
   updateAgentTrainingEntry,
   updateLeadStatus,
@@ -79,8 +85,8 @@ export function useCampaignsQuery() {
   const { isAuthenticated } = useApp();
 
   return useQuery({
-    queryKey: ["intergrai", "campaigns"],
-    queryFn: getCampaigns,
+    queryKey: ["intergrai", "campaigns", "archived"],
+    queryFn: () => getCampaigns({ includeArchived: true }),
     enabled: isBrowser && isAuthenticated,
     retry: 1,
   });
@@ -279,6 +285,12 @@ export function useUpdateLeadStatusMutation() {
   });
 }
 
+export function useClassifyAgentTrainingMutation() {
+  return useMutation({
+    mutationFn: ({ content }: { content: string }) => classifyAgentTrainingContent(content),
+  });
+}
+
 export function useAddLeadCommentMutation() {
   const queryClient = useQueryClient();
 
@@ -386,6 +398,45 @@ export function useCampaignApprovalDecisionMutation() {
   });
 }
 
+export function useCreateCampaignMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) => createCampaign(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useUpdateCampaignMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ campaignId, input }: { campaignId: string; input: Record<string, unknown> }) => updateCampaign(campaignId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useArchiveCampaignMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ campaignId }: { campaignId: string }) => archiveCampaign(campaignId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
 export function useTemplateVariantApprovalDecisionMutation() {
   const queryClient = useQueryClient();
 
@@ -408,6 +459,30 @@ export function useUpdateTemplateVariantContentMutation() {
   return useMutation({
     mutationFn: ({ variantId, input }: { variantId: string; input: Record<string, unknown> }) =>
       updateTemplateVariantContent(variantId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useCreateOutreachTemplateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) => createOutreachTemplate(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
+    },
+  });
+}
+
+export function useArchiveOutreachTemplateVariantMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ variantId }: { variantId: string }) => archiveOutreachTemplateVariant(variantId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
@@ -520,11 +595,9 @@ export function useCreateAgentTrainingEntryMutation() {
       status?: string;
       applies_to?: string;
     }) => createAgentTrainingEntry(input),
-    onSuccess: (entry: AgentTrainingEntryRecord) => {
+    onSuccess: (_entry: AgentTrainingEntryRecord) => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "agent-training"] });
-      if (entry.campaignId) {
-        void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
-      }
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
     },
   });
 }
@@ -535,6 +608,7 @@ export function useUpdateAgentTrainingEntryMutation() {
   return useMutation({
     mutationFn: ({ entryId, ...input }: {
       entryId: string;
+      category?: string;
       title?: string;
       content?: string;
       status?: string;

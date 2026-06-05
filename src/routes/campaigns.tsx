@@ -1,17 +1,25 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ApprovalStatusBadge, CampaignStatusBadge } from "@/components/status-badges";
 import { EmptyCard, PageIntro, SectionCard, StatCard } from "@/components/client-portal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
-import { normalizeApproval, friendlyApprovalStatus } from "@/lib/approval-hub";
-import { useCampaignApprovalDecisionMutation, useLeadAgentSummaryQuery } from "@/lib/leads-api-hooks";
+import { friendlyApprovalStatus, normalizeApproval } from "@/lib/approval-hub";
+import {
+  useArchiveCampaignMutation,
+  useCampaignApprovalDecisionMutation,
+  useCampaignsQuery,
+  useCreateCampaignMutation,
+  useLeadAgentSummaryQuery,
+  useUpdateCampaignMutation,
+} from "@/lib/leads-api-hooks";
 import type { ApprovalRecord, CampaignRecord, FollowupSequenceRecord, OutreachTemplateRecord } from "@/lib/leads-api";
 
 export const Route = createFileRoute("/campaigns")({
@@ -19,33 +27,77 @@ export const Route = createFileRoute("/campaigns")({
   component: CampaignsPage,
 });
 
-const REAL_EXPERT_CAMPAIGN_NAMES = new Set([
-  "Managed IT & Proactive Support",
-  "CCTV & Access Control",
-  "Multi-Site Technology Consolidation",
-  "Cybersecurity & Disaster Recovery",
-]);
-
 type RequestChangesState = {
   campaignId: string;
   campaignName: string;
   currentNote: string;
 } | null;
 
+type CampaignEditorState = {
+  mode: "create" | "edit";
+  campaignId?: string;
+  originalApprovalStatus?: string;
+} | null;
+
+type CampaignFormState = {
+  name: string;
+  objective: string;
+  targetNiche: string;
+  targetLocation: string;
+  targetDecisionMakers: string;
+  servicesOffers: string;
+  qualificationQuestions: string;
+  keySellingPoints: string;
+  cta: string;
+  notes: string;
+};
+
+const EMPTY_FORM: CampaignFormState = {
+  name: "",
+  objective: "",
+  targetNiche: "",
+  targetLocation: "",
+  targetDecisionMakers: "",
+  servicesOffers: "",
+  qualificationQuestions: "",
+  keySellingPoints: "",
+  cta: "",
+  notes: "",
+};
+
 function CampaignsPage() {
   const { user } = useApp();
   const summaryQuery = useLeadAgentSummaryQuery();
+  const campaignsQuery = useCampaignsQuery();
+  const createCampaignMutation = useCreateCampaignMutation();
+  const updateCampaignMutation = useUpdateCampaignMutation();
+  const archiveCampaignMutation = useArchiveCampaignMutation();
   const campaignDecisionMutation = useCampaignApprovalDecisionMutation();
-  const canApprove = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
+  const canManage = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
+  const canApprove = canManage;
   const [requestChangesCampaign, setRequestChangesCampaign] = useState<RequestChangesState>(null);
   const [requestChangesNote, setRequestChangesNote] = useState("");
+  const [editorState, setEditorState] = useState<CampaignEditorState>(null);
+  const [campaignForm, setCampaignForm] = useState<CampaignFormState>(EMPTY_FORM);
+  const [showArchived, setShowArchived] = useState(false);
 
   const summary = summaryQuery.data;
   const campaigns = useMemo(() => {
-    return (summary?.campaigns || [])
-      .filter((campaign) => REAL_EXPERT_CAMPAIGN_NAMES.has(campaign.name) && !/(demo|mock|test|placeholder|untitled)/i.test(campaign.name))
+    const rows = campaignsQuery.data?.campaigns || summary?.campaigns || [];
+    return rows
+      .filter((campaign) => !campaign.hiddenFromClient)
+      .filter((campaign) => !/(demo|mock|placeholder|untitled)/i.test(campaign.name))
       .sort((left, right) => left.name.localeCompare(right.name));
-  }, [summary?.campaigns]);
+  }, [campaignsQuery.data?.campaigns, summary?.campaigns]);
+
+  const activeCampaigns = useMemo(
+    () => campaigns.filter((campaign) => campaign.status !== "archived"),
+    [campaigns],
+  );
+  const archivedCampaigns = useMemo(
+    () => campaigns.filter((campaign) => campaign.status === "archived"),
+    [campaigns],
+  );
 
   const approvalsByCampaignId = useMemo(() => {
     const map = new Map<string, ApprovalRecord>();
@@ -59,7 +111,37 @@ function CampaignsPage() {
   }, [summary?.approvals]);
 
   async function refreshAll() {
-    await summaryQuery.refetch();
+    await Promise.all([summaryQuery.refetch(), campaignsQuery.refetch()]);
+  }
+
+  function openCreateCampaign() {
+    setCampaignForm(EMPTY_FORM);
+    setEditorState({ mode: "create" });
+  }
+
+  function openEditCampaign(campaign: CampaignRecord) {
+    setCampaignForm({
+      name: campaign.name || "",
+      objective: campaign.objective || "",
+      targetNiche: campaign.targetNiche || "",
+      targetLocation: campaign.targetLocation || "",
+      targetDecisionMakers: campaign.targetDecisionMakers.join("\n"),
+      servicesOffers: campaign.servicesOffers.join("\n"),
+      qualificationQuestions: campaign.qualificationQuestions.join("\n"),
+      keySellingPoints: campaign.keySellingPoints.join("\n"),
+      cta: campaign.callToAction || "",
+      notes: campaign.notes || "",
+    });
+    setEditorState({
+      mode: "edit",
+      campaignId: campaign.id,
+      originalApprovalStatus: normalizeApproval(campaign.approvalStatus),
+    });
+  }
+
+  function closeEditor() {
+    setEditorState(null);
+    setCampaignForm(EMPTY_FORM);
   }
 
   async function handleCampaignDecision(campaignId: string, decision: "approved" | "changes_requested", decisionNote?: string) {
@@ -88,11 +170,69 @@ function CampaignsPage() {
     setRequestChangesNote("");
   }
 
-  if (summaryQuery.isLoading && !summary) {
+  async function saveCampaign() {
+    if (!campaignForm.name.trim()) {
+      toast.error("Campaign name is required.");
+      return;
+    }
+    if (!campaignForm.objective.trim()) {
+      toast.error("Campaign objective is required.");
+      return;
+    }
+
+    const input = {
+      name: campaignForm.name.trim(),
+      objective: campaignForm.objective.trim(),
+      target_niche: campaignForm.targetNiche.trim() || null,
+      target_location: campaignForm.targetLocation.trim() || null,
+      target_decision_makers: splitTextareaList(campaignForm.targetDecisionMakers),
+      services_offers: splitTextareaList(campaignForm.servicesOffers),
+      qualification_questions: splitTextareaList(campaignForm.qualificationQuestions),
+      key_selling_points: splitTextareaList(campaignForm.keySellingPoints),
+      cta: campaignForm.cta.trim() || null,
+      notes: campaignForm.notes.trim() || null,
+    };
+
+    try {
+      if (editorState?.mode === "edit" && editorState.campaignId) {
+        await updateCampaignMutation.mutateAsync({
+          campaignId: editorState.campaignId,
+          input,
+        });
+        toast.success(
+          editorState.originalApprovalStatus === "approved"
+            ? "Changes saved. This campaign needs approval before the agent can use it again."
+            : "Campaign changes saved.",
+        );
+      } else {
+        await createCampaignMutation.mutateAsync(input);
+        toast.success("Campaign saved as draft. It now needs approval before the agent can use it.");
+      }
+      closeEditor();
+      await refreshAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save that campaign.");
+    }
+  }
+
+  async function archiveCampaign(campaign: CampaignRecord) {
+    const confirmed = window.confirm("This will hide the campaign from active use. Existing history will remain.");
+    if (!confirmed) return;
+
+    try {
+      await archiveCampaignMutation.mutateAsync({ campaignId: campaign.id });
+      toast.success("Campaign archived.");
+      await refreshAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to archive that campaign.");
+    }
+  }
+
+  if ((summaryQuery.isLoading || campaignsQuery.isLoading) && !summary && !campaignsQuery.data) {
     return <CampaignsLoadingState />;
   }
 
-  if (summaryQuery.isError || !summary) {
+  if ((summaryQuery.isError && !summary) || (campaignsQuery.isError && !campaignsQuery.data)) {
     return (
       <div className="mx-auto max-w-[1240px]">
         <Card className="rounded-[28px] p-10 text-center shadow-card">
@@ -109,19 +249,24 @@ function CampaignsPage() {
     );
   }
 
-  const approvalsWaiting = campaigns.filter((campaign) => normalizeApproval(campaign.approvalStatus) !== "approved").length;
+  const approvalsWaiting = activeCampaigns.filter((campaign) => normalizeApproval(campaign.approvalStatus) !== "approved").length;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
       <PageIntro
         badge="Campaigns"
-        title="Which campaigns are approved and ready?"
-        description="Review each real Expert campaign, confirm readiness, and approve or request changes directly from this page."
+        title="Which campaigns are active and approved?"
+        description="Add new campaigns safely, edit existing ones, and approve or request changes without changing launch controls."
         actions={(
           <>
             <Button asChild variant="outline">
               <Link to="/approvals">Open approval hub</Link>
             </Button>
+            {canManage ? (
+              <Button onClick={openCreateCampaign}>
+                Add campaign
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={() => void refreshAll()}>
               <RefreshCcw className="mr-2 h-4 w-4" />
               Refresh
@@ -130,20 +275,24 @@ function CampaignsPage() {
         )}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Campaigns" value={campaigns.length} detail="Only real Expert campaigns appear here." />
-        <StatCard label="Approved" value={campaigns.filter((campaign) => normalizeApproval(campaign.approvalStatus) === "approved").length} detail="Approved campaigns are clear on campaign sign-off." />
-        <StatCard label="Needs attention" value={approvalsWaiting} detail="These campaigns still need an approval decision." />
-        <StatCard label="Status" value="Paused safely" detail="Sending remains disabled while launch approvals are incomplete." />
+      <div className="rounded-[24px] border border-primary/10 bg-primary/5 px-5 py-4 text-sm text-foreground">
+        New campaigns are saved as drafts and must be approved before the agent can use them. Sending stays disabled until launch approval is complete.
       </div>
 
-      <SectionCard title="Campaign approvals" description="Approve campaigns here, then review linked templates and follow-ups as needed.">
-        {campaigns.length ? (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active campaigns" value={activeCampaigns.length} detail="Campaigns currently visible for active planning." />
+        <StatCard label="Approved" value={activeCampaigns.filter((campaign) => normalizeApproval(campaign.approvalStatus) === "approved").length} detail="Approved campaigns are clear on scope and ready for linked template review." />
+        <StatCard label="Needs approval" value={approvalsWaiting} detail="These campaigns still need an approval decision." />
+        <StatCard label="Archived" value={archivedCampaigns.length} detail="Archived campaigns keep their history but stay out of active use." />
+      </div>
+
+      <SectionCard title="Active campaigns" description="Start here. Review campaign details, update them safely, and keep approval status clear.">
+        {activeCampaigns.length ? (
           <div className="grid gap-4 xl:grid-cols-2">
-            {campaigns.map((campaign) => {
+            {activeCampaigns.map((campaign) => {
               const approval = approvalsByCampaignId.get(campaign.id);
-              const templates = (summary.outreachTemplates || []).filter((template) => template.campaignId === campaign.id);
-              const sequences = (summary.followupSequences || []).filter((sequence) => sequence.campaignId === campaign.id);
+              const templates = (summary?.outreachTemplates || []).filter((template) => template.campaignId === campaign.id);
+              const sequences = (summary?.followupSequences || []).filter((sequence) => sequence.campaignId === campaign.id);
               const templateReadiness = describeTemplateReadiness(templates, sequences);
               const outreachReadiness = describeOutreachReadiness(campaign, templates, sequences);
               const approvalStatus = normalizeApproval(campaign.approvalStatus);
@@ -164,10 +313,10 @@ function CampaignsPage() {
                   </div>
 
                   <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    <InfoRow label="Short purpose" value={campaign.objective || "Campaign objective not set yet"} />
-                    <InfoRow label="Current approval status" value={friendlyApprovalStatus(approvalStatus)} />
-                    <InfoRow label="Template readiness status" value={templateReadiness} />
-                    <InfoRow label="Outreach readiness status" value={outreachReadiness} />
+                    <InfoRow label="Target audience" value={campaign.targetNiche || "Not specified yet"} />
+                    <InfoRow label="Target locations" value={campaign.targetLocation || "Not specified yet"} />
+                    <InfoRow label="Template readiness" value={templateReadiness} />
+                    <InfoRow label="Outreach readiness" value={outreachReadiness} />
                   </div>
 
                   {latestNote ? (
@@ -177,6 +326,16 @@ function CampaignsPage() {
                   ) : null}
 
                   <div className="mt-5 flex flex-wrap gap-2">
+                    {canManage ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => openEditCampaign(campaign)}>
+                          Edit campaign
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => void archiveCampaign(campaign)}>
+                          Archive campaign
+                        </Button>
+                      </>
+                    ) : null}
                     {needsDecision ? (
                       <>
                         <Button
@@ -218,11 +377,97 @@ function CampaignsPage() {
           </div>
         ) : (
           <EmptyCard
-            title="No real campaigns available"
-            description="Demo, mock, placeholder, and untitled campaigns stay hidden from the client workspace."
+            title="No active campaigns available"
+            description="Add a campaign when you want the agent to prepare a new outreach track."
           />
         )}
       </SectionCard>
+
+      <SectionCard title="Archived campaigns" description="Archived campaigns stay out of active use, but their history remains available.">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Show archived only when you need historical context.</p>
+          <Button variant="outline" onClick={() => setShowArchived((current) => !current)}>
+            {showArchived ? "Hide archived" : "Show archived"}
+          </Button>
+        </div>
+
+        {showArchived ? (
+          archivedCampaigns.length ? (
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {archivedCampaigns.map((campaign) => (
+                <Card key={campaign.id} className="rounded-[26px] border-border/70 p-5 shadow-none">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg font-semibold">{campaign.name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{campaign.objective}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <CampaignStatusBadge status={campaign.status} />
+                      <ApprovalStatusBadge status={normalizeApproval(campaign.approvalStatus)} />
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyCard title="No archived campaigns yet" description="Archived campaigns will appear here after they are removed from active use." />
+          )
+        ) : null}
+      </SectionCard>
+
+      <Dialog open={Boolean(editorState)} onOpenChange={(open) => { if (!open) closeEditor(); }}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editorState?.mode === "edit" ? "Edit campaign" : "Add campaign"}</DialogTitle>
+            <DialogDescription>
+              New campaigns are saved as drafts and must be approved before the agent can use them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="Campaign name">
+              <Input value={campaignForm.name} onChange={(event) => setCampaignForm((current) => ({ ...current, name: event.target.value }))} placeholder="Example: Hospitality Network Refresh" />
+            </FormField>
+            <FormField label="Campaign objective">
+              <Input value={campaignForm.objective} onChange={(event) => setCampaignForm((current) => ({ ...current, objective: event.target.value }))} placeholder="What should this campaign achieve?" />
+            </FormField>
+            <FormField label="Target audience">
+              <Input value={campaignForm.targetNiche} onChange={(event) => setCampaignForm((current) => ({ ...current, targetNiche: event.target.value }))} placeholder="Example: hotels, professional services, retail groups" />
+            </FormField>
+            <FormField label="Target locations">
+              <Input value={campaignForm.targetLocation} onChange={(event) => setCampaignForm((current) => ({ ...current, targetLocation: event.target.value }))} placeholder="Example: Cape Town, Gauteng, nationwide" />
+            </FormField>
+            <FormField label="Target decision-makers">
+              <Textarea value={campaignForm.targetDecisionMakers} onChange={(event) => setCampaignForm((current) => ({ ...current, targetDecisionMakers: event.target.value }))} placeholder="One per line" className="min-h-[120px]" />
+            </FormField>
+            <FormField label="Services or offers">
+              <Textarea value={campaignForm.servicesOffers} onChange={(event) => setCampaignForm((current) => ({ ...current, servicesOffers: event.target.value }))} placeholder="One per line" className="min-h-[120px]" />
+            </FormField>
+            <FormField label="Qualification questions">
+              <Textarea value={campaignForm.qualificationQuestions} onChange={(event) => setCampaignForm((current) => ({ ...current, qualificationQuestions: event.target.value }))} placeholder="One per line" className="min-h-[120px]" />
+            </FormField>
+            <FormField label="Key selling points">
+              <Textarea value={campaignForm.keySellingPoints} onChange={(event) => setCampaignForm((current) => ({ ...current, keySellingPoints: event.target.value }))} placeholder="One per line" className="min-h-[120px]" />
+            </FormField>
+            <FormField label="Call to action">
+              <Input value={campaignForm.cta} onChange={(event) => setCampaignForm((current) => ({ ...current, cta: event.target.value }))} placeholder="Example: ask for a quick call" />
+            </FormField>
+            <FormField label="Notes">
+              <Textarea value={campaignForm.notes} onChange={(event) => setCampaignForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Anything else the agent should keep in mind." className="min-h-[120px]" />
+            </FormField>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditor}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void saveCampaign()}
+              disabled={createCampaignMutation.isPending || updateCampaignMutation.isPending}
+            >
+              Save campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(requestChangesCampaign)} onOpenChange={(open) => {
         if (!open) {
@@ -306,6 +551,13 @@ function describeOutreachReadiness(
   return "Campaign structure is ready. Launch still depends on global sending controls and final approvals.";
 }
 
+function splitTextareaList(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function CampaignsLoadingState() {
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -325,6 +577,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="rounded-[22px] border border-border/70 bg-background px-4 py-4">
       <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
       <p className="mt-2 text-sm">{value}</p>
+    </div>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
+      <div className="mt-2">{children}</div>
     </div>
   );
 }

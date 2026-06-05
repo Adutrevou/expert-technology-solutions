@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrainCircuit, Pencil, Plus, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyCard, PageIntro, SectionCard, StatCard, formatPortalDate } from "@/components/client-portal";
@@ -13,10 +13,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
 import {
   useAgentTrainingQuery,
+  useClassifyAgentTrainingMutation,
   useCreateAgentTrainingEntryMutation,
   useUpdateAgentTrainingEntryMutation,
 } from "@/lib/leads-api-hooks";
-import type { AgentTrainingEntryRecord } from "@/lib/leads-api";
+import type { AgentTrainingEntryRecord, TrainingClassificationSuggestion } from "@/lib/leads-api";
 
 export const Route = createFileRoute("/agent-training")({
   head: () => ({ meta: [{ title: "Agent Training — Expert Technology Solutions" }] }),
@@ -29,6 +30,7 @@ const SECTION_ORDER = [
   { key: "objection", label: "Common Objections" },
   { key: "reply_rule", label: "Reply Rules" },
   { key: "qualification_rule", label: "Qualification Rules" },
+  { key: "reporting_rule", label: "Reporting Rules" },
   { key: "do_not_say", label: "Do Not Say" },
   { key: "faq", label: "FAQs" },
   { key: "client_preference", label: "Client Preferences" },
@@ -48,6 +50,7 @@ type TrainingEditorState = {
 function AgentTrainingPage() {
   const { user } = useApp();
   const trainingQuery = useAgentTrainingQuery();
+  const classifyMutation = useClassifyAgentTrainingMutation();
   const createMutation = useCreateAgentTrainingEntryMutation();
   const updateMutation = useUpdateAgentTrainingEntryMutation();
   const isAdmin = user?.role === "intergrai_admin";
@@ -61,6 +64,10 @@ function AgentTrainingPage() {
   });
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<TrainingEditorState | null>(null);
+  const [suggestion, setSuggestion] = useState<TrainingClassificationSuggestion | null>(null);
+  const [manualCategoryOverride, setManualCategoryOverride] = useState(false);
+  const [manualAppliesToOverride, setManualAppliesToOverride] = useState(false);
+  const classifyRequestIdRef = useRef(0);
 
   const groupedEntries = useMemo(() => {
     const buckets = new Map<string, AgentTrainingEntryRecord[]>();
@@ -77,6 +84,39 @@ function AgentTrainingPage() {
     return buckets;
   }, [trainingQuery.data]);
 
+  useEffect(() => {
+    const content = form.content.trim();
+    if (!content) {
+      setSuggestion(null);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      const requestId = classifyRequestIdRef.current + 1;
+      classifyRequestIdRef.current = requestId;
+
+      try {
+        const nextSuggestion = await classifyMutation.mutateAsync({ content });
+        if (classifyRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setSuggestion(nextSuggestion);
+        setForm((current) => ({
+          ...current,
+          category: manualCategoryOverride ? current.category : nextSuggestion.category,
+          applies_to: manualAppliesToOverride ? current.applies_to : nextSuggestion.appliesTo,
+        }));
+      } catch {
+        if (classifyRequestIdRef.current === requestId) {
+          setSuggestion(null);
+        }
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [classifyMutation, form.content, manualAppliesToOverride, manualCategoryOverride]);
+
   async function handleSubmit() {
     if (!form.content.trim()) return;
 
@@ -89,6 +129,9 @@ function AgentTrainingPage() {
         applies_to: form.applies_to,
       });
       setForm((current) => ({ ...current, title: "", content: "" }));
+      setSuggestion(null);
+      setManualCategoryOverride(false);
+      setManualAppliesToOverride(false);
       toast.success("Training entry saved.");
       await trainingQuery.refetch();
     } catch (error) {
@@ -203,7 +246,13 @@ function AgentTrainingPage() {
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Category</p>
-            <Select value={form.category} onValueChange={(value) => setForm((current) => ({ ...current, category: value }))}>
+            <Select
+              value={form.category}
+              onValueChange={(value) => {
+                setManualCategoryOverride(true);
+                setForm((current) => ({ ...current, category: value }));
+              }}
+            >
               <SelectTrigger className="mt-2">
                 <SelectValue />
               </SelectTrigger>
@@ -216,7 +265,13 @@ function AgentTrainingPage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Applies to</p>
-            <Select value={form.applies_to} onValueChange={(value) => setForm((current) => ({ ...current, applies_to: value }))}>
+            <Select
+              value={form.applies_to}
+              onValueChange={(value) => {
+                setManualAppliesToOverride(true);
+                setForm((current) => ({ ...current, applies_to: value }));
+              }}
+            >
               <SelectTrigger className="mt-2">
                 <SelectValue />
               </SelectTrigger>
@@ -257,9 +312,25 @@ function AgentTrainingPage() {
           <Textarea
             className="mt-2 min-h-[160px] resize-y bg-background"
             value={form.content}
-            onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
+            onChange={(event) => {
+              setManualCategoryOverride(false);
+              setManualAppliesToOverride(false);
+              setForm((current) => ({ ...current, content: event.target.value }));
+            }}
             placeholder="Examples: keep the tone direct, do not overstate claims, mention proactive support before incident response..."
           />
+          {suggestion ? (
+            <div className="mt-3 rounded-[20px] border border-border/70 bg-muted/10 px-4 py-3 text-sm text-foreground">
+              <p className="font-medium">
+                Suggested category: {formatCategoryLabel(suggestion.category)} for {formatLabel(suggestion.appliesTo)}
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {suggestion.confidence < 0.55
+                  ? "We could not confidently categorise this. Please review before saving."
+                  : `because ${lowercaseFirstLetter(suggestion.reason)}`}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-4">
@@ -435,4 +506,13 @@ function formatLabel(value: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ") || "Unknown";
+}
+
+function formatCategoryLabel(value: string) {
+  return SECTION_ORDER.find((section) => section.key === value)?.label || formatLabel(value);
+}
+
+function lowercaseFirstLetter(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toLowerCase() + value.slice(1);
 }
