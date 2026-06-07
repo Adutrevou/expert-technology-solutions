@@ -50,11 +50,15 @@ function RequestsPage() {
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
 
   const requests = useMemo(
-    () => (requestsQuery.data?.requests ?? []).map((item, index) => normalizeRequestHistory(item, index)),
+    () =>
+      (requestsQuery.data?.requests ?? []).map((item, index) =>
+        normalizeRequestHistory(item, index),
+      ),
     [requestsQuery.data?.requests],
   );
 
-  const selectedRequestSummary = requests.find((request) => request.id === selectedRequestId) || null;
+  const selectedRequestSummary =
+    requests.find((request) => request.id === selectedRequestId) || null;
   const detailQuery = useRequestDetailQuery(selectedRequestId || undefined);
   const selectedRequestDetail = useMemo<RequestDetailRecord | null>(() => {
     if (detailQuery.data) return detailQuery.data;
@@ -123,7 +127,9 @@ function RequestsPage() {
       }
     } catch (error) {
       setSubmitNotice(null);
-      setSubmitError(error instanceof Error ? error.message : "Unable to submit your request right now.");
+      setSubmitError(
+        error instanceof Error ? error.message : "Unable to submit your request right now.",
+      );
     }
   };
 
@@ -132,7 +138,9 @@ function RequestsPage() {
       <header className="rounded-[28px] border border-border/70 bg-gradient-subtle px-6 py-6 shadow-card md:px-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">Powered by Intergrai</p>
+            <p className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">
+              Powered by Intergrai
+            </p>
             <h1 className="mt-3 text-3xl font-bold md:text-4xl">Expert Lead Agent</h1>
             <p className="mt-2 text-sm text-muted-foreground">Requests &amp; Support</p>
           </div>
@@ -152,7 +160,9 @@ function RequestsPage() {
               <div>
                 <h2 className="text-lg font-semibold">Submit a request</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Send campaign changes, lead questions, draft requests, or support issues directly to Intergrai.
+                  Instructions submitted here create tasks for the agent. They do not automatically
+                  send outreach unless converted into an approved campaign or approved lead
+                  instruction.
                 </p>
               </div>
               <ClipboardList className="h-5 w-5 text-primary" />
@@ -203,14 +213,14 @@ function RequestsPage() {
                 {createdByRole ? ` · ${formatLabel(createdByRole)}` : ""}
               </div>
 
-              {submitError ? (
-                <InlineMessage tone="error">{submitError}</InlineMessage>
-              ) : null}
-              {submitNotice ? (
-                <InlineMessage tone="success">{submitNotice}</InlineMessage>
-              ) : null}
+              {submitError ? <InlineMessage tone="error">{submitError}</InlineMessage> : null}
+              {submitNotice ? <InlineMessage tone="success">{submitNotice}</InlineMessage> : null}
 
-              <Button type="submit" className="w-full gap-2" disabled={createRequestMutation.isPending}>
+              <Button
+                type="submit"
+                className="w-full gap-2"
+                disabled={createRequestMutation.isPending}
+              >
                 <Send className="h-4 w-4" />
                 {createRequestMutation.isPending ? "Submitting request..." : "Submit request"}
               </Button>
@@ -221,9 +231,16 @@ function RequestsPage() {
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h2 className="font-semibold">Request history</h2>
-                <p className="text-xs text-muted-foreground">Client-visible requests and latest replies</p>
+                <p className="text-xs text-muted-foreground">
+                  Client-visible requests and latest replies
+                </p>
               </div>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => requestsQuery.refetch()}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => requestsQuery.refetch()}
+              >
                 <RefreshCcw className="h-4 w-4" />
                 Refresh
               </Button>
@@ -239,7 +256,8 @@ function RequestsPage() {
               ) : requestsQuery.isError ? (
                 <div className="p-4">
                   <InlineMessage tone="error">
-                    {(requestsQuery.error as Error | undefined)?.message || "Unable to load request history."}
+                    {(requestsQuery.error as Error | undefined)?.message ||
+                      "Unable to load request history."}
                   </InlineMessage>
                 </div>
               ) : requests.length === 0 ? (
@@ -269,7 +287,9 @@ function RequestsPage() {
                             <CategoryBadge category={request.category} />
                             <RequestStatusBadge status={request.clientVisibleStatus} />
                           </div>
-                          <h3 className="mt-3 truncate text-sm font-semibold md:text-base">{request.title}</h3>
+                          <h3 className="mt-3 truncate text-sm font-semibold md:text-base">
+                            {request.title}
+                          </h3>
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-muted-foreground">
@@ -303,7 +323,9 @@ function RequestsPage() {
           </div>
 
           <div className="mb-6 rounded-2xl border border-border/70 bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
-            Request editing will appear here once a client-safe update endpoint is available. Backend support is not exposed on the current client API.
+            Request editing will appear here once a client-safe update endpoint is available.
+            Backend support is not exposed on the current client API. Outreach uses approved
+            campaigns and approved templates only.
           </div>
 
           {!selectedRequestId ? (
@@ -360,13 +382,19 @@ function RequestDetailPanel({
               Submitted {formatTimestamp(request.createdAt)}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="gap-2" onClick={onRefresh} disabled={isRefreshing}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+          >
             <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             Refresh
           </Button>
         </div>
 
-        {(request.createdByName || request.createdByEmail || request.createdByRole) ? (
+        {request.createdByName || request.createdByEmail || request.createdByRole ? (
           <div className="text-xs text-muted-foreground">
             {request.createdByName || "Portal user"}
             {request.createdByEmail ? ` · ${request.createdByEmail}` : ""}
@@ -375,7 +403,9 @@ function RequestDetailPanel({
         ) : null}
 
         <div className="rounded-2xl border border-border/70 bg-card px-4 py-4">
-          <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">Original request</p>
+          <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+            Original request
+          </p>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
             {request.message || "No request message was included."}
           </p>
@@ -387,7 +417,9 @@ function RequestDetailPanel({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold">Replies &amp; updates</h4>
-          <span className="text-xs text-muted-foreground">{replies.length} visible item{replies.length === 1 ? "" : "s"}</span>
+          <span className="text-xs text-muted-foreground">
+            {replies.length} visible item{replies.length === 1 ? "" : "s"}
+          </span>
         </div>
 
         {replies.length === 0 ? (
@@ -414,7 +446,7 @@ function ReplyCard({ reply }: { reply: RequestReplyRecord }) {
         <p className="text-xs text-muted-foreground">{formatTimestamp(reply.createdAt)}</p>
       </div>
       <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{reply.message}</p>
-      {(reply.authorName || reply.authorEmail || reply.authorRole) ? (
+      {reply.authorName || reply.authorEmail || reply.authorRole ? (
         <p className="mt-3 text-xs text-muted-foreground">
           {reply.authorName || "Intergrai"}
           {reply.authorEmail ? ` · ${reply.authorEmail}` : ""}
@@ -427,7 +459,10 @@ function ReplyCard({ reply }: { reply: RequestReplyRecord }) {
 
 function CategoryBadge({ category }: { category: string }) {
   return (
-    <Badge variant="outline" className="bg-info/12 text-info border-info/20 text-[10px] uppercase tracking-wide">
+    <Badge
+      variant="outline"
+      className="bg-info/12 text-info border-info/20 text-[10px] uppercase tracking-wide"
+    >
       {formatLabel(category)}
     </Badge>
   );
@@ -436,28 +471,35 @@ function CategoryBadge({ category }: { category: string }) {
 function RequestStatusBadge({ status }: { status: string }) {
   const tone = REQUEST_STATUS_STYLES[status] || "bg-muted text-muted-foreground";
   return (
-    <Badge variant="outline" className={cn("border-transparent text-[10px] uppercase tracking-wide", tone)}>
+    <Badge
+      variant="outline"
+      className={cn("border-transparent text-[10px] uppercase tracking-wide", tone)}
+    >
       {formatLabel(status)}
     </Badge>
   );
 }
 
 function ReplyTypeBadge({ type }: { type: RequestReplyRecord["type"] }) {
-  const label = type === "status_update" ? "Status update" : type === "message" ? "Message" : type === "reply" ? "Reply" : "Update";
+  const label =
+    type === "status_update"
+      ? "Status update"
+      : type === "message"
+        ? "Message"
+        : type === "reply"
+          ? "Reply"
+          : "Update";
   return (
-    <Badge variant="outline" className="border-border/70 bg-muted/30 text-[10px] uppercase tracking-wide">
+    <Badge
+      variant="outline"
+      className="border-border/70 bg-muted/30 text-[10px] uppercase tracking-wide"
+    >
       {label}
     </Badge>
   );
 }
 
-function InlineMessage({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone: "error" | "success";
-}) {
+function InlineMessage({ children, tone }: { children: ReactNode; tone: "error" | "success" }) {
   return (
     <div
       className={cn(
@@ -491,11 +533,13 @@ function formatTimestamp(value?: string) {
 }
 
 function formatLabel(value: string) {
-  return value
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || "Unknown";
+  return (
+    value
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || "Unknown"
+  );
 }
 
 const REQUEST_STATUS_STYLES: Record<string, string> = {
