@@ -17,7 +17,7 @@ const PIPELINE_STAGES = [
   { label: "Found", key: "Found", note: "Prospects identified for review." },
   { label: "Qualified", key: "Qualified", note: "Prospects that fit your target profile." },
   { label: "Prepared", key: "Prepared", note: "Outreach drafted and ready for approval." },
-  { label: "Contacted", key: "Contacted", note: "Will remain at zero until launch." },
+  { label: "Contacted", key: "Contacted", note: "Increases as one-by-one sends go out." },
   { label: "Interested", key: "Interested", note: "Positive replies and interest signals." },
   {
     label: "Meetings / Quotes",
@@ -113,8 +113,8 @@ function LeadAgentPage() {
         }
         description={
           data.anyCampaignReady
-            ? "Pipeline work is active and at least one campaign has the approvals needed for launch. Sending still stays off until it is explicitly enabled."
-            : "Pipeline work is active, outreach is prepared, and sending remains safely paused until launch approval."
+            ? "Pipeline work is active and at least one campaign has the approvals needed for launch. Sending continues one-by-one whenever the live send gate passes and caps remain available."
+            : "Pipeline work is active, outreach is prepared, and sending stays paused until a campaign and first-contact template are approved."
         }
         actions={
           <>
@@ -133,7 +133,7 @@ function LeadAgentPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Current status"
+          label="Outreach status"
           value={currentStatus}
           detail="Lead sourcing, verification, and sending stay within the approved safety limits."
         />
@@ -170,7 +170,7 @@ function LeadAgentPage() {
         <StatCard
           label="Sending status"
           value={data.sendingEnabled ? "Enabled" : "Paused"}
-          detail="Sending stays inside the 05:00–19:00 SA window."
+          detail="24/7 sending is allowed when mailbox readiness and caps permit it."
         />
         <StatCard
           label="Caps"

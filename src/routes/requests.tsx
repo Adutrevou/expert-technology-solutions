@@ -32,9 +32,9 @@ export const Route = createFileRoute("/requests")({
 const REQUEST_CATEGORY_OPTIONS: Array<{ value: RequestCategory; label: string }> = [
   { value: "new_campaign", label: "Add campaign idea" },
   { value: "campaign_change", label: "Pause or change campaign" },
-  { value: "lead_question", label: "Find more leads" },
+  { value: "lead_question", label: "Find more leads in X industry" },
   { value: "outreach_draft", label: "Review reply" },
-  { value: "support_issue", label: "General request" },
+  { value: "support_issue", label: "General instruction / request" },
 ];
 
 function RequestsPage() {
@@ -224,8 +224,8 @@ function RequestsPage() {
           <Card className="overflow-hidden shadow-card">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
-              <h2 className="font-semibold">Request history</h2>
-              <p className="text-xs text-muted-foreground">Client-visible requests and replies</p>
+                <h2 className="font-semibold">Request history</h2>
+                <p className="text-xs text-muted-foreground">Client-visible requests and replies</p>
               </div>
               <Button
                 variant="outline"

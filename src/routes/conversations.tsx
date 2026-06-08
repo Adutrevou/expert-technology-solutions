@@ -118,7 +118,7 @@ function ConversationsPage() {
       <PageIntro
         badge="Conversations"
         title="Who are we speaking to and what happened?"
-        description="Review prepared emails, sent threads, replies, and approval-gated draft replies in one clear conversation timeline."
+        description="Review who was contacted, who replied, and what needs action in a simple mailbox view."
         actions={(
           <Button variant="outline" className="gap-2" onClick={() => conversationsQuery.refetch()}>
             <RefreshCcw className="h-4 w-4" />
@@ -148,7 +148,7 @@ function ConversationsPage() {
               <div>
                 <h2 className="text-xl font-semibold">Conversation list</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Prepared, sent, replied, and approval-gated threads stay client-scoped here.
+                  Sent outreach, replies, and draft replies are grouped here like an inbox.
                 </p>
               </div>
               <MessagesSquare className="h-5 w-5 text-primary" />
@@ -179,7 +179,7 @@ function ConversationsPage() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {conversation.contactName || "No contact"}{conversation.contactEmail ? ` · ${conversation.contactEmail}` : ""}{conversation.campaignName ? ` · ${conversation.campaignName}` : ""}
+                    {conversation.contactName || conversation.contactEmail || "Decision-maker not verified yet"}{conversation.contactEmail ? ` · ${conversation.contactEmail}` : ""}{conversation.campaignName ? ` · ${conversation.campaignName}` : ""}
                   </p>
                   <p className="mt-2 text-sm text-foreground">{conversation.latestSubject || "Prepared email preview"}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{conversation.latestSnippet || "No message body captured yet."}</p>

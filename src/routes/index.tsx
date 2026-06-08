@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
-import { normalizeLead } from "@/lib/leads-api";
+import { normalizeLead, type DashboardResponse, type LeadAgentSummary } from "@/lib/leads-api";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Expert Technology Solutions" }] }),
@@ -20,53 +20,22 @@ function Dashboard() {
   const conversationsQuery = useConversationsQuery();
   const requestsQuery = useRequestsQuery();
 
-  if (
-    dashboardQuery.isLoading
-    || summaryQuery.isLoading
-    || conversationsQuery.isLoading
-    || requestsQuery.isLoading
-  ) {
+  if (dashboardQuery.isLoading || summaryQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading) {
     return <DashboardLoadingState />;
   }
 
-  if (
-    dashboardQuery.isError
-    || summaryQuery.isError
-    || conversationsQuery.isError
-    || requestsQuery.isError
-    || !dashboardQuery.data
-    || !summaryQuery.data
-  ) {
-    return (
-      <div className="mx-auto max-w-[1240px]">
-        <Card className="rounded-[28px] p-10 text-center shadow-card">
-          <h1 className="text-2xl font-semibold">Dashboard unavailable</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {(dashboardQuery.error as Error | undefined)?.message
-              || (summaryQuery.error as Error | undefined)?.message
-              || "We couldn’t load the dashboard right now."}
-          </p>
-          <div className="mt-6 flex justify-center">
-            <Button onClick={() => dashboardQuery.refetch()} variant="outline">
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Try again
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  const data = dashboardQuery.data;
-  const recentLeads = data.recent_leads.map(normalizeLead).slice(0, 4);
+  const data = dashboardQuery.data ?? EMPTY_DASHBOARD;
+  const summaryData = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
+  const recentLeads = (data.recent_leads || []).map(normalizeLead).slice(0, 4);
   const approvalItems = buildApprovalHubItems(
-    summaryQuery.data,
+    summaryData,
     conversationsQuery.data || [],
     requestsQuery.data?.requests || [],
   );
   const pendingApprovals = getActionableApprovalItems(approvalItems).filter((item) => item.kind !== "credit_approval");
   const attentionItems = pendingApprovals.slice(0, 4);
-  const leadCounts = summaryQuery.data.clientFacingCounts;
+  const leadCounts = summaryData.clientFacingCounts;
+  const hasWarnings = dashboardQuery.isError || summaryQuery.isError || conversationsQuery.isError || requestsQuery.isError;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -85,6 +54,21 @@ function Dashboard() {
           </>
         )}
       />
+
+      {hasWarnings ? (
+        <Card className="rounded-[24px] border-warning/30 bg-warning/10 px-5 py-4 text-sm text-warning-foreground shadow-card">
+          Some live metrics are unavailable right now. The dashboard is still rendering with safe fallbacks.
+          <Button variant="outline" size="sm" className="ml-4" onClick={() => void Promise.allSettled([
+            dashboardQuery.refetch(),
+            summaryQuery.refetch(),
+            conversationsQuery.refetch(),
+            requestsQuery.refetch(),
+          ])}>
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -114,23 +98,23 @@ function Dashboard() {
         />
         <StatCard
           label="Reply drafts needing approval"
-          value={summaryQuery.data.repliesWaitingApproval}
+          value={summaryData.repliesWaitingApproval}
           detail="Draft replies are waiting for review before they can move forward."
         />
         <StatCard
           label="Meetings / quotes"
-          value={summaryQuery.data.clientFacingCounts.meetingsQuoteRequests}
+          value={leadCounts.meetingsQuoteRequests}
           detail="Positive replies that ask for a meeting or quote."
         />
         <StatCard
-          label="Needs approval"
+          label="Approvals waiting"
           value={pendingApprovals.length}
           detail={pendingApprovals.length ? "Real client decisions waiting now" : "All clear right now"}
         />
         <StatCard
           label="Workspace"
           value={data.client.status === "active" ? "Ready" : data.client.status || "Unknown"}
-          detail="Sending remains paused until launch approval."
+          detail="Mailbox readiness and approved launch state determine whether sending is active."
         />
       </div>
 
@@ -216,3 +200,132 @@ function DashboardLoadingState() {
     </div>
   );
 }
+
+const EMPTY_DASHBOARD: DashboardResponse = {
+  ok: true,
+  client: {
+    id: "expert-technology-solutions",
+    slug: "expert-technology-solutions",
+    name: "Expert Technology Solutions",
+    status: "unknown",
+  },
+  campaign_counts: {
+    total: 0,
+    active: 0,
+    draft: 0,
+  },
+  lead_counts: {
+    total: 0,
+    hot: 0,
+    warm: 0,
+    review: 0,
+    not_qualified: 0,
+  },
+  recent_leads: [],
+  pending_approvals: [],
+  recent_reports: [],
+};
+
+const EMPTY_LEAD_AGENT_SUMMARY: LeadAgentSummary = {
+  ok: true,
+  client: EMPTY_DASHBOARD.client,
+  agent: null,
+  activeMissions: [],
+  openRequests: [],
+  campaigns: [],
+  leadPipelineCounts: [],
+  rawLeadsCount: 0,
+  rawLeadStatusCounts: [],
+  enrichmentQueueCount: 0,
+  enrichmentQueueStatusCounts: [],
+  enrichmentUsageSummary: {
+    apolloAttempted: 0,
+    hunterAttempted: 0,
+    apolloUsed: 0,
+    hunterUsed: 0,
+  },
+  enrichmentBudgetSummary: {
+    apolloMonthlyLimit: 0,
+    apolloUsed: 0,
+    apolloRemaining: 0,
+    hunterMonthlyLimit: 0,
+    hunterUsed: 0,
+    hunterRemaining: 0,
+  },
+  outreachTemplates: [],
+  followupSequences: [],
+  outreachQueueCount: 0,
+  outreachQueueStatusCounts: [],
+  outreachQueue: [],
+  verifiedContactsCount: 0,
+  outreachPlannedCount: 0,
+  sendReadyCount: 0,
+  waitingForMailboxCount: 0,
+  outreachBlockers: [],
+  verifiedContactsWaitingForOutreach: [],
+  mailboxStatus: "unknown",
+  mailboxConnected: false,
+  sendingEnabled: false,
+  sendReady: false,
+  mailboxFromName: "",
+  mailboxFromEmail: "",
+  mailboxProviderType: "",
+  mailboxDailySendLimit: 0,
+  mailboxMonthlySendLimit: 0,
+  mailboxSentToday: 0,
+  mailboxSentThisMonth: 0,
+  mailboxLastError: "",
+  mailboxLastHealthCheckAt: undefined,
+  mailboxReadinessBlockers: [],
+  mailboxConnectionCheck: null,
+  launchMode: "waiting_for_approval",
+  launchReady: false,
+  anyCampaignReady: false,
+  campaignLaunchStates: [],
+  campaignsApprovedCount: 0,
+  campaignsWaitingApprovalCount: 0,
+  campaignsReadyToLaunchCount: 0,
+  campaignsLiveCount: 0,
+  templatesWaitingApprovalCount: 0,
+  followupsWaitingApprovalCount: 0,
+  unapprovedRequiredAssetsCount: 0,
+  renderPreviewAvailableCount: 0,
+  outreachAssets: [],
+  responseRules: [],
+  responseRuleCategories: [],
+  responseRulesCount: 0,
+  approvedResponseRulesCount: 0,
+  autoReplyRulesConfiguredCount: 0,
+  autoReplyRulesEnabledCount: 0,
+  mailboxes: [],
+  approvalsWaiting: 0,
+  approvals: [],
+  pendingEnrichmentCreditApprovals: [],
+  clientFacingCounts: {
+    totalLeadsFound: 0,
+    qualifiedLeads: 0,
+    outreachPrepared: 0,
+    emailsSent: 0,
+    repliesReceived: 0,
+    positiveReplies: 0,
+    meetingsQuoteRequests: 0,
+  },
+  currentCampaignFocus: "",
+  expertLeadAgentState: "ready",
+  expertLeadAgentStateLabel: "Ready",
+  newLeadsSourcedToday: 0,
+  repliesWaitingApproval: 0,
+  adminSummary: {
+    rawLeadsCount: 0,
+    enrichmentQueueCount: 0,
+    totalApprovalsCount: 0,
+    archivedMissionsCount: 0,
+    internalRequestsCount: 0,
+    testConversationsCount: 0,
+    enrichmentProviderStatusSummary: [],
+  },
+  latestQualificationActions: [],
+  latestEnrichmentActions: [],
+  latestWeeklyReport: null,
+  internalNotes: [],
+};
