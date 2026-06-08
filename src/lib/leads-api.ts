@@ -1447,7 +1447,7 @@ function formatLeadDisplayName(record: Record<string, unknown>, fallbackCompany 
   const company = pickString(record, ["company_name", "company", "lead_company_name", "raw_company_name"]) || fallbackCompany;
   const serverDisplayName = pickString(record, ["display_contact_name", "displayContactName"]) || "";
   const contactName =
-    serverDisplayName ||
+    (serverDisplayName && !isPlaceholderLeadLabel(serverDisplayName) ? serverDisplayName : "") ||
     pickString(record, ["contact_name", "enriched_contact_name", "lead_contact_name", "raw_contact_name", "name", "full_name", "fullName"]) ||
     "";
   const email = pickString(record, ["enriched_email", "lead_email", "email"]) || "";
@@ -1961,7 +1961,7 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     outreachStatus: pickString(record, ["outreach_status", "outreachStatus"]) || "",
     replyDraftStatus: pickString(record, ["reply_draft_status", "replyDraftStatus"]) || "",
     nextAction: pickString(record, ["next_action", "nextAction"]) || pickString(leadPipeline, ["next_action", "nextAction"]) || "",
-    displayContactName: pickString(record, ["display_contact_name", "displayContactName"]) || formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || ""),
+    displayContactName: formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || ""),
     manualReviewRequired:
       (pickBoolean(record, ["manual_review_required", "manualReviewRequired"]) ?? false)
       || (pickBoolean(record, ["quality_gate_failed", "qualityGateFailed"]) ?? false)
