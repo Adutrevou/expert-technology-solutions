@@ -73,7 +73,7 @@ function LeadsPage() {
 
   const filtered = useMemo(() => {
     return all.filter((lead) => {
-      if (q && !`${lead.name} ${lead.company} ${lead.email}`.toLowerCase().includes(q.toLowerCase())) return false;
+      if (q && !`${lead.displayContactName || lead.name} ${lead.company} ${lead.email}`.toLowerCase().includes(q.toLowerCase())) return false;
       if (industry !== "all" && lead.industry !== industry) return false;
       if (qualification !== "all" && lead.qualification !== qualification) return false;
       if (campaign !== "all" && lead.campaignName !== campaign) return false;
@@ -136,7 +136,7 @@ function LeadsPage() {
   const exportCSV = () => {
     const head = ["Name", "Company", "Title", "Industry", "Location", "Qualification", "Status", "Campaign", "Email"];
     const rows = filtered.map((lead) => [
-      lead.name,
+      lead.displayContactName || lead.name,
       lead.company,
       lead.title,
       lead.industry,
@@ -225,8 +225,9 @@ function LeadsPage() {
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryStat label="Total leads" value={all.length} />
           <SummaryStat label="Researching" value={all.filter((lead) => lead.status === "Researching").length} />
-          <SummaryStat label="Qualified" value={all.filter((lead) => lead.status !== "Researching").length} />
+          <SummaryStat label="Qualified" value={all.filter((lead) => ["Qualified", "Outreach prepared", "Contacted", "Replied", "Needs reply approval"].includes(lead.status)).length} />
           <SummaryStat label="Contacted" value={all.filter((lead) => lead.status === "Contacted" || lead.status === "Replied" || lead.status === "Needs reply approval").length} />
+          <SummaryStat label="Manual review" value={all.filter((lead) => lead.status === "Manual review").length} />
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
@@ -343,7 +344,7 @@ function LeadsPage() {
                       }}
                       className={lead.id === selectedLead?.id ? "cursor-pointer bg-primary/5 ring-1 ring-primary/30" : "cursor-pointer transition-smooth hover:bg-muted/30"}
                     >
-                      <TableCell className="font-medium">{displayValue(lead.name)}</TableCell>
+                      <TableCell className="font-medium">{displayValue(lead.displayContactName || lead.name)}</TableCell>
                       <TableCell className="text-muted-foreground">{displayValue(lead.company)}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">{displayValue(lead.title)}</TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(lead.industry)}</TableCell>
@@ -433,7 +434,7 @@ function LeadMobileCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate font-semibold">{displayValue(lead.name)}</h2>
+          <h2 className="truncate font-semibold">{displayValue(lead.displayContactName || lead.name)}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{displayValue(lead.company)}</p>
         </div>
         <LeadStatusBadge status={lead.status} />
@@ -512,7 +513,7 @@ function LeadDetailPanel({
         <div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">{displayValue(lead.name)}</h2>
+              <h2 className="text-2xl font-semibold">{displayValue(lead.displayContactName || lead.name)}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {displayValue(lead.company)}
                 {lead.title ? ` · ${lead.title}` : ""}
@@ -521,7 +522,7 @@ function LeadDetailPanel({
             <LeadStatusBadge status={currentStatus} />
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <LeadField label="Contact" value={displayValue(lead.name)} />
+            <LeadField label="Contact" value={displayValue(lead.displayContactName || lead.name)} />
             <LeadField label="Company" value={displayValue(lead.company)} />
             <LeadField label="Email" value={displayValue(lead.email)} />
             <LeadField label="Phone" value={displayValue(lead.phone)} />
@@ -535,11 +536,22 @@ function LeadDetailPanel({
             <LeadField label="Lead score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
             <LeadField label="Outreach status" value={displayValue(lead.outreachStatus)} />
             <LeadField label="Next action" value={displayValue(lead.nextAction)} />
+            <LeadField label="Review" value={lead.manualReviewRequired ? "Review lead quality before outreach" : "Ready for outreach checks"} />
             <LeadField label="Last activity" value={lead.lastActivity ? formatDistanceToNow(new Date(lead.lastActivity), { addSuffix: true }) : "Not provided"} />
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted/10 p-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Match reason</p>
             <p className="mt-2 text-sm">{displayValue(lead.matchReason)}</p>
+            {lead.qualityReasons.length ? (
+              <div className="mt-3 rounded-xl border border-border/70 bg-background p-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Quality review</p>
+                <ul className="mt-2 space-y-1">
+                  {lead.qualityReasons.map((reason) => (
+                    <li key={reason}>- {reason}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {lead.decisionMakerPath.length ? (
               <p className="mt-3 text-sm text-muted-foreground">
                 Decision-maker path: {lead.decisionMakerPath.join(" -> ")}

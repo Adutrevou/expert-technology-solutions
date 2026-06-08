@@ -1,14 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { ArrowRight, RefreshCcw } from "lucide-react";
+import { ApprovalStatusBadge } from "@/components/status-badges";
+import { buildApprovalHubItems, getActionableApprovalItems } from "@/lib/approval-hub";
+import { EmptyCard, formatPortalDate, PageIntro, SectionCard, StatCard } from "@/components/client-portal";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { KpiCard } from "@/components/kpi-card";
-import { useDashboardQuery } from "@/lib/leads-api-hooks";
-import { normalizeLead, normalizePendingApproval } from "@/lib/leads-api";
-import { Users, Megaphone, Clock3, Building2, ArrowRight, RefreshCcw } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { Button } from "@/components/ui/button";
-import { LeadStatusBadge, ApprovalStatusBadge } from "@/components/status-badges";
+import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
+import { normalizeLead } from "@/lib/leads-api";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Expert Technology Solutions" }] }),
@@ -17,198 +16,177 @@ export const Route = createFileRoute("/")({
 
 function Dashboard() {
   const dashboardQuery = useDashboardQuery();
+  const summaryQuery = useLeadAgentSummaryQuery();
+  const conversationsQuery = useConversationsQuery();
+  const requestsQuery = useRequestsQuery();
 
-  if (dashboardQuery.isLoading) {
+  if (
+    dashboardQuery.isLoading
+    || summaryQuery.isLoading
+    || conversationsQuery.isLoading
+    || requestsQuery.isLoading
+  ) {
     return <DashboardLoadingState />;
   }
 
-  if (dashboardQuery.isError || !dashboardQuery.data) {
-    const errMsg = (dashboardQuery.error as Error | undefined)?.message;
+  if (
+    dashboardQuery.isError
+    || summaryQuery.isError
+    || conversationsQuery.isError
+    || requestsQuery.isError
+    || !dashboardQuery.data
+    || !summaryQuery.data
+  ) {
     return (
-      <CenteredState
-        title="Dashboard unavailable"
-        description={errMsg || "We couldn’t load the live Intergrai dashboard right now."}
-        action={<Button onClick={() => dashboardQuery.refetch()} variant="outline"><RefreshCcw className="h-4 w-4 mr-2" />Try again</Button>}
-      />
+      <div className="mx-auto max-w-[1240px]">
+        <Card className="rounded-[28px] p-10 text-center shadow-card">
+          <h1 className="text-2xl font-semibold">Dashboard unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {(dashboardQuery.error as Error | undefined)?.message
+              || (summaryQuery.error as Error | undefined)?.message
+              || "We couldn’t load the dashboard right now."}
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Button onClick={() => dashboardQuery.refetch()} variant="outline">
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Try again
+            </Button>
+          </div>
+        </Card>
+      </div>
     );
   }
 
-  const { client, campaign_counts: campaignCounts, lead_counts: leadCounts } = dashboardQuery.data;
-  const recentLeads = dashboardQuery.data.recent_leads.map(normalizeLead);
-  const pendingApprovals = dashboardQuery.data.pending_approvals.map(normalizePendingApproval);
-  const qualificationBreakdown = [
-    { label: "Hot", value: leadCounts.hot, tone: "bg-success" },
-    { label: "Warm", value: leadCounts.warm, tone: "bg-warning" },
-    { label: "Review", value: leadCounts.review, tone: "bg-muted-foreground" },
-    { label: "Not qualified", value: leadCounts.not_qualified, tone: "bg-destructive" },
-  ];
+  const data = dashboardQuery.data;
+  const recentLeads = data.recent_leads.map(normalizeLead).slice(0, 4);
+  const approvalItems = buildApprovalHubItems(
+    summaryQuery.data,
+    conversationsQuery.data || [],
+    requestsQuery.data?.requests || [],
+  );
+  const pendingApprovals = getActionableApprovalItems(approvalItems);
+  const attentionItems = pendingApprovals.slice(0, 4);
 
   return (
-    <div className="space-y-8 max-w-[1400px] mx-auto">
-      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Intergrai Leads API</p>
-          <h1 className="text-3xl md:text-4xl font-bold mt-1">{client.name}</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Live overview powered by Intergrai for {client.domain || client.slug}.
-          </p>
-        </div>
-        <Link to="/campaigns" className="text-sm font-semibold text-primary inline-flex items-center gap-1">
-          Review campaigns <ArrowRight className="h-4 w-4" />
-        </Link>
-      </header>
+    <div className="mx-auto max-w-[1240px] space-y-6">
+      <PageIntro
+        badge="Dashboard"
+        title="How is my lead agent performing?"
+        description="See overall pipeline progress, what is ready now, and what needs your attention next."
+        actions={(
+          <>
+            <Button asChild variant="outline">
+              <Link to="/lead-agent">Open Expert Lead Agent</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/approvals">Review approvals</Link>
+            </Button>
+          </>
+        )}
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Client status" value={client.status === "active" ? "Active" : client.status || "Unknown"} delta={client.domain || client.slug} icon={Building2} accent="info" />
-        <KpiCard label="Campaigns" value={campaignCounts.total} delta={campaignCounts.total === 1 ? "1 live campaign record" : `${campaignCounts.total} live campaign records`} icon={Megaphone} accent="primary" />
-        <KpiCard label="Leads" value={leadCounts.total} delta={leadCounts.total === 0 ? "No synced leads yet" : `${leadCounts.warm} warm · ${leadCounts.review} review`} icon={Users} accent="success" />
-        <KpiCard label="Pending approvals" value={pendingApprovals.length} delta={pendingApprovals.length ? "Waiting on review" : "Nothing waiting"} icon={Clock3} accent="warning" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Campaigns"
+          value={data.campaign_counts.total}
+          detail={data.campaign_counts.total === 1 ? "1 campaign in view" : `${data.campaign_counts.total} campaigns in view`}
+        />
+        <StatCard
+          label="Leads found"
+          value={data.lead_counts.total}
+          detail={data.lead_counts.total === 0 ? "No leads synced yet" : `${data.lead_counts.warm} warm and ${data.lead_counts.hot} hot`}
+        />
+        <StatCard
+          label="Needs approval"
+          value={pendingApprovals.length}
+          detail={pendingApprovals.length ? "Real client decisions waiting now" : "All clear right now"}
+        />
+        <StatCard
+          label="Workspace"
+          value={data.client.status === "active" ? "Ready" : data.client.status || "Unknown"}
+          detail="Sending remains paused until launch approval."
+        />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="p-6 shadow-card">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="font-semibold">Recent leads</h2>
-              <p className="text-xs text-muted-foreground">Latest live records from the shared leads API</p>
-            </div>
-          </div>
-
-          {recentLeads.length === 0 ? (
-            <EmptyPanel
-              title="No recent leads yet"
-              description="The API is connected, but this client does not have any synced leads yet."
-            />
-          ) : (
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <SectionCard
+          title="What needs your attention"
+          description="The most important next decisions are surfaced here first."
+          action={(
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/approvals">
+                Open approval hub
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
+        >
+          {attentionItems.length ? (
             <div className="space-y-3">
-              {recentLeads.map((lead) => (
-                <div key={lead.id} className="rounded-lg border border-border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{lead.name}</p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {lead.company}
-                        {lead.title !== "Unknown title" ? ` · ${lead.title}` : ""}
-                      </p>
+              {attentionItems.map((item) => (
+                <div key={item.id} className="rounded-[22px] border border-border/70 bg-background px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{item.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{item.shortContext}</p>
+                      <p className="mt-3 text-xs text-muted-foreground">{formatPortalDate(item.createdAt)}</p>
                     </div>
-                    <LeadStatusBadge status={lead.qualification} />
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <span>{lead.location}</span>
-                    <span>{lead.campaignName}</span>
-                    {lead.createdAt && <span>{formatDistanceToNow(new Date(lead.createdAt), { addSuffix: true })}</span>}
+                    <ApprovalStatusBadge status={item.status} />
                   </div>
                 </div>
               ))}
             </div>
+          ) : (
+            <EmptyCard
+              title="All clear"
+              description="No approvals need your attention right now."
+            />
           )}
-        </Card>
+        </SectionCard>
 
-        <Card className="p-6 shadow-card">
-          <h2 className="font-semibold">Qualification breakdown</h2>
-          <p className="text-xs text-muted-foreground mb-5">Current live counts by qualification stage</p>
-          <div className="space-y-4">
-            {qualificationBreakdown.map((item) => {
-              const width = leadCounts.total > 0 ? `${(item.value / leadCounts.total) * 100}%` : "0%";
-              return (
-                <div key={item.label}>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span>{item.label}</span>
-                    <span className="font-medium tabular-nums">{item.value.toLocaleString()}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div className={`h-2 rounded-full ${item.tone}`} style={{ width }} />
-                  </div>
+        <SectionCard
+          title="Recent leads"
+          description="A small live snapshot of newly synced opportunities."
+          action={<Button asChild variant="outline" size="sm"><Link to="/campaigns">View campaigns</Link></Button>}
+        >
+          {recentLeads.length ? (
+            <div className="space-y-3">
+              {recentLeads.map((lead) => (
+                <div key={lead.id} className="rounded-[22px] border border-border/70 bg-background px-4 py-4">
+                  <p className="font-medium">{lead.company}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {lead.displayContactName || lead.name}{lead.title !== "Unknown title" ? ` · ${lead.title}` : ""}
+                  </p>
+                  <p className="mt-2 text-sm text-foreground">{lead.campaignName || "No campaign linked"}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{lead.location}</p>
                 </div>
-              );
-            })}
-          </div>
-        </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyCard
+              title="No recent leads yet"
+              description="The dashboard is connected. Leads will appear here once qualification activity continues."
+            />
+          )}
+        </SectionCard>
       </div>
-
-      <Card className="p-6 shadow-card">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="font-semibold">Pending approvals</h2>
-            <p className="text-xs text-muted-foreground">Requests returned by the live dashboard endpoint</p>
-          </div>
-        </div>
-
-        {pendingApprovals.length === 0 ? (
-          <EmptyPanel
-            title="No approvals pending"
-            description="There are no campaign or lead actions waiting for review."
-          />
-        ) : (
-          <div className="space-y-3">
-            {pendingApprovals.map((item) => (
-              <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-border p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-sm text-muted-foreground">{item.summary}</p>
-                  {item.createdAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Raised {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                    </p>
-                  )}
-                </div>
-                <ApprovalStatusBadge status={item.status} />
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
 
 function DashboardLoadingState() {
   return (
-    <div className="space-y-8 max-w-[1400px] mx-auto">
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-36" />
-        <Skeleton className="h-10 w-80" />
-        <Skeleton className="h-4 w-64" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mx-auto max-w-[1240px] space-y-6">
+      <Skeleton className="h-44 rounded-[32px]" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-32" />
+          <Skeleton key={index} className="h-32 rounded-[24px]" />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Skeleton className="h-96" />
-        <Skeleton className="h-96" />
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Skeleton className="h-[360px] rounded-[28px]" />
+        <Skeleton className="h-[360px] rounded-[28px]" />
       </div>
-      <Skeleton className="h-72" />
-    </div>
-  );
-}
-
-function EmptyPanel({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
-      <p className="font-medium">{title}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
-function CenteredState({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="max-w-[1400px] mx-auto">
-      <Card className="p-10 text-center shadow-card">
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-        {action ? <div className="mt-6 flex justify-center">{action}</div> : null}
-      </Card>
     </div>
   );
 }

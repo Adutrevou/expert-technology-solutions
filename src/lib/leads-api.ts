@@ -771,6 +771,7 @@ export interface LeadActivityRecord {
 export interface LeadRecord {
   id: string;
   name: string;
+  displayContactName: string;
   company: string;
   title: string;
   industry: string;
@@ -792,6 +793,8 @@ export interface LeadRecord {
   outreachStatus: string;
   replyDraftStatus: string;
   nextAction: string;
+  manualReviewRequired: boolean;
+  qualityReasons: string[];
   lastActivity?: string;
   createdAt?: string;
 }
@@ -1381,6 +1384,87 @@ function normalizeCount(value: unknown): number {
   return 0;
 }
 
+function normalizeEmailLocalPart(value: unknown): string {
+  const email = String(value || "").trim();
+  if (!email || !email.includes("@")) {
+    return "";
+  }
+
+  return email.split("@")[0].trim().toLowerCase();
+}
+
+function isGenericInboxEmail(value: unknown): boolean {
+  const localPart = normalizeEmailLocalPart(value);
+  return Boolean(localPart) && /^(info|sales|admin|support|hello|contact|enquiries?|enquiry|office|team|accounts|billing|finance|marketing|bookings?|careers?|jobs?|hr|help|mw\d+|no[-_.]?reply)$/i.test(localPart);
+}
+
+function formatReadableLocalPart(localPart: string): string {
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => (part.match(/^\d+$/) ? part : `${part.charAt(0).toUpperCase()}${part.slice(1)}`))
+    .join(" ");
+}
+
+function getPersonalDisplayNameFromEmail(email: unknown): string {
+  const value = String(email || "").trim();
+  if (!value || isGenericInboxEmail(value)) {
+    return "";
+  }
+
+  const localPart = normalizeEmailLocalPart(value);
+  return localPart ? formatReadableLocalPart(localPart) : "";
+}
+
+function isPlaceholderLeadLabel(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return [
+    "",
+    "-",
+    "n/a",
+    "na",
+    "unknown",
+    "unknown contact",
+    "unknown title",
+    "unnamed lead",
+    "untitled",
+    "tbd"
+  ].includes(normalized);
+}
+
+function formatLeadDisplayName(record: Record<string, unknown>, fallbackCompany = ""): string {
+  const company = pickString(record, ["company_name", "company", "lead_company_name", "raw_company_name"]) || fallbackCompany;
+  const serverDisplayName = pickString(record, ["display_contact_name", "displayContactName"]) || "";
+  const contactName =
+    serverDisplayName ||
+    pickString(record, ["contact_name", "enriched_contact_name", "lead_contact_name", "raw_contact_name", "name", "full_name", "fullName"]) ||
+    "";
+  const email = pickString(record, ["enriched_email", "lead_email", "email"]) || "";
+  const title = pickString(record, ["enriched_contact_title", "lead_title", "title", "contact_title"]) || "";
+
+  if (contactName && !isPlaceholderLeadLabel(contactName)) {
+    return contactName;
+  }
+
+  const emailName = getPersonalDisplayNameFromEmail(email);
+  if (emailName) {
+    return emailName;
+  }
+
+  if (title && company) {
+    return `${title} at ${company}`;
+  }
+
+  if (company) {
+    return isGenericInboxEmail(email) ? `Generic inbox at ${company}` : `Unknown contact at ${company}`;
+  }
+
+  return isGenericInboxEmail(email) ? "Generic inbox" : "Unknown contact";
+}
+
 function normalizeStatusCounts(value: unknown): Array<{ status: string; count: number }> {
   if (asArray(value).length) {
     return asArray(value)
@@ -1823,9 +1907,9 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const firstName = pickString(record, ["first_name", "firstName"]);
   const lastName = pickString(record, ["last_name", "lastName"]);
   const name =
-    pickString(record, ["name", "full_name", "fullName", "contact_name", "contactName"]) ||
+    formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || "") ||
     [firstName, lastName].filter(Boolean).join(" ").trim() ||
-    "Unnamed lead";
+    "Unknown contact";
 
   const location =
     pickString(record, ["location"]) ||
@@ -1870,6 +1954,9 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     outreachStatus: pickString(record, ["outreach_status", "outreachStatus"]) || "",
     replyDraftStatus: pickString(record, ["reply_draft_status", "replyDraftStatus"]) || "",
     nextAction: pickString(record, ["next_action", "nextAction"]) || pickString(leadPipeline, ["next_action", "nextAction"]) || "",
+    displayContactName: pickString(record, ["display_contact_name", "displayContactName"]) || formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || ""),
+    manualReviewRequired: (pickBoolean(record, ["manual_review_required", "manualReviewRequired"]) ?? false) || String(record.status || record.lead_status || record.workflow_status || "").toLowerCase() === "manual review",
+    qualityReasons: asArray(record.quality_reasons ?? record.qualityReasons).map((item) => String(item || "")).filter(Boolean),
     lastActivity: normalizeTimestamp(record.last_activity ?? record.lastActivity ?? leadPipeline.last_activity ?? leadPipeline.lastActivity),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
@@ -2174,6 +2261,7 @@ function normalizeFollowupSequence(value: unknown, index = 0): FollowupSequenceR
 
 function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRecord {
   const record = asRecord(value);
+  const companyName = pickString(record, ["lead_company_name", "leadCompanyName", "raw_company_name", "rawCompanyName", "company_name", "companyName"]) || "";
   return {
     id: pickString(record, ["id", "_id"]) || `outreach-queue-${index}`,
     campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
@@ -2183,10 +2271,10 @@ function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRec
     mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "waiting_for_mailbox",
     variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
     sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
-    leadCompanyName: pickString(record, ["lead_company_name", "leadCompanyName"]) || "",
+    leadCompanyName: companyName || "",
     rawCompanyName: pickString(record, ["raw_company_name", "rawCompanyName"]) || "",
     recipientEmail: pickString(record, ["recipient_email", "recipientEmail", "enriched_email", "enrichedEmail", "lead_email", "leadEmail"]) || "",
-    recipientName: pickString(record, ["recipient_name", "recipientName", "enriched_contact_name", "enrichedContactName", "lead_contact_name", "leadContactName"]) || "",
+    recipientName: pickString(record, ["recipient_display_name", "recipientDisplayName", "recipient_name", "recipientName", "enriched_contact_name", "enrichedContactName", "lead_contact_name", "leadContactName"]) || formatLeadDisplayName(record, companyName),
     renderPreviewAvailable: pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
     blockers: asArray(record.blockers).map((item, blockerIndex) => normalizeOutreachBlocker(item, blockerIndex)),
     resolvedImage: normalizeResolvedImagePreview(record.resolved_image ?? record.resolvedImage),
@@ -2263,13 +2351,14 @@ function normalizeReplyDraft(value: unknown, index = 0): ReplyDraftRecord {
 
 function normalizeConversation(value: unknown, index = 0): ConversationRecord {
   const record = asRecord(value);
+  const companyName = pickString(record, ["company_name", "companyName"]) || "";
   return {
     id: pickString(record, ["id", "_id"]) || `conversation-${index}`,
     outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
     campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
-    companyName: pickString(record, ["company_name", "companyName"]) || "",
-    contactName: pickString(record, ["contact_name", "contactName"]) || "",
+    companyName,
+    contactName: pickString(record, ["contact_name", "contactName", "contact_display_name", "contactDisplayName"]) || formatLeadDisplayName(record, companyName),
     contactEmail: pickString(record, ["contact_email", "contactEmail"]) || "",
     status: pickString(record, ["status"]) || "prepared",
     replyStatus: pickString(record, ["reply_status", "replyStatus"]) || "",

@@ -7,6 +7,7 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   reviewed: { label: "Reviewed", cls: "bg-muted text-muted-foreground" },
   review: { label: "Review", cls: "bg-muted text-muted-foreground" },
   Researching: { label: "Researching", cls: "bg-muted text-muted-foreground" },
+  "Manual review": { label: "Manual review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   Qualified: { label: "Qualified", cls: "bg-info/15 text-info border-info/30" },
   "Outreach prepared": { label: "Outreach prepared", cls: "bg-primary/15 text-primary border-primary/30" },
   contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
