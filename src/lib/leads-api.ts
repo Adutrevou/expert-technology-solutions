@@ -1955,8 +1955,20 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     replyDraftStatus: pickString(record, ["reply_draft_status", "replyDraftStatus"]) || "",
     nextAction: pickString(record, ["next_action", "nextAction"]) || pickString(leadPipeline, ["next_action", "nextAction"]) || "",
     displayContactName: pickString(record, ["display_contact_name", "displayContactName"]) || formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || ""),
-    manualReviewRequired: (pickBoolean(record, ["manual_review_required", "manualReviewRequired"]) ?? false) || String(record.status || record.lead_status || record.workflow_status || "").toLowerCase() === "manual review",
-    qualityReasons: asArray(record.quality_reasons ?? record.qualityReasons).map((item) => String(item || "")).filter(Boolean),
+    manualReviewRequired:
+      (pickBoolean(record, ["manual_review_required", "manualReviewRequired"]) ?? false)
+      || (pickBoolean(record, ["quality_gate_failed", "qualityGateFailed"]) ?? false)
+      || asArray(record.quality_gate_blockers ?? record.qualityGateBlockers).length > 0
+      || String(record.status || record.lead_status || record.workflow_status || "").toLowerCase() === "manual review",
+    qualityReasons: [
+      ...asArray(record.quality_reasons ?? record.qualityReasons).map((item) => String(item || "")).filter(Boolean),
+      ...asArray(record.quality_gate_blockers ?? record.qualityGateBlockers)
+        .map((item) => {
+          const blocker = asRecord(item);
+          return String(blocker.message || blocker.code || item || "");
+        })
+        .filter(Boolean),
+    ],
     lastActivity: normalizeTimestamp(record.last_activity ?? record.lastActivity ?? leadPipeline.last_activity ?? leadPipeline.lastActivity),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
@@ -2529,6 +2541,7 @@ function normalizeMicrosoftReplySyncStatus(value: unknown): MicrosoftReplySyncSt
   const record = asRecord(value);
   const mailbox = asRecord(record.mailbox);
   const connectionCheck = normalizeMailboxConnectionCheck(record.connection_check ?? record.connectionCheck);
+  const connectionCheckRecord = asRecord(connectionCheck);
 
   return {
     mailboxId: pickString(mailbox, ["id", "_id"]) || "",
@@ -2536,9 +2549,9 @@ function normalizeMicrosoftReplySyncStatus(value: unknown): MicrosoftReplySyncSt
     mailboxEmail: pickString(mailbox, ["from_email", "fromEmail"]) || (connectionCheck?.expectedMailbox ?? ""),
     providerType: pickString(record, ["provider_type", "providerType"]) || pickString(mailbox, ["provider_type", "providerType"]) || "microsoft",
     connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || connectionCheck?.connectionStatus || "not_connected",
-    connected: pickBoolean(connectionCheck, ["connected"]) ?? false,
-    configured: pickBoolean(connectionCheck, ["oauthConfigured"]) ?? false,
-    credentialsStored: pickBoolean(connectionCheck, ["credentialsStored"]) ?? false,
+    connected: pickBoolean(connectionCheckRecord, ["connected"]) ?? false,
+    configured: pickBoolean(connectionCheckRecord, ["oauthConfigured"]) ?? false,
+    credentialsStored: pickBoolean(connectionCheckRecord, ["credentialsStored"]) ?? false,
     signedInMailbox: connectionCheck?.signedInMailbox || "",
     signedInUser: connectionCheck?.signedInUser || "",
     blockers: connectionCheck?.blockers || [],

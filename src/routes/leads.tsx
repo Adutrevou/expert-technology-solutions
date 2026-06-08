@@ -449,7 +449,7 @@ function LeadMobileCard({
         <LeadField label="Location" value={displayValue(lead.location)} />
         <LeadField label="Campaign" value={displayValue(lead.campaignName)} />
         <LeadField label="Score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
-        <LeadField label="Source" value={displayValue(lead.sourceEvidence)} />
+        <LeadField label="Source" value={formatSourceEvidence(lead)} />
       </dl>
     </button>
   );
@@ -532,7 +532,7 @@ function LeadDetailPanel({
             <LeadField label="Location" value={displayValue(lead.location)} />
             <LeadField label="Website" value={displayValue(lead.website || lead.domain)} />
             <LeadField label="LinkedIn" value={displayValue(lead.linkedinUrl || lead.companyLinkedin)} />
-            <LeadField label="Source evidence" value={displayValue(lead.sourceEvidence)} />
+            <LeadField label="Source evidence" value={formatSourceEvidence(lead)} />
             <LeadField label="Lead score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
             <LeadField label="Outreach status" value={displayValue(lead.outreachStatus)} />
             <LeadField label="Next action" value={displayValue(lead.nextAction)} />
@@ -709,6 +709,14 @@ function LeadField({ label, value }: { label: string; value: string }) {
 
 function displayValue(value?: string | null) {
   return value?.trim() ? value : "Not provided";
+}
+
+function formatSourceEvidence(lead: LeadRecord) {
+  if (lead.sourceEvidence?.trim()) {
+    return lead.sourceEvidence;
+  }
+
+  return "Source evidence missing";
 }
 
 function activityLabel(item: LeadActivityRecord) {
