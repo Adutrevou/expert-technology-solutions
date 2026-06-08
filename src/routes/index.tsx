@@ -64,9 +64,9 @@ function Dashboard() {
     conversationsQuery.data || [],
     requestsQuery.data?.requests || [],
   );
-  const pendingApprovals = getActionableApprovalItems(approvalItems);
+  const pendingApprovals = getActionableApprovalItems(approvalItems).filter((item) => item.kind !== "credit_approval");
   const attentionItems = pendingApprovals.slice(0, 4);
-  const repliesReceived = summaryQuery.data.campaigns.reduce((total, campaign) => total + Number(campaign.replies || 0), 0);
+  const leadCounts = summaryQuery.data.clientFacingCounts;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -94,22 +94,22 @@ function Dashboard() {
         />
         <StatCard
           label="Leads found"
-          value={data.lead_counts.total}
-          detail={data.lead_counts.total === 0 ? "No leads synced yet" : `${data.lead_counts.warm} warm and ${data.lead_counts.hot} hot`}
+          value={leadCounts.totalLeadsFound}
+          detail={leadCounts.totalLeadsFound === 0 ? "No visible leads yet" : `${leadCounts.qualifiedLeads} qualified and ${leadCounts.outreachPrepared} prepared`}
         />
         <StatCard
           label="Qualified leads"
-          value={summaryQuery.data.clientFacingCounts.qualifiedLeads}
+          value={leadCounts.qualifiedLeads}
           detail="Lead-quality gated opportunities in the visible pipeline."
         />
         <StatCard
           label="Outreach sent"
-          value={summaryQuery.data.clientFacingCounts.emailsSent}
+          value={leadCounts.emailsSent}
           detail="One-by-one outreach already sent."
         />
         <StatCard
           label="Replies received"
-          value={repliesReceived}
+          value={leadCounts.repliesReceived}
           detail="Inbound replies captured across live conversations."
         />
         <StatCard
@@ -181,7 +181,7 @@ function Dashboard() {
                 <div key={lead.id} className="rounded-[22px] border border-border/70 bg-background px-4 py-4">
                   <p className="font-medium">{lead.company}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {lead.displayContactName || lead.name}{lead.title !== "Unknown title" ? ` · ${lead.title}` : ""}
+                    {lead.displayContactName || lead.name}{lead.title ? ` · ${lead.title}` : ""}
                   </p>
                   <p className="mt-2 text-sm text-foreground">{lead.campaignName || "No campaign linked"}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{lead.location}</p>

@@ -61,11 +61,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [authError, setAuthError] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const t = (localStorage.getItem(STORAGE_KEYS.theme) as "light" | "dark") || "dark";
+    const t = (localStorage.getItem(STORAGE_KEYS.theme) as "light" | "dark") || "light";
     setTheme(t);
     document.documentElement.classList.toggle("dark", t === "dark");
   }, []);

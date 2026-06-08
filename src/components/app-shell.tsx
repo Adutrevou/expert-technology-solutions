@@ -1,10 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit, Users, ClipboardList, MessageSquareReply } from "lucide-react";
+import { LayoutDashboard, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit, Users, ClipboardList, MessageSquareReply, Menu } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -27,6 +29,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = router.location.pathname;
   const isIntergraiAdmin = user?.role === "intergrai_admin";
   const navItems = BASE_NAV;
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const currentPage = navItems.find(({ to }) => (to === "/" ? path === "/" : path.startsWith(to)));
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -75,16 +79,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="sticky top-0 z-20 h-18 border-b border-border/70 bg-background/80 backdrop-blur-xl">
-          <div className="flex h-full items-center justify-between gap-4 px-4 md:px-8">
+          <div className="flex h-full items-center justify-between gap-3 px-3 sm:px-4 md:px-8">
             <div className="flex items-center gap-3 min-w-0">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0 lg:hidden"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
               <div className="flex h-10 items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3">
                 <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
                   {client.logoUrl ? (
                     <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
                   ) : client.initials}
                 </span>
-                <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">{client.companyName}</span>
+                <span className="truncate max-w-[150px] text-sm font-medium sm:max-w-[180px]">{client.companyName}</span>
               </div>
+              {currentPage ? (
+                <div className="min-w-0 lg:hidden">
+                  <p className="truncate text-xs uppercase tracking-[0.22em] text-muted-foreground">Workspace</p>
+                  <p className="truncate text-sm font-medium">{currentPage.label}</p>
+                </div>
+              ) : null}
               <Badge variant="outline" className="hidden gap-1 text-[10px] md:inline-flex">
                 <Activity className="h-3 w-3" />
                 Intergrai portal
@@ -97,13 +116,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
                 {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 h-9 px-2">
+                  <Button variant="ghost" className="h-9 gap-2 px-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-primary text-xs font-bold text-primary-foreground">
                       {user?.name?.[0]?.toUpperCase()}
                     </div>
@@ -127,19 +146,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <nav className="flex gap-1 overflow-x-auto border-b border-border/70 bg-background/60 px-4 py-2 lg:hidden">
-          {navItems.map(({ to, label, icon: Icon }) => {
-            const active = to === "/" ? path === "/" : path.startsWith(to);
-            return (
-              <Link key={to} to={to} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-smooth ${active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent side="left" className="w-[min(22rem,calc(100vw-1rem))] overflow-y-auto rounded-r-[28px] border-sidebar-border/80 bg-sidebar/95 p-0 text-sidebar-foreground">
+            <div className="flex h-full flex-col">
+              <div className="flex h-20 items-center border-b border-sidebar-border/80 px-5">
+                <img src={logo} alt="Expert Technology Solutions" className="h-10 w-auto" />
+              </div>
+              <SheetHeader className="px-5 py-5 text-left">
+                <SheetTitle className="text-sidebar-foreground">Expert workspace</SheetTitle>
+                <SheetDescription className="text-sidebar-foreground/70">
+                  Mobile navigation for campaigns, approvals, outreach, and reporting.
+                </SheetDescription>
+              </SheetHeader>
+              <nav className="flex-1 space-y-1 px-3 pb-5">
+                {navItems.map(({ to, label, icon: Icon }) => {
+                  const active = to === "/" ? path === "/" : path.startsWith(to);
+                  return (
+                    <Link
+                      key={to}
+                      to={to}
+                      onClick={() => setMobileNavOpen(false)}
+                      className={`flex min-h-11 items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-smooth ${
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-card"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="border-t border-sidebar-border/80 px-5 py-4 text-xs text-sidebar-foreground/65">
+                Outreach stays paused until launch approval. Auto-replies remain off.
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
 
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-8">{children}</main>
       </div>
     </div>
   );

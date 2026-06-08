@@ -199,6 +199,7 @@
     color: var(--color-foreground);
     background-image: var(--gradient-glow);
     background-attachment: fixed;
+    overflow-x: hidden;
   }
   input, textarea, select {
     color: var(--color-foreground);

@@ -4,6 +4,7 @@ import appCss from "../styles.css?url";
 import { AppStateProvider, useApp } from "@/lib/app-state";
 import { AppShell } from "@/components/app-shell";
 import { AppQueryProvider } from "@/lib/query-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -47,7 +48,7 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" },
     ],
   }),
   shellComponent: RootShell,
@@ -57,7 +58,7 @@ export const Route = createRootRoute({
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
@@ -74,6 +75,7 @@ function RootComponent() {
     <AppQueryProvider>
       <AppStateProvider>
         <Gate />
+        <Toaster richColors />
       </AppStateProvider>
     </AppQueryProvider>
   );
@@ -84,22 +86,23 @@ function Gate() {
   const router = useRouterState();
   const navigate = useNavigate();
   const path = router.location.pathname;
+  const isPublicAuthPath = path === "/login" || path === "/forgot-password" || path === "/reset-password";
 
   useEffect(() => {
     if (authStatus === "loading") return;
-    if (!isAuthenticated && path !== "/login") navigate({ to: "/login", replace: true });
-    if (isAuthenticated && path === "/login") navigate({ to: "/", replace: true });
-  }, [authStatus, isAuthenticated, path, navigate]);
+    if (!isAuthenticated && !isPublicAuthPath) navigate({ to: "/login", replace: true });
+    if (isAuthenticated && isPublicAuthPath) navigate({ to: "/", replace: true });
+  }, [authStatus, isAuthenticated, isPublicAuthPath, navigate]);
 
   if (authStatus === "loading") {
     return <LoadingGate />;
   }
 
-  if (isAuthenticated && path === "/login") {
+  if (isAuthenticated && isPublicAuthPath) {
     return <LoadingGate />;
   }
 
-  if (path === "/login") return <Outlet />;
+  if (isPublicAuthPath) return <Outlet />;
   if (!isAuthenticated) return <LoadingGate />;
   return (
     <AppShell>

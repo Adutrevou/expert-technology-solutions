@@ -97,6 +97,9 @@ export interface EnrichmentCreditApprovalRecord {
   queueItemId: string;
   approvalId: string;
   companyName: string;
+  contactName: string;
+  targetRole: string;
+  providerLabel: string;
   rawLeadId: string;
   rawLeadStatus: string;
   campaignId: string;
@@ -106,6 +109,8 @@ export interface EnrichmentCreditApprovalRecord {
   providerStatus: string;
   apolloPlanned: boolean;
   hunterPlanned: boolean;
+  approvalDetails: Record<string, unknown>;
+  approvalMetadata: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -665,6 +670,8 @@ export interface LeadAgentSummary {
   pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
   clientFacingCounts: LeadAgentClientFacingCounts;
   currentCampaignFocus: string;
+  expertLeadAgentState: string;
+  expertLeadAgentStateLabel: string;
   newLeadsSourcedToday: number;
   repliesWaitingApproval: number;
   adminSummary: LeadAgentAdminSummary;
@@ -1444,7 +1451,6 @@ function formatLeadDisplayName(record: Record<string, unknown>, fallbackCompany 
     pickString(record, ["contact_name", "enriched_contact_name", "lead_contact_name", "raw_contact_name", "name", "full_name", "fullName"]) ||
     "";
   const email = pickString(record, ["enriched_email", "lead_email", "email"]) || "";
-  const title = pickString(record, ["enriched_contact_title", "lead_title", "title", "contact_title"]) || "";
 
   if (contactName && !isPlaceholderLeadLabel(contactName)) {
     return contactName;
@@ -1455,15 +1461,11 @@ function formatLeadDisplayName(record: Record<string, unknown>, fallbackCompany 
     return emailName;
   }
 
-  if (title && company) {
-    return `${title} at ${company}`;
-  }
-
   if (company) {
-    return isGenericInboxEmail(email) ? `Generic inbox at ${company}` : `Unknown contact at ${company}`;
+    return isGenericInboxEmail(email) ? `Generic inbox at ${company}` : "Decision-maker not verified yet";
   }
 
-  return isGenericInboxEmail(email) ? "Generic inbox" : "Unknown contact";
+  return isGenericInboxEmail(email) ? "Generic inbox" : "Decision-maker not verified yet";
 }
 
 function normalizeStatusCounts(value: unknown): Array<{ status: string; count: number }> {
@@ -1779,6 +1781,8 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       meetingsQuoteRequests: meetingsCount,
     },
     currentCampaignFocus: pickString(record, ["current_campaign_focus", "currentCampaignFocus"]) || "",
+    expertLeadAgentState: pickString(record, ["expert_lead_agent_state", "expertLeadAgentState"]) || "",
+    expertLeadAgentStateLabel: pickString(record, ["expert_lead_agent_state_label", "expertLeadAgentStateLabel"]) || "",
     newLeadsSourcedToday: normalizeCount(record.new_leads_sourced_today ?? record.newLeadsSourcedToday),
     repliesWaitingApproval: normalizeCount(record.replies_waiting_approval ?? record.repliesWaitingApproval),
     adminSummary: {
@@ -1912,7 +1916,7 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const name =
     formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || "") ||
     [firstName, lastName].filter(Boolean).join(" ").trim() ||
-    "Unknown contact";
+    "Decision-maker not verified yet";
 
   const location =
     pickString(record, ["location"]) ||
@@ -2657,10 +2661,24 @@ function normalizeVerifiedContactPlanning(value: unknown, index = 0): VerifiedCo
 
 function normalizeEnrichmentCreditApproval(value: unknown, index = 0): EnrichmentCreditApprovalRecord {
   const record = asRecord(value);
+  const approvalDetails = asRecord(record.approval_details ?? record.approvalDetails ?? record.details);
+  const approvalMetadata = asRecord(record.approval_metadata ?? record.approvalMetadata ?? record.metadata);
   return {
     queueItemId: pickString(record, ["queue_item_id", "queueItemId", "id"]) || `queue-item-${index}`,
     approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
     companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed raw lead",
+    contactName:
+      pickString(record, ["contact_name", "contactName", "raw_contact_name", "rawContactName"]) ||
+      pickString(approvalDetails, ["contact_name", "contactName"]) ||
+      "",
+    targetRole:
+      pickString(record, ["target_role", "targetRole", "raw_contact_title", "rawContactTitle"]) ||
+      pickString(approvalDetails, ["target_role", "targetRole"]) ||
+      "",
+    providerLabel:
+      pickString(record, ["provider_label", "providerLabel"]) ||
+      pickString(approvalDetails, ["provider", "provider_label", "providerLabel"]) ||
+      "",
     rawLeadId: pickString(record, ["raw_lead_id", "rawLeadId"]) || "",
     rawLeadStatus: pickString(record, ["raw_lead_status", "rawLeadStatus"]) || "",
     campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
@@ -2670,6 +2688,8 @@ function normalizeEnrichmentCreditApproval(value: unknown, index = 0): Enrichmen
     providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
     apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
     hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
+    approvalDetails,
+    approvalMetadata,
     createdAt: normalizeTimestamp(record.approval_created_at ?? record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.approval_updated_at ?? record.updated_at ?? record.updatedAt),
   };

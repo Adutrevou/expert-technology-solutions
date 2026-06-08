@@ -37,6 +37,16 @@ const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> =
   { value: "converted", label: "Converted" },
   { value: "rejected", label: "Rejected" },
 ];
+const LEAD_PIPELINE_STATUSES = [
+  "all",
+  "Researching",
+  "Needs review",
+  "Qualified",
+  "Outreach prepared",
+  "Contacted",
+  "Replied",
+  "Needs reply approval",
+] as const;
 
 function LeadsPage() {
   const leadsQuery = useLeadsQuery();
@@ -46,7 +56,7 @@ function LeadsPage() {
 
   const [q, setQ] = useState("");
   const [industry, setIndustry] = useState("all");
-  const [qualification, setQualification] = useState("all");
+  const [pipelineStatus, setPipelineStatus] = useState<(typeof LEAD_PIPELINE_STATUSES)[number]>("all");
   const [campaign, setCampaign] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -71,12 +81,12 @@ function LeadsPage() {
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
   const statusCounts = useMemo(() => {
-    const count = (statuses: string[]) => all.filter((lead) => statuses.includes(lead.status)).length;
+    const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(lead.status))).length;
     return {
       visible: all.length,
-      qualified: count(["Qualified", "Outreach prepared", "Contacted", "Replied", "Needs reply approval"]),
+      qualified: count(["Qualified"]),
       researching: count(["Researching"]),
-      manualReview: count(["Manual review"]),
+      manualReview: count(["Needs review"]),
       outreachPrepared: count(["Outreach prepared"]),
       contacted: count(["Contacted"]),
       replied: count(["Replied"]),
@@ -88,25 +98,26 @@ function LeadsPage() {
     return all.filter((lead) => {
       if (q && !`${lead.displayContactName || lead.name} ${lead.company} ${lead.email}`.toLowerCase().includes(q.toLowerCase())) return false;
       if (industry !== "all" && lead.industry !== industry) return false;
-      if (qualification !== "all" && lead.qualification !== qualification) return false;
+      if (pipelineStatus !== "all" && normalizeLeadPipelineStatus(lead.status) !== pipelineStatus) return false;
       if (campaign !== "all" && lead.campaignName !== campaign) return false;
       return true;
     });
-  }, [all, q, industry, qualification, campaign]);
+  }, [all, q, industry, pipelineStatus, campaign]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const selectedLead = filtered.find((lead) => lead.id === selectedLeadId) || filtered[0] || null;
   const activityQuery = useLeadActivityQuery(selectedLead?.id);
   const activity = activityQuery.data ?? [];
-  const currentStatus = selectedLead?.status || "unknown";
+  const currentStatus = normalizeLeadPipelineStatus(selectedLead?.status || "Researching");
+  const currentWorkflowStatus = mapPipelineStatusToWorkflowStatus(currentStatus);
   const statusOptions = useMemo(() => {
-    if (!currentStatus || LEAD_STATUS_OPTIONS.some((item) => item.value === currentStatus)) {
+    if (!currentWorkflowStatus || LEAD_STATUS_OPTIONS.some((item) => item.value === currentWorkflowStatus)) {
       return LEAD_STATUS_OPTIONS;
     }
 
-    return [{ value: currentStatus as LeadWorkflowStatus, label: formatStatusLabel(currentStatus) }, ...LEAD_STATUS_OPTIONS];
-  }, [currentStatus]);
+    return [{ value: currentWorkflowStatus as LeadWorkflowStatus, label: formatStatusLabel(currentWorkflowStatus) }, ...LEAD_STATUS_OPTIONS];
+  }, [currentWorkflowStatus]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -121,10 +132,10 @@ function LeadsPage() {
     if (campaign !== "all" && !visibleCampaigns.includes(campaign)) {
       setCampaign("all");
     }
-    if (qualification !== "all" && !all.some((lead) => lead.qualification === qualification)) {
-      setQualification("all");
+    if (pipelineStatus !== "all" && !all.some((lead) => normalizeLeadPipelineStatus(lead.status) === pipelineStatus)) {
+      setPipelineStatus("all");
     }
-  }, [all, campaign, industry, qualification, visibleCampaigns, visibleIndustries]);
+  }, [all, campaign, industry, pipelineStatus, visibleCampaigns, visibleIndustries]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -139,7 +150,8 @@ function LeadsPage() {
   }, [filtered, selectedLeadId]);
 
   useEffect(() => {
-    setStatusDraft(selectedLead?.status || "new");
+    const visibleStatus = normalizeLeadPipelineStatus(selectedLead?.status || "Researching");
+    setStatusDraft(mapPipelineStatusToWorkflowStatus(visibleStatus));
     setCommentDraft("");
     setStatusNotice(null);
     setCommentNotice(null);
@@ -147,15 +159,14 @@ function LeadsPage() {
   }, [selectedLead?.id, selectedLead?.status]);
 
   const exportCSV = () => {
-    const head = ["Name", "Company", "Title", "Industry", "Location", "Qualification", "Status", "Campaign", "Email"];
+    const head = ["Name", "Company", "Title", "Industry", "Location", "Pipeline status", "Campaign", "Email"];
     const rows = filtered.map((lead) => [
       lead.displayContactName || lead.name,
       lead.company,
       lead.title,
       lead.industry,
       lead.location,
-      lead.qualification,
-      lead.status,
+      normalizeLeadPipelineStatus(lead.status),
       lead.campaignName,
       lead.email,
     ]);
@@ -239,7 +250,7 @@ function LeadsPage() {
           <SummaryStat label="Visible leads" value={statusCounts.visible} />
           <SummaryStat label="Qualified" value={statusCounts.qualified} />
           <SummaryStat label="Researching" value={statusCounts.researching} />
-          <SummaryStat label="Manual review" value={statusCounts.manualReview} />
+          <SummaryStat label="Needs review" value={statusCounts.manualReview} />
           <SummaryStat label="Outreach prepared" value={statusCounts.outreachPrepared} />
           <SummaryStat label="Contacted" value={statusCounts.contacted} />
           <SummaryStat label="Replied" value={statusCounts.replied} />
@@ -249,7 +260,7 @@ function LeadsPage() {
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Total visible: {statusCounts.visible}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Qualified: {statusCounts.qualified}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Researching: {statusCounts.researching}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Manual review: {statusCounts.manualReview}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs review: {statusCounts.manualReview}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replied: {statusCounts.replied}</span>
         </div>
@@ -265,14 +276,17 @@ function LeadsPage() {
               {visibleIndustries.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={qualification} onValueChange={(value) => { setQualification(value); setPage(1); }}>
-            <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Qualification" /></SelectTrigger>
+          <Select value={pipelineStatus} onValueChange={(value) => { setPipelineStatus(value as (typeof LEAD_PIPELINE_STATUSES)[number]); setPage(1); }}>
+            <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Pipeline status" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All qualifications</SelectItem>
-              <SelectItem value="review">Review</SelectItem>
-              <SelectItem value="warm">Warm</SelectItem>
-              <SelectItem value="hot">Hot</SelectItem>
-              <SelectItem value="not_qualified">Not qualified</SelectItem>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="Researching">Researching</SelectItem>
+              <SelectItem value="Needs review">Needs review</SelectItem>
+              <SelectItem value="Qualified">Qualified</SelectItem>
+              <SelectItem value="Outreach prepared">Outreach prepared</SelectItem>
+              <SelectItem value="Contacted">Contacted</SelectItem>
+              <SelectItem value="Replied">Replied</SelectItem>
+              <SelectItem value="Needs reply approval">Needs reply approval</SelectItem>
             </SelectContent>
           </Select>
           <Select value={campaign} onValueChange={(value) => { setCampaign(value); setPage(1); }}>
@@ -402,6 +416,7 @@ function LeadsPage() {
             commentError={commentError || (addCommentMutation.error as Error | undefined)?.message || null}
             commentNotice={commentNotice}
             currentStatus={currentStatus}
+            currentWorkflowStatus={currentWorkflowStatus}
             onCommentChange={setCommentDraft}
             onCommentSubmit={handleCommentSubmit}
             onStatusChange={setStatusDraft}
@@ -464,7 +479,7 @@ function LeadMobileCard({
         <LeadStatusBadge status={lead.status} />
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <LeadStatusBadge status={lead.qualification} />
+        <LeadStatusBadge status={lead.status} />
         {lead.outreachStatus ? <LeadStatusBadge status={lead.outreachStatus} /> : null}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -489,6 +504,7 @@ function LeadDetailPanel({
   commentLoading,
   commentNotice,
   currentStatus,
+  currentWorkflowStatus,
   onCommentChange,
   onCommentSubmit,
   onStatusChange,
@@ -509,6 +525,7 @@ function LeadDetailPanel({
   commentLoading: boolean;
   commentNotice: string | null;
   currentStatus: string;
+  currentWorkflowStatus: LeadWorkflowStatus;
   onCommentChange: (value: string) => void;
   onCommentSubmit: () => void;
   onStatusChange: (value: string) => void;
@@ -560,7 +577,7 @@ function LeadDetailPanel({
             <LeadField label="Lead score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
             <LeadField label="Outreach status" value={displayValue(lead.outreachStatus)} />
             <LeadField label="Next action" value={displayValue(lead.nextAction)} />
-            <LeadField label="Review" value={lead.manualReviewRequired ? "Review lead quality before outreach" : "Ready for outreach checks"} />
+            <LeadField label="Review" value={lead.manualReviewRequired ? "Needs review" : "Ready for outreach checks"} />
             <LeadField label="Last activity" value={lead.lastActivity ? formatDistanceToNow(new Date(lead.lastActivity), { addSuffix: true }) : "Not provided"} />
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted/10 p-4">
@@ -606,7 +623,7 @@ function LeadDetailPanel({
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={onStatusSubmit} disabled={statusLoading || selectedStatus === currentStatus} className="sm:min-w-36">
+            <Button onClick={onStatusSubmit} disabled={statusLoading || selectedStatus === currentWorkflowStatus} className="sm:min-w-36">
               {statusLoading ? "Saving..." : "Update status"}
             </Button>
           </div>
@@ -749,7 +766,75 @@ function activityLabel(item: LeadActivityRecord) {
   return "Activity recorded";
 }
 
+function normalizeLeadPipelineStatus(value: string) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  switch (normalized) {
+    case "researching":
+      return "Researching";
+    case "manual review":
+    case "manual_review":
+    case "manual_review_required":
+    case "needs review":
+    case "needs_review":
+    case "review":
+      return "Needs review";
+    case "qualified":
+      return "Qualified";
+    case "outreach prepared":
+    case "outreach_prepared":
+      return "Outreach prepared";
+    case "contacted":
+      return "Contacted";
+    case "replied":
+      return "Replied";
+    case "needs reply approval":
+    case "needs_reply_approval":
+      return "Needs reply approval";
+    default:
+      return formatStatusLabel(normalized);
+  }
+}
+
+function mapPipelineStatusToWorkflowStatus(status: string): LeadWorkflowStatus {
+  switch (normalizeLeadPipelineStatus(status)) {
+    case "Researching":
+      return "new";
+    case "Needs review":
+      return "reviewed";
+    case "Qualified":
+      return "interested";
+    case "Outreach prepared":
+      return "reviewed";
+    case "Contacted":
+      return "contacted";
+    case "Replied":
+      return "follow_up";
+    case "Needs reply approval":
+      return "follow_up";
+    default:
+      return "reviewed";
+  }
+}
+
 function formatStatusLabel(status: string) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "manual review" || normalized === "manual_review" || normalized === "manual_review_required" || normalized === "needs review" || normalized === "needs_review" || normalized === "review") {
+    return "Needs review";
+  }
+  if (normalized === "researching") {
+    return "Researching";
+  }
+  if (normalized === "qualified") {
+    return "Qualified";
+  }
+  if (normalized === "outreach prepared" || normalized === "outreach_prepared") {
+    return "Outreach prepared";
+  }
+  if (normalized === "needs reply approval" || normalized === "needs_reply_approval") {
+    return "Needs reply approval";
+  }
+
   return status
     .split("_")
     .filter(Boolean)

@@ -1,19 +1,11 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { Bot, RefreshCcw, Send } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  EmptyCard,
-  formatPortalDate,
-  PageIntro,
-  SectionCard,
-  StatCard,
-  StatusMessage,
-} from "@/components/client-portal";
+import { PageIntro, SectionCard, StatCard, StatusMessage } from "@/components/client-portal";
 import { useCreateMissionMutation, useLeadAgentSummaryQuery } from "@/lib/leads-api-hooks";
 
 export const Route = createFileRoute("/lead-agent")({
@@ -58,42 +50,7 @@ function LeadAgentPage() {
     }));
   }, [data]);
 
-  const recentActivity = useMemo(() => {
-    if (!data) return [];
-    return [
-      ...data.activeMissions.map((mission) => ({
-        id: `mission-${mission.id}`,
-        title: mission.title,
-        detail: mission.instruction || "Instruction added",
-        date: mission.updatedAt || mission.createdAt,
-      })),
-      ...data.openRequests.map((request) => ({
-        id: `request-${request.id}`,
-        title: request.title || "Open request",
-        detail: request.latestReply || request.message || "Request recorded",
-        date: request.latestReplyAt || request.createdAt,
-      })),
-    ]
-      .sort(
-        (left, right) =>
-          (new Date(right.date || 0).getTime() || 0) - (new Date(left.date || 0).getTime() || 0),
-      )
-      .slice(0, 5);
-  }, [data]);
-
-  const nextAction = data?.anyCampaignReady
-    ? data.currentCampaignFocus
-      ? `Keep ${data.currentCampaignFocus} topped up while one-by-one outreach continues.`
-      : data.sendingEnabled
-        ? "At least one campaign is ready. Run a dry-run send batch before any live outreach."
-        : "At least one campaign is ready. Keep sending paused until launch is explicitly enabled."
-    : data?.approvalsWaiting
-      ? "Review campaign, template, and follow-up approvals before launch."
-      : data?.mailboxConnected
-        ? "Template approvals are clear. Keep sending paused until launch is explicitly approved."
-        : "Connect mailbox reply sync and finish approvals before launch.";
-
-  const currentStatus = data?.agent?.status ? formatFriendlyLabel(data.agent.status) : "Ready";
+  const currentStatus = data?.expertLeadAgentStateLabel || (data?.agent?.status ? formatFriendlyLabel(data.agent.status) : "Ready");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -178,12 +135,22 @@ function LeadAgentPage() {
         <StatCard
           label="Current status"
           value={currentStatus}
-          detail="Lead sourcing and qualification are active."
+          detail="Lead sourcing, verification, and sending stay within the approved safety limits."
         />
         <StatCard
-          label="New leads today"
-          value={data.newLeadsSourcedToday}
-          detail="Real campaign-sourced companies added today."
+          label="Leads found"
+          value={data.clientFacingCounts.totalLeadsFound}
+          detail="Real client-visible leads in the active pipeline."
+        />
+        <StatCard
+          label="Qualified leads"
+          value={data.clientFacingCounts.qualifiedLeads}
+          detail="Leads that meet the quality gate."
+        />
+        <StatCard
+          label="Outreach sent"
+          value={data.clientFacingCounts.emailsSent}
+          detail="One-by-one outreach already sent."
         />
         <StatCard
           label="Replies received"
@@ -191,24 +158,24 @@ function LeadAgentPage() {
           detail="Inbound replies captured across live conversations."
         />
         <StatCard
-          label="Ready campaigns"
-          value={data.campaignsReadyToLaunchCount}
-          detail="These campaigns can launch once sending is explicitly enabled."
-        />
-        <StatCard
-          label="Needs approval"
-          value={data.approvalsWaiting}
-          detail="Approvals page remains the central decision hub."
-        />
-        <StatCard
-          label="Replies waiting"
+          label="Reply drafts needing approval"
           value={data.repliesWaitingApproval}
-          detail="Approval-gated reply drafts waiting for review."
+          detail="Reply drafts waiting for client approval."
         />
         <StatCard
-          label="Safety"
-          value={data.sendingEnabled ? "Active" : "Paused"}
-          detail="No auto-replies. No send actions exposed here."
+          label="Approvals waiting"
+          value={data.approvalsWaiting}
+          detail="Client-actionable approvals still open."
+        />
+        <StatCard
+          label="Sending status"
+          value={data.sendingEnabled ? "Enabled" : "Paused"}
+          detail="Sending stays inside the 05:00–19:00 SA window."
+        />
+        <StatCard
+          label="Caps"
+          value={`${data.mailboxSentToday}/50 today`}
+          detail={`${data.mailboxSentThisMonth}/2000 this month`}
         />
       </div>
 
@@ -233,53 +200,6 @@ function LeadAgentPage() {
           ))}
         </div>
       </SectionCard>
-
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard
-          title="Next action"
-          description="One clear next step, based on the current workspace state."
-        >
-          <div className="rounded-[24px] border border-primary/15 bg-primary/5 px-5 py-5">
-            <p className="text-lg font-medium">{nextAction}</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Mailbox connected: {data.mailboxConnected ? "Yes" : "No"} · Sending enabled:{" "}
-              {data.sendingEnabled ? "Yes" : "No"}
-            </p>
-            {data.currentCampaignFocus ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Current campaign focus: {data.currentCampaignFocus}
-              </p>
-            ) : null}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Recent activity"
-          description="The latest visible work from the agent and open requests."
-        >
-          {recentActivity.length ? (
-            <div className="space-y-3">
-              {recentActivity.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-[22px] border border-border/70 bg-background px-4 py-4"
-                >
-                  <p className="font-medium">{item.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {formatPortalDate(item.date)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyCard
-              title="No recent activity yet"
-              description="New missions, open requests, and visible changes will appear here."
-            />
-          )}
-        </SectionCard>
-      </div>
 
       <SectionCard
         title="Guide the agent"
@@ -340,12 +260,10 @@ function LeadAgentPage() {
       <div className="rounded-[24px] border border-border/70 bg-card/80 px-5 py-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2 font-medium text-foreground">
           <Bot className="h-4 w-4 text-primary" />
-          What this page is for
+          Simple operating view
         </div>
         <p className="mt-2">
-          This page is a calm operational overview. Decisions still belong on the Approvals page,
-          and template editing still belongs on the Templates page. Outreach uses approved campaigns
-          and approved templates only.
+          Decisions still belong on the Approvals page, and template editing still belongs on the Templates page. Outreach uses approved campaigns and approved templates only.
         </p>
       </div>
     </div>

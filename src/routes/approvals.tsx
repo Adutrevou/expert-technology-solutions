@@ -47,6 +47,7 @@ function ApprovalsPage() {
   const enrichmentDecisionMutation = useEnrichmentCreditApprovalMutation();
   const replyDraftDecisionMutation = useUpdateReplyDraftMutation();
   const canApprove = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
+  const isAdmin = user?.role === "intergrai_admin";
   const [requestChangesItem, setRequestChangesItem] = useState<ApprovalHubItem | null>(null);
   const [requestChangesNote, setRequestChangesNote] = useState("");
   const [editingReplyDraftItem, setEditingReplyDraftItem] = useState<ApprovalHubItem | null>(null);
@@ -55,11 +56,15 @@ function ApprovalsPage() {
     if (!summaryQuery.data) return [];
     return buildApprovalHubItems(summaryQuery.data, conversationsQuery.data || [], requestsQuery.data?.requests || []);
   }, [summaryQuery.data, conversationsQuery.data, requestsQuery.data]);
+  const visibleItems = useMemo(
+    () => (isAdmin ? items : items.filter((item) => item.kind !== "credit_approval")),
+    [items, isAdmin],
+  );
 
-  const needsAttentionItems = items.filter(actionableApprovalFilter);
-  const changesRequestedItems = items.filter((item) => item.status === "changes_requested");
-  const approvedItems = items.filter((item) => item.status === "approved");
-  const archivedItems = items.filter((item) => item.status === "archived");
+  const needsAttentionItems = visibleItems.filter(actionableApprovalFilter);
+  const changesRequestedItems = visibleItems.filter((item) => item.status === "changes_requested");
+  const approvedItems = visibleItems.filter((item) => item.status === "approved");
+  const archivedItems = visibleItems.filter((item) => item.status === "archived");
   const editingReplyDraftConversation = editingReplyDraftItem
     ? (conversationsQuery.data || []).find((conversation) => conversation.id === editingReplyDraftItem.conversationId) || null
     : null;
@@ -167,7 +172,7 @@ function ApprovalsPage() {
       <PageIntro
         badge="Approvals"
         title="Approvals"
-        description="Review what needs your decision before the agent can act."
+        description="Review decisions the agent needs before it can continue."
         actions={(
           <Button variant="outline" onClick={() => void refreshAll()}>
             <RefreshCcw className="mr-2 h-4 w-4" />
@@ -364,6 +369,7 @@ function ApprovalDecisionCard({
   onEditDraft?: () => void;
 }) {
   const isReplyDraft = item.kind === "reply_draft";
+  const approveLabel = item.kind === "credit_approval" ? "Approve verification" : isReplyDraft ? "Approve & Send" : "Approve";
 
   return (
     <div className="rounded-[28px] border border-border/70 bg-background px-5 py-5">
@@ -383,10 +389,15 @@ function ApprovalDecisionCard({
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <ApprovalMeta label="What needs approval" value={item.title} />
+        <ApprovalMeta label="Why this matters" value={item.reason} />
+        <ApprovalMeta label="What happens next" value={item.shortContext} />
+        <ApprovalMeta label="Preview / context" value={item.previewSummary} />
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
         <ApprovalMeta label="Current status" value={friendlyApprovalStatus(item.status)} />
-        <ApprovalMeta label="Context" value={item.previewSummary} />
         <ApprovalMeta label="Requested by" value={item.requestedBy} />
-        <ApprovalMeta label="Created" value={formatPortalDate(item.createdAt)} />
       </div>
 
       {isReplyDraft ? (
@@ -394,9 +405,13 @@ function ApprovalDecisionCard({
           <ApprovalMeta label="Original reply" value={item.originalReplySummary || "Inbound reply received."} />
           <ApprovalMeta label="Why it was generated" value={item.generationReason || "Generated from the inbound reply."} />
           <ApprovalMeta label="Training used" value={item.trainingSummary || "Reply rules and training notes"} />
-          <ApprovalMeta label="Conversation" value={`${item.companyName || "Unknown company"} · ${item.contactName || "Unknown contact"}`} />
+          <ApprovalMeta label="Conversation" value={`${item.companyName || "Unknown company"} · ${item.contactName || "Decision-maker not verified yet"}`} />
         </div>
       ) : null}
+
+      <div className="mt-4">
+        <ApprovalMeta label="Created" value={formatPortalDate(item.createdAt)} />
+      </div>
 
       {item.latestNote ? (
         <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/10 px-4 py-3 text-sm text-muted-foreground">
@@ -413,10 +428,10 @@ function ApprovalDecisionCard({
         {canApprove ? (
           <>
             <Button onClick={onApprove} disabled={busy}>
-              Approve
+              {approveLabel}
             </Button>
             <Button variant="outline" onClick={onRequestChanges} disabled={busy}>
-              Request changes
+              {isReplyDraft ? "Decline" : "Request changes"}
             </Button>
           </>
         ) : null}

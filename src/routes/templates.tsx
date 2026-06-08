@@ -92,6 +92,15 @@ const EMPTY_TEMPLATE_FORM: TemplateCreateForm = {
   notes: "",
 };
 
+type CampaignTemplateGroup = {
+  campaignId: string;
+  campaignName: string;
+  launchState: string;
+  launchNextAction: string;
+  templates: OutreachTemplateRecord[];
+  sequences: FollowupSequenceRecord[];
+};
+
 function TemplatesPage() {
   const { user } = useApp();
   const summaryQuery = useLeadAgentSummaryQuery();
@@ -119,35 +128,70 @@ function TemplatesPage() {
     const map = new Map<string, ApprovalRecord>();
     for (const approval of data?.approvals || []) {
       if (!approval.entityId) continue;
-      map.set(`${approval.entityType}:${approval.entityId}`, approval);
+      const key = `${approval.entityType}:${approval.entityId}`;
+      if (!map.has(key)) {
+        map.set(key, approval);
+      }
     }
     return map;
   }, [data?.approvals]);
 
   const campaigns = useMemo(() => {
     if (!data) return [];
-    const grouped = new Map<string, { campaignId: string; campaignName: string; templates: OutreachTemplateRecord[]; sequences: FollowupSequenceRecord[] }>();
+    const grouped = new Map<string, CampaignTemplateGroup>();
+    const campaignNameById = new Map(
+      data.campaigns
+        .filter((item) => item.status !== "archived")
+        .map((campaign) => [campaign.id, campaign.name || "Campaign"] as const),
+    );
 
     for (const campaign of data.campaigns.filter((item) => item.status !== "archived")) {
       grouped.set(campaign.id, {
         campaignId: campaign.id,
         campaignName: campaign.name || "Campaign",
+        launchState: campaign.launchState,
+        launchNextAction: campaign.launchNextAction,
         templates: [],
         sequences: [],
       });
     }
 
     for (const template of data.outreachTemplates) {
+      const visibleVariants = template.variants.filter((variant) => normalizeApprovalStatus(variant.status) !== "archived");
+      if (!visibleVariants.length) continue;
       const key = template.campaignId || template.campaignName || "unassigned";
-      const existing = grouped.get(key) || { campaignId: template.campaignId || "", campaignName: template.campaignName || "Unassigned campaign", templates: [], sequences: [] };
-      existing.templates.push(template);
+      const resolvedCampaignName = (template.campaignId ? campaignNameById.get(template.campaignId) : null) || template.campaignName || "Unassigned campaign";
+      const existing = grouped.get(key) || {
+        campaignId: template.campaignId || "",
+        campaignName: resolvedCampaignName,
+        launchState: "waiting_for_approval",
+        launchNextAction: "Review campaign approvals before launch.",
+        templates: [],
+        sequences: [],
+      };
+      existing.templates.push({
+        ...template,
+        campaignName: resolvedCampaignName,
+        variants: visibleVariants,
+      });
       grouped.set(key, existing);
     }
 
-    for (const sequence of data.followupSequences) {
+    for (const sequence of data.followupSequences.filter((item) => normalizeApprovalStatus(item.status) !== "archived")) {
       const key = sequence.campaignId || sequence.campaignName || "unassigned";
-      const existing = grouped.get(key) || { campaignId: sequence.campaignId || "", campaignName: sequence.campaignName || "Unassigned campaign", templates: [], sequences: [] };
-      existing.sequences.push(sequence);
+      const resolvedCampaignName = (sequence.campaignId ? campaignNameById.get(sequence.campaignId) : null) || sequence.campaignName || "Unassigned campaign";
+      const existing = grouped.get(key) || {
+        campaignId: sequence.campaignId || "",
+        campaignName: resolvedCampaignName,
+        launchState: "waiting_for_approval",
+        launchNextAction: "Review campaign approvals before launch.",
+        templates: [],
+        sequences: [],
+      };
+      existing.sequences.push({
+        ...sequence,
+        campaignName: resolvedCampaignName,
+      });
       grouped.set(key, existing);
     }
 
@@ -254,7 +298,7 @@ function TemplatesPage() {
       stopEditing(variant.id);
       toast.success(
         normalizeApprovalStatus(variant.approvalStatus) === "approved"
-          ? "Changes saved. This email needs approval again before launch."
+          ? "Template changed. Outreach for this campaign is paused until this template is approved again."
           : "Changes saved.",
       );
       await summaryQuery.refetch();
@@ -293,6 +337,34 @@ function TemplatesPage() {
       await summaryQuery.refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to approve that follow-up sequence.");
+    }
+  }
+
+  async function pauseVariantApproval(variantId: string) {
+    try {
+      await templateVariantDecisionMutation.mutateAsync({
+        variantId,
+        decision: "waiting_for_approval",
+        decision_note: "Template paused until approval is confirmed again.",
+      });
+      toast.success("Template approval paused.");
+      await summaryQuery.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to pause that template approval.");
+    }
+  }
+
+  async function pauseSequenceApproval(sequenceId: string) {
+    try {
+      await followupSequenceDecisionMutation.mutateAsync({
+        sequenceId,
+        decision: "waiting_for_approval",
+        decision_note: "Follow-up sequence paused until approval is confirmed again.",
+      });
+      toast.success("Follow-up approval paused.");
+      await summaryQuery.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to pause that follow-up approval.");
     }
   }
 
@@ -529,7 +601,11 @@ function TemplatesPage() {
     );
   }
 
-  const pendingVariantCount = data.outreachTemplates.flatMap((template) => template.variants).filter((variant) => normalizeApprovalStatus(variant.approvalStatus) === "pending").length;
+  const pendingVariantCount = data.outreachTemplates
+    .flatMap((template) => template.variants)
+    .filter((variant) => normalizeApprovalStatus(variant.status) !== "archived")
+    .filter((variant) => normalizeApprovalStatus(variant.approvalStatus) === "pending")
+    .length;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -566,10 +642,13 @@ function TemplatesPage() {
           <SectionCard
             key={campaign.campaignId || campaign.campaignName}
             title={campaign.campaignName}
-            description={describeCampaignTemplates(campaign.templates, campaign.sequences)}
+            description={`${describeCampaignTemplates(campaign.templates, campaign.sequences)} Launch state: ${friendlyLaunchState(campaign.launchState)}.`}
             action={canEdit && campaign.campaignId ? <Button size="sm" onClick={() => openTemplateCreate(campaign.campaignId, campaign.campaignName)}>Add template</Button> : undefined}
           >
             <div className="space-y-4">
+              <div className="rounded-[22px] border border-border/70 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
+                {campaign.launchNextAction || "Review campaign approvals before launch."}
+              </div>
               {!campaign.templates.length && !campaign.sequences.length ? (
                 <EmptyCard
                   title="No templates here yet"
@@ -579,8 +658,8 @@ function TemplatesPage() {
               {campaign.templates.flatMap((template) =>
                 template.variants.map((variant) => {
                   const approvalRecord = approvalsByEntityKey.get(`outreach_template_variant:${variant.id}`);
-                  const status = normalizeApprovalStatus(approvalRecord?.decisionStatus || variant.approvalStatus);
-                  const requestedNote = variant.approvalDecisionNote || approvalRecord?.decisionNote || "";
+                  const status = normalizeApprovalStatus(approvalRecord?.decisionStatus || approvalRecord?.status || variant.approvalStatus);
+                  const requestedNote = approvalRecord?.decisionNote || variant.approvalDecisionNote || "";
                   const draft = drafts[variant.id];
                   const current = draft || variantToDraft(variant);
                   const editing = editingVariantId === variant.id;
@@ -610,7 +689,7 @@ function TemplatesPage() {
                           </div>
                           <h3 className="mt-3 text-xl font-semibold">{buildVariantTitle(template, variant)}</h3>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            {template.campaignName || campaign.campaignName}
+                            {campaign.campaignName}
                           </p>
                         </div>
                         <ApprovalStatusBadge status={status} />
@@ -623,7 +702,7 @@ function TemplatesPage() {
                         <TemplateMeta label="Current status" value={statusLabel(status)} />
                       </div>
 
-                      <div className="mt-5 rounded-[24px] border border-border/70 bg-muted/10 px-5 py-5">
+                      <div className="mt-5 overflow-hidden rounded-[24px] border border-border/70 bg-muted/10 px-4 py-5 sm:px-5">
                         <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Email preview</p>
                         <p className="mt-3 font-medium">{current.subject || "No subject line"}</p>
                         <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
@@ -652,7 +731,7 @@ function TemplatesPage() {
                             </div>
                           </div>
 
-                          <div className="rounded-[24px] border border-border/70 bg-background px-5 py-5">
+                          <div className="rounded-[24px] border border-border/70 bg-background px-4 py-5 sm:px-5">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <p className="font-medium">Optional image</p>
@@ -693,10 +772,11 @@ function TemplatesPage() {
                                     event.currentTarget.value = "";
                                   }}
                                 />
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     onClick={() => openFilePicker(variant.id)}
                                     disabled={uploadOutreachAssetMutation.isPending}
                                   >
@@ -792,7 +872,7 @@ function TemplatesPage() {
                               </div>
                               <div>
                                 <p className="text-sm font-medium">Linked campaign</p>
-                                <Input className="mt-2" value={template.campaignName || campaign.campaignName} readOnly />
+                                <Input className="mt-2" value={campaign.campaignName} readOnly />
                               </div>
                               <div>
                                 <p className="text-sm font-medium">Linked template</p>
@@ -800,10 +880,11 @@ function TemplatesPage() {
                               </div>
                             </div>
 
-                            <div className="mt-4 flex flex-wrap gap-2">
+                            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="w-full sm:w-auto"
                                 onClick={() => void saveAssetDetails(template, variant)}
                                 disabled={updateOutreachAssetMutation.isPending || !currentAssetDraft.assetId}
                                 title={!currentAssetDraft.assetId ? "Upload an image first." : undefined}
@@ -812,12 +893,13 @@ function TemplatesPage() {
                               </Button>
                               {canApprove && currentAssetDraft.approvalId && imageStatus === "pending" ? (
                                 <>
-                                  <Button size="sm" variant="outline" onClick={() => void approveAsset(currentAssetDraft.approvalId)}>
+                                  <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => void approveAsset(currentAssetDraft.approvalId)}>
                                     Approve image
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
+                                    className="w-full sm:w-auto"
                                     onClick={() => {
                                       setRequestChangesTarget({ kind: "asset", title: currentAssetDraft.title || "Image", approvalId: currentAssetDraft.approvalId });
                                       setRequestChangesNote(currentAssetDraft.approvalDecisionNote || "");
@@ -836,18 +918,18 @@ function TemplatesPage() {
                             ) : null}
                           </div>
 
-                          <div className="flex flex-wrap gap-2">
-                            <Button onClick={() => void saveVariant(template, variant)} disabled={!dirty || updateTemplateVariantContentMutation.isPending}>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <Button className="w-full sm:w-auto" onClick={() => void saveVariant(template, variant)} disabled={!dirty || updateTemplateVariantContentMutation.isPending}>
                               Save changes
                             </Button>
-                            <Button variant="outline" onClick={() => stopEditing(variant.id)}>
+                            <Button className="w-full sm:w-auto" variant="outline" onClick={() => stopEditing(variant.id)}>
                               Cancel
                             </Button>
-                            <Button variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
+                            <Button className="w-full sm:w-auto" variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
                               Archive template
                             </Button>
                             {!dirty ? (
-                              <Badge variant="outline" className="border-border/70 bg-muted/10 text-muted-foreground">
+                              <Badge variant="outline" className="w-full justify-center border-border/70 bg-muted/10 text-muted-foreground sm:w-auto">
                                 No unsaved changes
                               </Badge>
                             ) : null}
@@ -876,13 +958,14 @@ function TemplatesPage() {
                               <p className="mt-3 text-sm text-muted-foreground">{selectedAsset.approvalDecisionNote}</p>
                             ) : null}
                             {canApprove && selectedAsset?.approvalId && imageStatus === "pending" ? (
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <Button size="sm" variant="outline" onClick={() => void approveAsset(selectedAsset.approvalId)}>
+                              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                                <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => void approveAsset(selectedAsset.approvalId)}>
                                   Approve image
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  className="w-full sm:w-auto"
                                   onClick={() => {
                                     setRequestChangesTarget({ kind: "asset", title: selectedAsset.title || "Image", approvalId: selectedAsset.approvalId });
                                     setRequestChangesNote(selectedAsset.approvalDecisionNote || "");
@@ -900,18 +983,19 @@ function TemplatesPage() {
                             </div>
                           ) : null}
 
-                          <div className="flex flex-wrap gap-2">
-                            {canEdit ? <Button variant="outline" onClick={() => startEditing(template, variant)}>Edit</Button> : null}
+                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            {canEdit ? <Button className="w-full sm:w-auto" variant="outline" onClick={() => startEditing(template, variant)}>Edit</Button> : null}
                             {canEdit ? (
-                              <Button variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
+                              <Button className="w-full sm:w-auto" variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
                                 Archive template
                               </Button>
                             ) : null}
                             {canApprove && status === "pending" ? (
                               <>
-                                <Button onClick={() => void approveVariant(variant.id)}>Approve</Button>
+                                <Button className="w-full sm:w-auto" onClick={() => void approveVariant(variant.id)}>Approve</Button>
                                 <Button
                                   variant="outline"
+                                  className="w-full sm:w-auto"
                                   onClick={() => {
                                     setRequestChangesTarget({ kind: "variant", title: buildVariantTitle(template, variant), id: variant.id });
                                     setRequestChangesNote(requestedNote);
@@ -921,8 +1005,13 @@ function TemplatesPage() {
                                 </Button>
                               </>
                             ) : null}
+                            {canApprove && status === "approved" ? (
+                              <Button className="w-full sm:w-auto" variant="outline" onClick={() => void pauseVariantApproval(variant.id)}>
+                                Unapprove / Pause
+                              </Button>
+                            ) : null}
                             {status === "approved" ? (
-                              <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+                              <Badge variant="outline" className="w-full justify-center border-success/30 bg-success/10 text-success sm:w-auto">
                                 Approved
                               </Badge>
                             ) : null}
@@ -955,13 +1044,14 @@ function TemplatesPage() {
                             Latest note: {sequence.approvalDecisionNote}
                           </div>
                         ) : null}
-                        <div className="mt-5 flex flex-wrap gap-2">
+                        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                           {canApprove && status === "pending" ? (
                             <>
-                              <Button size="sm" onClick={() => void approveSequence(sequence.id)}>Approve</Button>
+                              <Button size="sm" className="w-full sm:w-auto" onClick={() => void approveSequence(sequence.id)}>Approve</Button>
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="w-full sm:w-auto"
                                 onClick={() => {
                                   setRequestChangesTarget({ kind: "sequence", title: sequence.name || "Follow-up sequence", id: sequence.id });
                                   setRequestChangesNote(sequence.approvalDecisionNote || "");
@@ -971,9 +1061,16 @@ function TemplatesPage() {
                               </Button>
                             </>
                           ) : (
-                            <Button asChild size="sm" variant="outline">
-                              <Link to="/approvals">View in approval hub</Link>
-                            </Button>
+                            <>
+                              {canApprove && status === "approved" ? (
+                                <Button size="sm" className="w-full sm:w-auto" variant="outline" onClick={() => void pauseSequenceApproval(sequence.id)}>
+                                  Unapprove / Pause
+                                </Button>
+                              ) : null}
+                              <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
+                                <Link to="/approvals">View in approval hub</Link>
+                              </Button>
+                            </>
                           )}
                         </div>
                       </Card>
@@ -1246,6 +1343,21 @@ function describeCampaignTemplates(templates: OutreachTemplateRecord[], sequence
   const emailCount = templates.reduce((total, template) => total + template.variants.length, 0);
   const followups = sequences.reduce((total, sequence) => total + sequence.followupCount, 0);
   return `${emailCount} email ${emailCount === 1 ? "variant" : "variants"}${followups ? ` · ${followups} follow-up ${followups === 1 ? "step" : "steps"}` : ""}`;
+}
+
+function friendlyLaunchState(value: string) {
+  switch ((value || "").toLowerCase()) {
+    case "approved_ready":
+      return "Ready to launch";
+    case "live":
+      return "Live";
+    case "paused_needs_approval":
+      return "Paused - approval needed";
+    case "archived":
+      return "Archived";
+    default:
+      return "Needs approval";
+  }
 }
 
 function friendlyTemplateType(value: string) {

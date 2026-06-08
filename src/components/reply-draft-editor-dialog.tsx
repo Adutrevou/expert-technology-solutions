@@ -52,7 +52,7 @@ export function ReplyDraftEditorDialog({
 
     return {
       companyName: conversation?.companyName || "Unknown company",
-      contactName: conversation?.contactName || conversation?.contactEmail || "Unknown contact",
+      contactName: conversation?.contactName || conversation?.contactEmail || "Decision-maker not verified yet",
       campaignName: conversation?.campaignName || "No linked campaign",
       replySummary: latestInbound ? summarizeReply(latestInbound.subject, latestInbound.bodyText) : "No inbound reply captured.",
       generatedReason,

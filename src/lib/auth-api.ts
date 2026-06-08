@@ -14,11 +14,17 @@ export interface AuthUser {
   email: string;
   role: AppRole;
   clientSlug: string;
+  mustChangePassword: boolean;
 }
 
 interface LoginResponse {
   token: string;
   user: AuthUser | null;
+}
+
+interface BasicAuthResponse {
+  ok: boolean;
+  message?: string;
 }
 
 const AUTH_API_BASE_URL = resolveAuthApiBaseUrl(String(import.meta.env.VITE_LEADS_API_BASE_URL || "").trim());
@@ -58,6 +64,41 @@ export async function logout(token: string): Promise<boolean> {
   }
 
   return response.ok;
+}
+
+export async function requestPasswordReset(email: string): Promise<BasicAuthResponse> {
+  await postJson("/auth/password-reset/request", { email });
+  return {
+    ok: true,
+    message: "If that email is active for this portal, a password reset link has been prepared.",
+  };
+}
+
+export async function resetPassword(token: string, password: string): Promise<BasicAuthResponse> {
+  await postJson("/auth/password-reset/reset", { token, password });
+  return {
+    ok: true,
+    message: "Your password has been reset. You can now sign in.",
+  };
+}
+
+export async function changePassword(token: string, currentPassword: string, newPassword: string): Promise<BasicAuthResponse> {
+  await requestJson("/auth/change-password", {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  return {
+    ok: true,
+    message: "Password updated successfully.",
+  };
 }
 
 function authHeaders(token: string): HeadersInit {
@@ -171,6 +212,7 @@ function normalizeAuthUser(payload: unknown): AuthUser {
     email,
     role,
     clientSlug: INTERGRAI_CLIENT_SLUG,
+    mustChangePassword: pickBoolean(nestedUser, ["must_change_password", "mustChangePassword"]) ?? false,
   };
 }
 
@@ -234,6 +276,17 @@ function pickString(record: Record<string, unknown>, keys: string[]) {
     const value = record[key];
     if (typeof value === "string" && value.trim()) {
       return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function pickBoolean(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") {
+      return value;
     }
   }
 

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useApp } from "@/lib/app-state";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ function LoginPage() {
           <p className="mt-2 text-sm text-muted-foreground">Secure client access for Expert Technology Solutions</p>
         </div>
 
-        <Card className="p-8 shadow-elegant border-border/50 backdrop-blur-xl bg-card/80">
+        <Card className="border-border/50 bg-card/80 p-5 shadow-elegant backdrop-blur-xl sm:p-8">
           <h2 className="text-2xl font-bold mb-1">Client Portal login</h2>
           <p className="text-sm text-muted-foreground mb-6">
             Sign in with your Intergrai-managed email and password to access the Expert Technology Solutions dashboard.
@@ -86,7 +86,14 @@ function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 flex items-center justify-between gap-4 border-t border-border/60 pt-4 text-xs text-muted-foreground">
+          <div className="mt-4 flex flex-col items-start gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <Link to="/forgot-password" className="text-primary transition hover:opacity-80">
+              Forgot password?
+            </Link>
+            <span className="text-muted-foreground">Sending stays paused until launch approval.</span>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>Access is limited to approved Expert Technology Solutions users.</span>
             <span className="shrink-0">Powered by Intergrai</span>
           </div>

@@ -30,10 +30,54 @@ export type ApprovalHubItem = {
   companyName?: string;
   contactName?: string;
   campaignName?: string;
+  providerLabel?: string;
+  targetRole?: string;
   originalReplySummary?: string;
   generationReason?: string;
   trainingSummary?: string;
 };
+
+function normalizeApprovalKeyPart(value?: string) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function dedupePendingCreditApprovals(approvals: LeadAgentSummary["pendingEnrichmentCreditApprovals"] = []) {
+  const byKey = new Map<string, (typeof approvals)[number]>();
+
+  for (const approval of approvals) {
+    const company = normalizeApprovalKeyPart(approval.companyName);
+    const campaign = normalizeApprovalKeyPart(approval.campaignName);
+    const rawLead = normalizeApprovalKeyPart(approval.rawLeadId);
+    const key = company && campaign
+      ? `company:${company}|campaign:${campaign}`
+      : rawLead
+        ? `raw:${rawLead}`
+        : `queue:${approval.queueItemId}`;
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, approval);
+      continue;
+    }
+
+    const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime() || 0;
+    const nextTime = new Date(approval.updatedAt || approval.createdAt || 0).getTime() || 0;
+    if (nextTime >= existingTime) {
+      byKey.set(key, approval);
+    }
+  }
+
+  return [...byKey.values()].sort((left, right) => {
+    const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime() || 0;
+    const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime() || 0;
+    return rightTime - leftTime;
+  });
+}
+
+function formatApprovalContactValue(value?: string) {
+  const text = String(value || "").trim();
+  return text || "Decision-maker still being verified";
+}
 
 export function buildApprovalHubItems(
   summary: LeadAgentSummary,
@@ -195,23 +239,37 @@ export function buildApprovalHubItems(
     });
   }
 
-  for (const approval of summary.pendingEnrichmentCreditApprovals) {
+  for (const approval of dedupePendingCreditApprovals(summary.pendingEnrichmentCreditApprovals)) {
+    const campaignName = approval.campaignName || "the linked campaign";
+    const contactName = approval.contactName || approval.targetRole || "";
+    const providerLabel = approval.providerLabel || (approval.apolloPlanned && approval.hunterPlanned ? "Apollo/Hunter" : approval.apolloPlanned ? "Apollo" : approval.hunterPlanned ? "Hunter" : "Apollo/Hunter");
     items.push({
       key: `credit:${approval.queueItemId}`,
       id: approval.queueItemId,
       kind: "credit_approval",
       status: "pending",
-      title: `Approve verification request for ${approval.companyName || "lead"}`,
-      typeLabel: "Request",
-      shortContext: `This request supports ${approval.campaignName || "the linked campaign"}.`,
-      previewSummary: "Contact verification spend approval",
+      title: `Approve contact verification — ${approval.companyName || "Lead"}`,
+      typeLabel: "Contact verification",
+      shortContext: `Use ${providerLabel} to verify a decision-maker for ${campaignName}.`,
+      previewSummary: [
+        `Company: ${approval.companyName || "Lead"}`,
+        `Campaign: ${campaignName}`,
+        `Target role: ${formatApprovalContactValue(approval.targetRole)}`,
+        `Contact: ${formatApprovalContactValue(contactName)}`,
+        `Provider: ${providerLabel}`,
+      ].join(" · "),
       reason: "Verification work needs approval before credit-backed enrichment continues.",
       requestedBy: "Intergrai",
       createdAt: approval.createdAt,
       previewHref: "/lead-agent",
-      previewLabel: "View details",
+      previewLabel: "Review lead pipeline",
       latestNote: "",
       actionable: true,
+      companyName: approval.companyName || "",
+      contactName: approval.contactName || approval.targetRole || "",
+      campaignName,
+      providerLabel,
+      targetRole: approval.targetRole || "",
     });
   }
 
@@ -238,8 +296,8 @@ export function buildApprovalHubItems(
       kind: "reply_draft",
       status,
       title: `Approve reply draft — ${conversation.companyName || conversation.contactName || "Conversation"}`,
-      typeLabel: "Reply Draft",
-      shortContext: `Company: ${conversation.companyName || "Unknown company"} · Contact: ${conversation.contactName || conversation.contactEmail || "Unknown contact"} · Campaign: ${conversation.campaignName || "No campaign linked"}.`,
+      typeLabel: "Reply draft",
+      shortContext: "Review the draft, edit it if needed, and approve it to send immediately.",
       previewSummary: `${draft.draftSubject || "Reply draft"}${draft.draftBody ? ` · ${truncatePreview(draft.draftBody, 140)}` : ""}`,
       reason: status === "pending"
         ? "This reply was generated from an inbound message and still needs your approval before it can move forward."

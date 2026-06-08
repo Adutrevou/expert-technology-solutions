@@ -56,7 +56,7 @@ function ConversationsPage() {
         status,
         approval_note: reviewNote.trim() || (status === "approved" ? "Approved from the Conversations page." : "Changes requested from the Conversations page."),
       });
-      toast.success(status === "approved" ? "Reply approved." : "Reply changes requested.");
+      toast.success(status === "approved" ? "Reply approved and sent." : "Reply declined.");
       await Promise.all([conversationsQuery.refetch(), detailQuery.refetch()]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save that reply decision.");
@@ -148,7 +148,7 @@ function ConversationsPage() {
               <div>
                 <h2 className="text-xl font-semibold">Conversation list</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Prepared, sent, and replied threads stay client-scoped here.
+                  Prepared, sent, replied, and approval-gated threads stay client-scoped here.
                 </p>
               </div>
               <MessagesSquare className="h-5 w-5 text-primary" />
@@ -234,7 +234,7 @@ function ConversationsPage() {
                 </div>
 
                 <MetaCard label="Company" value={selectedConversation.companyName || "Unknown company"} />
-                <MetaCard label="Contact" value={selectedConversation.contactName || selectedConversation.contactEmail || "Unknown contact"} />
+                <MetaCard label="Contact" value={selectedConversation.contactName || selectedConversation.contactEmail || "Decision-maker not verified yet"} />
                 <MetaCard label="Email" value={selectedConversation.contactEmail || "No email captured"} />
                 <MetaCard label="Campaign" value={selectedConversation.campaignName || "No linked campaign"} />
                 <MetaCard label="Subject" value={selectedConversation.latestSubject || latestOutboundMessage?.subject || "No subject captured"} />
@@ -317,7 +317,7 @@ function ConversationsPage() {
                         </pre>
                         <p className="mt-3 text-xs text-muted-foreground">
                           {latestReplyDraft.status === "approved"
-                            ? "Approved - ready to send through the approved outreach runner."
+                            ? "Approved and sent through the approved reply path."
                             : latestReplyDraft.status === "changes_requested"
                               ? "Changes requested. Edit the draft and save it again."
                               : "Needs approval before any send path can continue."}
@@ -351,7 +351,7 @@ function ConversationsPage() {
                                   onClick={() => void handleReplyDecision("approved")}
                                   disabled={updateReplyDraftMutation.isPending}
                                 >
-                                  Approve
+                                  Approve &amp; Send
                                 </Button>
                               ) : null}
                               {latestReplyDraft.status !== "changes_requested" ? (
@@ -361,7 +361,7 @@ function ConversationsPage() {
                                   onClick={() => void handleReplyDecision("changes_requested")}
                                   disabled={updateReplyDraftMutation.isPending}
                                 >
-                                  Request Changes
+                                  Decline
                                 </Button>
                               ) : null}
                             </div>
@@ -473,16 +473,31 @@ function conversationStatusLabel(status: string) {
   if (status === "sent") {
     return "Sent";
   }
+  if (status === "prepared") {
+    return "Draft reply ready";
+  }
+  if (status === "replied") {
+    return "Reply received";
+  }
+  if (status === "closed") {
+    return "Closed";
+  }
 
   return formatLabel(status);
 }
 
 function conversationStatusDescription(status: string) {
   if (status === "prepared") {
-    return "Prepared";
+    return "Draft reply ready";
   }
   if (status === "sent") {
     return "Sent / Waiting for reply";
+  }
+  if (status === "replied") {
+    return "Reply received";
+  }
+  if (status === "closed") {
+    return "Closed";
   }
 
   return formatLabel(status);
@@ -491,13 +506,13 @@ function conversationStatusDescription(status: string) {
 function replyStatusLabel(status: string) {
   switch (status) {
     case "needs_review":
-      return "Needs review";
+      return "Awaiting approval";
     case "draft_ready":
-      return "Needs approval";
+      return "Draft reply ready";
     case "approved":
       return "Approved";
     case "sent":
-      return "Sent";
+      return "Sent reply";
     default:
       return formatLabel(status);
   }
@@ -506,13 +521,15 @@ function replyStatusLabel(status: string) {
 function replyDraftStatusLabel(status: string) {
   switch (status) {
     case "waiting_for_approval":
-      return "Needs approval";
+      return "Awaiting approval";
+    case "draft_ready":
+      return "Draft reply ready";
     case "changes_requested":
-      return "Changes requested";
+      return "Declined / changes requested";
     case "approved":
       return "Approved";
     case "sent":
-      return "Sent";
+      return "Sent reply";
     default:
       return formatLabel(status);
   }
@@ -530,16 +547,34 @@ function replyDraftStatusClassName(status: string) {
 
 function conversationTimestampLabel(status: string) {
   if (status === "prepared") {
-    return "Prepared";
+    return "Draft reply ready";
   }
   if (status === "sent") {
     return "Sent";
+  }
+  if (status === "replied") {
+    return "Reply received";
+  }
+  if (status === "closed") {
+    return "Closed";
   }
 
   return "Last activity";
 }
 
 function statusClassName(status: string) {
+  if (status === "prepared") {
+    return "border-warning/30 bg-warning/10 text-warning-foreground";
+  }
+  if (status === "sent") {
+    return "border-info/30 bg-info/10 text-info";
+  }
+  if (status === "replied" || status === "positive_reply" || status === "meeting_requested" || status === "quote_requested") {
+    return "border-success/30 bg-success/10 text-success";
+  }
+  if (status === "closed") {
+    return "border-border/70 bg-muted/20 text-muted-foreground";
+  }
   if (isReplyStatus(status)) {
     return "border-success/30 bg-success/10 text-success";
   }

@@ -25,16 +25,16 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/requests")({
-  head: () => ({ meta: [{ title: "Expert Lead Agent — Expert Technology Solutions" }] }),
+  head: () => ({ meta: [{ title: "Requests — Expert Technology Solutions" }] }),
   component: RequestsPage,
 });
 
 const REQUEST_CATEGORY_OPTIONS: Array<{ value: RequestCategory; label: string }> = [
-  { value: "new_campaign", label: "New campaign" },
-  { value: "campaign_change", label: "Campaign change" },
-  { value: "lead_question", label: "Lead question" },
-  { value: "outreach_draft", label: "Outreach draft" },
-  { value: "support_issue", label: "Support issue" },
+  { value: "new_campaign", label: "Add campaign idea" },
+  { value: "campaign_change", label: "Pause or change campaign" },
+  { value: "lead_question", label: "Find more leads" },
+  { value: "outreach_draft", label: "Review reply" },
+  { value: "support_issue", label: "General request" },
 ];
 
 function RequestsPage() {
@@ -141,8 +141,8 @@ function RequestsPage() {
             <p className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">
               Powered by Intergrai
             </p>
-            <h1 className="mt-3 text-3xl font-bold md:text-4xl">Expert Lead Agent</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Requests &amp; Support</p>
+            <h1 className="mt-3 text-3xl font-bold md:text-4xl">Requests for Intergrai / Agent</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Simple client requests and replies</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded-full bg-primary/12 px-3 py-1 font-medium text-primary">
@@ -160,9 +160,7 @@ function RequestsPage() {
               <div>
                 <h2 className="text-lg font-semibold">Submit a request</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Instructions submitted here create tasks for the agent. They do not automatically
-                  send outreach unless converted into an approved campaign or approved lead
-                  instruction.
+                  Send a short request for the agent or for Intergrai to review. Nothing here sends outreach automatically.
                 </p>
               </div>
               <ClipboardList className="h-5 w-5 text-primary" />
@@ -216,13 +214,9 @@ function RequestsPage() {
               {submitError ? <InlineMessage tone="error">{submitError}</InlineMessage> : null}
               {submitNotice ? <InlineMessage tone="success">{submitNotice}</InlineMessage> : null}
 
-              <Button
-                type="submit"
-                className="w-full gap-2"
-                disabled={createRequestMutation.isPending}
-              >
+              <Button type="submit" className="w-full gap-2" disabled={createRequestMutation.isPending}>
                 <Send className="h-4 w-4" />
-                {createRequestMutation.isPending ? "Submitting request..." : "Submit request"}
+                {createRequestMutation.isPending ? "Submitting..." : "Submit request"}
               </Button>
             </form>
           </Card>
@@ -230,10 +224,8 @@ function RequestsPage() {
           <Card className="overflow-hidden shadow-card">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
-                <h2 className="font-semibold">Request history</h2>
-                <p className="text-xs text-muted-foreground">
-                  Client-visible requests and latest replies
-                </p>
+              <h2 className="font-semibold">Request history</h2>
+              <p className="text-xs text-muted-foreground">Client-visible requests and replies</p>
               </div>
               <Button
                 variant="outline"
@@ -310,22 +302,15 @@ function RequestsPage() {
           <div className="mb-6 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Request detail</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Original request plus client-visible replies and status updates.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Original request, latest replies, and status updates.</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>
-                Edit request
-              </Button>
               <MessageSquareText className="h-5 w-5 text-primary" />
             </div>
           </div>
 
           <div className="mb-6 rounded-2xl border border-border/70 bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
-            Request editing will appear here once a client-safe update endpoint is available.
-            Backend support is not exposed on the current client API. Outreach uses approved
-            campaigns and approved templates only.
+            Requests are just a clean inbox for Intergrai and the agent. Approved campaigns and approved templates stay unchanged here.
           </div>
 
           {!selectedRequestId ? (
