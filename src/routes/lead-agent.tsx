@@ -186,6 +186,11 @@ function LeadAgentPage() {
           detail="Real campaign-sourced companies added today."
         />
         <StatCard
+          label="Replies received"
+          value={data.clientFacingCounts.repliesReceived}
+          detail="Inbound replies captured across live conversations."
+        />
+        <StatCard
           label="Ready campaigns"
           value={data.campaignsReadyToLaunchCount}
           detail="These campaigns can launch once sending is explicitly enabled."

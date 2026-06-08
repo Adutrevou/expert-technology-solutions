@@ -66,6 +66,7 @@ function Dashboard() {
   );
   const pendingApprovals = getActionableApprovalItems(approvalItems);
   const attentionItems = pendingApprovals.slice(0, 4);
+  const repliesReceived = summaryQuery.data.campaigns.reduce((total, campaign) => total + Number(campaign.replies || 0), 0);
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -95,6 +96,31 @@ function Dashboard() {
           label="Leads found"
           value={data.lead_counts.total}
           detail={data.lead_counts.total === 0 ? "No leads synced yet" : `${data.lead_counts.warm} warm and ${data.lead_counts.hot} hot`}
+        />
+        <StatCard
+          label="Qualified leads"
+          value={summaryQuery.data.clientFacingCounts.qualifiedLeads}
+          detail="Lead-quality gated opportunities in the visible pipeline."
+        />
+        <StatCard
+          label="Outreach sent"
+          value={summaryQuery.data.clientFacingCounts.emailsSent}
+          detail="One-by-one outreach already sent."
+        />
+        <StatCard
+          label="Replies received"
+          value={repliesReceived}
+          detail="Inbound replies captured across live conversations."
+        />
+        <StatCard
+          label="Reply drafts needing approval"
+          value={summaryQuery.data.repliesWaitingApproval}
+          detail="Draft replies are waiting for review before they can move forward."
+        />
+        <StatCard
+          label="Meetings / quotes"
+          value={summaryQuery.data.clientFacingCounts.meetingsQuoteRequests}
+          detail="Positive replies that ask for a meeting or quote."
         />
         <StatCard
           label="Needs approval"

@@ -13,6 +13,7 @@ export type ApprovalHubItem = {
   key: string;
   id: string;
   approvalId?: string;
+  conversationId?: string;
   kind: "campaign" | "template_variant" | "followup_sequence" | "reply_draft" | "credit_approval" | "approval_record" | "asset_approval" | "request_notice" | "response_rule";
   status: "pending" | "approved" | "changes_requested" | "archived" | "draft";
   title: string;
@@ -26,6 +27,12 @@ export type ApprovalHubItem = {
   previewLabel: string;
   latestNote: string;
   actionable: boolean;
+  companyName?: string;
+  contactName?: string;
+  campaignName?: string;
+  originalReplySummary?: string;
+  generationReason?: string;
+  trainingSummary?: string;
 };
 
 export function buildApprovalHubItems(
@@ -35,6 +42,9 @@ export function buildApprovalHubItems(
 ) {
   const items: ApprovalHubItem[] = [];
   const approvalsByEntityKey = new Map<string, ApprovalRecord>();
+  const campaignNameById = new Map(
+    (summary.campaigns || []).map((campaign) => [campaign.id, campaign.name || "Campaign"] as const),
+  );
 
   for (const approval of summary.approvals || []) {
     if (!approval.entityType || !approval.entityId) continue;
@@ -72,7 +82,9 @@ export function buildApprovalHubItems(
 
   for (const template of summary.outreachTemplates) {
     for (const variant of template.variants) {
-      const status = normalizeApprovalStatus(variant.approvalStatus || variant.approvalDecisionStatus);
+      const approval = approvalsByEntityKey.get(`outreach_template_variant:${variant.id}`);
+      const campaignName = (template.campaignId ? campaignNameById.get(template.campaignId) : null) || template.campaignName;
+      const status = normalizeApprovalStatus(approval?.decisionStatus || approval?.status || variant.approvalStatus || variant.approvalDecisionStatus);
       if (status === "archived" || status === "draft") continue;
 
       items.push({
@@ -81,13 +93,13 @@ export function buildApprovalHubItems(
         kind: "template_variant",
         status,
         title: approvalTitleFallback("template_variant", {
-          campaignName: template.campaignName,
+          campaignName,
           templateName: template.name,
           templateType: template.templateType,
           variantLabel: variant.variantLabel,
         }),
         typeLabel: template.templateType === "follow_up" ? "Follow-up" : "Email Template",
-        shortContext: `This email will be used for the ${template.campaignName || "linked"} campaign.`,
+        shortContext: `This email will be used for the ${campaignName || "linked"} campaign.`,
         previewSummary: `${variant.subjectTemplate || "No subject line"}${template.name ? ` · ${template.name}` : ""}${variant.variantLabel ? ` · Variant ${variant.variantLabel}` : ""}`,
         reason: status === "pending"
           ? (variant.previousApprovalStatus === "approved"
@@ -95,16 +107,17 @@ export function buildApprovalHubItems(
             : "The email copy needs approval before launch.")
           : "Email approval history.",
         requestedBy: "Intergrai",
-        createdAt: variant.latestQualityReview?.createdAt,
+        createdAt: approval?.updatedAt || approval?.createdAt || variant.latestQualityReview?.createdAt,
         previewHref: "/templates",
         previewLabel: "View full preview",
-        latestNote: variant.approvalDecisionNote || "",
+        latestNote: approval?.decisionNote || variant.approvalDecisionNote || "",
         actionable: true,
       });
     }
   }
 
   for (const sequence of summary.followupSequences) {
+    const campaignName = (sequence.campaignId ? campaignNameById.get(sequence.campaignId) : null) || sequence.campaignName;
     const status = normalizeApprovalStatus(sequence.approvalStatus || sequence.approvalDecisionStatus);
     if (status === "archived" || status === "draft") continue;
 
@@ -113,9 +126,9 @@ export function buildApprovalHubItems(
       id: sequence.id,
       kind: "followup_sequence",
       status,
-      title: approvalTitleFallback("followup_sequence", { campaignName: sequence.campaignName, sequenceName: sequence.name }),
+      title: approvalTitleFallback("followup_sequence", { campaignName, sequenceName: sequence.name }),
       typeLabel: "Follow-up",
-      shortContext: `This follow-up sequence supports the ${sequence.campaignName || "linked"} campaign.`,
+      shortContext: `This follow-up sequence supports the ${campaignName || "linked"} campaign.`,
       previewSummary: `${sequence.followupCount} follow-up step${sequence.followupCount === 1 ? "" : "s"}${sequence.name ? ` · ${sequence.name}` : ""}`,
       reason: status === "pending"
         ? "Follow-up timing and copy should be approved before launch."
@@ -208,25 +221,43 @@ export function buildApprovalHubItems(
 
     const status = normalizeReplyDraftStatus(draft.status);
     if (status === "archived" || status === "draft") continue;
+    const latestInboundMessage = [...(conversation.messages || [])]
+      .reverse()
+      .find((message) => message.direction === "inbound") || null;
+    const trainingSummary = (draft.trainingContextUsed || [])
+      .map((entry) => String(entry.title || entry.category || entry.name || "").trim())
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(" · ");
+    const generatedReason = String(draft.metadata?.action_recommended || draft.metadata?.reply_category || "Generated from the latest inbound reply and reply rules.");
 
     items.push({
       key: `reply:${draft.id}`,
       id: draft.id,
+      conversationId: conversation.id,
       kind: "reply_draft",
       status,
-      title: `Reply approval — ${conversation.companyName || conversation.contactName || "Conversation"}`,
+      title: `Approve reply draft — ${conversation.companyName || conversation.contactName || "Conversation"}`,
       typeLabel: "Reply Draft",
-      shortContext: `Reply draft for ${conversation.contactName || conversation.contactEmail || "this conversation"}.`,
-      previewSummary: `${draft.draftSubject || "Reply draft"}${conversation.campaignName ? ` · ${conversation.campaignName}` : ""}`,
+      shortContext: `Company: ${conversation.companyName || "Unknown company"} · Contact: ${conversation.contactName || conversation.contactEmail || "Unknown contact"} · Campaign: ${conversation.campaignName || "No campaign linked"}.`,
+      previewSummary: `${draft.draftSubject || "Reply draft"}${draft.draftBody ? ` · ${truncatePreview(draft.draftBody, 140)}` : ""}`,
       reason: status === "pending"
-        ? "Replies remain approval-gated so nothing sends automatically."
+        ? "This reply was generated from an inbound message and still needs your approval before it can move forward."
         : "Reply approval history.",
-      requestedBy: "Lead Agent",
-      createdAt: draft.createdAt,
-      previewHref: "/conversations",
-      previewLabel: "View full preview",
+      requestedBy: draft.createdBy?.name || draft.createdBy?.created_by_name || "Lead Agent",
+      createdAt: draft.updatedAt || draft.createdAt || conversation.updatedAt,
+      previewHref: `/conversations`,
+      previewLabel: "Open conversation",
       latestNote: draft.approvalNote || "",
       actionable: true,
+      companyName: conversation.companyName || "",
+      contactName: conversation.contactName || conversation.contactEmail || "",
+      campaignName: conversation.campaignName || "",
+      originalReplySummary: latestInboundMessage
+        ? `${latestInboundMessage.subject || "Inbound reply"} · ${truncatePreview(latestInboundMessage.bodyText || "", 150)}`
+        : "Inbound reply received.",
+      generationReason: generatedReason,
+      trainingSummary: trainingSummary || "Reply rules and training notes",
     });
   }
 
@@ -473,6 +504,13 @@ function friendlyAutoReplyStatus(value: string) {
 
 function hasInternalVisibilityKeyword(value?: string | null) {
   return INTERNAL_KEYWORD_PATTERN.test(String(value || ""));
+}
+
+function truncatePreview(value: string, limit: number) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`;
 }
 
 export function statusLabel(value: ApprovalHubItem["status"]) {

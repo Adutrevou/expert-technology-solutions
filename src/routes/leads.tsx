@@ -70,6 +70,19 @@ function LeadsPage() {
   const hasLeadData = all.length > 0;
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
+  const statusCounts = useMemo(() => {
+    const count = (statuses: string[]) => all.filter((lead) => statuses.includes(lead.status)).length;
+    return {
+      visible: all.length,
+      qualified: count(["Qualified", "Outreach prepared", "Contacted", "Replied", "Needs reply approval"]),
+      researching: count(["Researching"]),
+      manualReview: count(["Manual review"]),
+      outreachPrepared: count(["Outreach prepared"]),
+      contacted: count(["Contacted"]),
+      replied: count(["Replied"]),
+      needsReplyApproval: count(["Needs reply approval"]),
+    };
+  }, [all]);
 
   const filtered = useMemo(() => {
     return all.filter((lead) => {
@@ -223,11 +236,22 @@ function LeadsPage() {
 
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryStat label="Total leads" value={all.length} />
-          <SummaryStat label="Researching" value={all.filter((lead) => lead.status === "Researching").length} />
-          <SummaryStat label="Qualified" value={all.filter((lead) => ["Qualified", "Outreach prepared", "Contacted", "Replied", "Needs reply approval"].includes(lead.status)).length} />
-          <SummaryStat label="Contacted" value={all.filter((lead) => lead.status === "Contacted" || lead.status === "Replied" || lead.status === "Needs reply approval").length} />
-          <SummaryStat label="Manual review" value={all.filter((lead) => lead.status === "Manual review").length} />
+          <SummaryStat label="Visible leads" value={statusCounts.visible} />
+          <SummaryStat label="Qualified" value={statusCounts.qualified} />
+          <SummaryStat label="Researching" value={statusCounts.researching} />
+          <SummaryStat label="Manual review" value={statusCounts.manualReview} />
+          <SummaryStat label="Outreach prepared" value={statusCounts.outreachPrepared} />
+          <SummaryStat label="Contacted" value={statusCounts.contacted} />
+          <SummaryStat label="Replied" value={statusCounts.replied} />
+          <SummaryStat label="Needs reply approval" value={statusCounts.needsReplyApproval} />
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Total visible: {statusCounts.visible}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Qualified: {statusCounts.qualified}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Researching: {statusCounts.researching}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Manual review: {statusCounts.manualReview}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replied: {statusCounts.replied}</span>
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">

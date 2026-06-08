@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
+import { ReplyDraftEditorDialog } from "@/components/reply-draft-editor-dialog";
 import {
   actionableApprovalFilter,
   buildApprovalHubItems,
@@ -48,6 +49,7 @@ function ApprovalsPage() {
   const canApprove = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
   const [requestChangesItem, setRequestChangesItem] = useState<ApprovalHubItem | null>(null);
   const [requestChangesNote, setRequestChangesNote] = useState("");
+  const [editingReplyDraftItem, setEditingReplyDraftItem] = useState<ApprovalHubItem | null>(null);
 
   const items = useMemo(() => {
     if (!summaryQuery.data) return [];
@@ -58,6 +60,9 @@ function ApprovalsPage() {
   const changesRequestedItems = items.filter((item) => item.status === "changes_requested");
   const approvedItems = items.filter((item) => item.status === "approved");
   const archivedItems = items.filter((item) => item.status === "archived");
+  const editingReplyDraftConversation = editingReplyDraftItem
+    ? (conversationsQuery.data || []).find((conversation) => conversation.id === editingReplyDraftItem.conversationId) || null
+    : null;
 
   async function refreshAll() {
     await Promise.all([summaryQuery.refetch(), conversationsQuery.refetch(), requestsQuery.refetch()]);
@@ -99,6 +104,26 @@ function ApprovalsPage() {
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save that decision.");
+    }
+  }
+
+  async function handleReplyDraftSave(input: { draftSubject: string; draftBody: string }) {
+    if (!editingReplyDraftItem || !editingReplyDraftConversation?.latestReplyDraft) {
+      return;
+    }
+
+    try {
+      await replyDraftDecisionMutation.mutateAsync({
+        draftId: editingReplyDraftConversation.latestReplyDraft.id,
+        status: "waiting_for_approval",
+        draft_subject: input.draftSubject,
+        draft_body: input.draftBody,
+        approval_note: "Edited from the Approvals page.",
+      });
+      toast.success("Reply draft saved.");
+      await refreshAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save that reply draft.");
     }
   }
 
@@ -179,6 +204,7 @@ function ApprovalsPage() {
                 setRequestChangesItem(item);
                 setRequestChangesNote(item.latestNote || "");
               }}
+              onEditDraft={(item) => setEditingReplyDraftItem(item)}
             />
           </TabsContent>
 
@@ -191,6 +217,7 @@ function ApprovalsPage() {
               busy={busy}
               onApprove={() => undefined}
               onRequestChanges={() => undefined}
+              onEditDraft={(item) => setEditingReplyDraftItem(item)}
             />
           </TabsContent>
 
@@ -203,6 +230,7 @@ function ApprovalsPage() {
               busy={busy}
               onApprove={() => undefined}
               onRequestChanges={() => undefined}
+              onEditDraft={(item) => setEditingReplyDraftItem(item)}
             />
           </TabsContent>
 
@@ -215,6 +243,7 @@ function ApprovalsPage() {
               busy={busy}
               onApprove={() => undefined}
               onRequestChanges={() => undefined}
+              onEditDraft={(item) => setEditingReplyDraftItem(item)}
             />
           </TabsContent>
         </Tabs>
@@ -261,6 +290,20 @@ function ApprovalsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReplyDraftEditorDialog
+        open={Boolean(editingReplyDraftItem)}
+        onOpenChange={(open) => {
+          if (!open) setEditingReplyDraftItem(null);
+        }}
+        conversation={editingReplyDraftConversation}
+        draft={editingReplyDraftConversation?.latestReplyDraft || null}
+        busy={replyDraftDecisionMutation.isPending}
+        title={`Edit reply draft — ${editingReplyDraftItem?.companyName || editingReplyDraftItem?.contactName || "Conversation"}`}
+        description="Make the reply clearer or more specific, then return it to approval-gated review."
+        saveLabel="Save draft"
+        onSave={handleReplyDraftSave}
+      />
     </div>
   );
 }
@@ -273,6 +316,7 @@ function ApprovalCardList({
   busy,
   onApprove,
   onRequestChanges,
+  onEditDraft,
 }: {
   items: ApprovalHubItem[];
   emptyTitle: string;
@@ -281,6 +325,7 @@ function ApprovalCardList({
   busy: boolean;
   onApprove: (item: ApprovalHubItem) => void;
   onRequestChanges: (item: ApprovalHubItem) => void;
+  onEditDraft: (item: ApprovalHubItem) => void;
 }) {
   if (!items.length) {
     return <EmptyCard title={emptyTitle} description={emptyDescription} />;
@@ -296,6 +341,7 @@ function ApprovalCardList({
           busy={busy}
           onApprove={() => onApprove(item)}
           onRequestChanges={() => onRequestChanges(item)}
+          onEditDraft={item.kind === "reply_draft" ? () => onEditDraft(item) : undefined}
         />
       ))}
     </div>
@@ -308,13 +354,17 @@ function ApprovalDecisionCard({
   busy,
   onApprove,
   onRequestChanges,
+  onEditDraft,
 }: {
   item: ApprovalHubItem;
   canApprove: boolean;
   busy: boolean;
   onApprove: () => void;
   onRequestChanges: () => void;
+  onEditDraft?: () => void;
 }) {
+  const isReplyDraft = item.kind === "reply_draft";
+
   return (
     <div className="rounded-[28px] border border-border/70 bg-background px-5 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -339,6 +389,15 @@ function ApprovalDecisionCard({
         <ApprovalMeta label="Created" value={formatPortalDate(item.createdAt)} />
       </div>
 
+      {isReplyDraft ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <ApprovalMeta label="Original reply" value={item.originalReplySummary || "Inbound reply received."} />
+          <ApprovalMeta label="Why it was generated" value={item.generationReason || "Generated from the inbound reply."} />
+          <ApprovalMeta label="Training used" value={item.trainingSummary || "Reply rules and training notes"} />
+          <ApprovalMeta label="Conversation" value={`${item.companyName || "Unknown company"} · ${item.contactName || "Unknown contact"}`} />
+        </div>
+      ) : null}
+
       {item.latestNote ? (
         <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/10 px-4 py-3 text-sm text-muted-foreground">
           Latest note: {item.latestNote}
@@ -346,6 +405,11 @@ function ApprovalDecisionCard({
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">
+        {isReplyDraft && onEditDraft ? (
+          <Button variant="outline" onClick={onEditDraft} disabled={busy}>
+            Edit draft
+          </Button>
+        ) : null}
         {canApprove ? (
           <>
             <Button onClick={onApprove} disabled={busy}>

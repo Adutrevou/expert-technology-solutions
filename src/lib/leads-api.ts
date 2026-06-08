@@ -553,6 +553,7 @@ export interface LeadAgentClientFacingCounts {
   qualifiedLeads: number;
   outreachPrepared: number;
   emailsSent: number;
+  repliesReceived: number;
   positiveReplies: number;
   meetingsQuoteRequests: number;
 }
@@ -1001,7 +1002,7 @@ export function createReplyDraft(conversationId: string) {
   }).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
 }
 
-export function updateReplyDraft(draftId: string, input: { status: string; approval_note?: string }) {
+export function updateReplyDraft(draftId: string, input: { status: string; approval_note?: string; draft_subject?: string; draft_body?: string }) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-drafts/${encodeURIComponent(draftId)}`, {
     method: "PATCH",
     body: JSON.stringify(input),
@@ -1673,6 +1674,7 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
   const qualifiedCount = normalizeCount(clientFacingCounts.qualified_leads ?? clientFacingCounts.qualifiedLeads) || pipelineCount("Qualified");
   const preparedCount = normalizeCount(clientFacingCounts.outreach_prepared ?? clientFacingCounts.outreachPrepared) || pipelineCount("Prepared");
   const contactedCount = normalizeCount(clientFacingCounts.emails_sent ?? clientFacingCounts.emailsSent) || pipelineCount("Contacted");
+  const repliesReceivedCount = normalizeCount(clientFacingCounts.replies_received ?? clientFacingCounts.repliesReceived);
   const interestedCount = normalizeCount(clientFacingCounts.positive_replies ?? clientFacingCounts.positiveReplies) || pipelineCount("Interested");
   const meetingsCount = normalizeCount(clientFacingCounts.meetings_quote_requests ?? clientFacingCounts.meetingsQuoteRequests) || pipelineCount("Meetings / Quotes");
 
@@ -1772,6 +1774,7 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       qualifiedLeads: qualifiedCount,
       outreachPrepared: preparedCount,
       emailsSent: contactedCount,
+      repliesReceived: repliesReceivedCount,
       positiveReplies: interestedCount,
       meetingsQuoteRequests: meetingsCount,
     },

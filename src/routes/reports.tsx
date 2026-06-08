@@ -36,7 +36,8 @@ function ReportsPage() {
   }
 
   const { clientFacingCounts, leadPipelineCounts, campaigns, approvalsWaiting, mailboxConnected, sendingEnabled, mailboxLastError } = summaryQuery.data;
-  const totalActivity = clientFacingCounts.outreachPrepared + clientFacingCounts.emailsSent + clientFacingCounts.positiveReplies;
+  const repliesReceived = campaigns.reduce((total, campaign) => total + Number(campaign.replies || 0), 0);
+  const totalActivity = clientFacingCounts.outreachPrepared + clientFacingCounts.emailsSent + clientFacingCounts.positiveReplies + repliesReceived;
   const campaignRows = campaigns.map((campaign) => ({
     name: campaign.name,
     status: campaign.approvalStatus === "approved" ? "Approved" : "Waiting for approval",
@@ -70,7 +71,9 @@ function ReportsPage() {
         <MetricCard label="Leads found" value={clientFacingCounts.totalLeadsFound} />
         <MetricCard label="Qualified leads" value={clientFacingCounts.qualifiedLeads} />
         <MetricCard label="Outreach prepared" value={clientFacingCounts.outreachPrepared} />
+        <MetricCard label="Replies received" value={repliesReceived} />
         <MetricCard label="Positive replies" value={clientFacingCounts.positiveReplies} />
+        <MetricCard label="Reply drafts needing approval" value={summaryQuery.data.repliesWaitingApproval} />
       </div>
 
       {totalActivity === 0 ? (
@@ -123,7 +126,9 @@ function ReportsPage() {
           <div className="mt-5 space-y-3">
             <SummaryRow label="Approvals waiting" value={`${approvalsWaiting}`} />
             <SummaryRow label="Emails sent" value={`${clientFacingCounts.emailsSent}`} />
+            <SummaryRow label="Replies received" value={`${repliesReceived}`} />
             <SummaryRow label="Replies" value={`${clientFacingCounts.positiveReplies}`} />
+            <SummaryRow label="Reply drafts needing approval" value={`${summaryQuery.data.repliesWaitingApproval}`} />
             <SummaryRow label="Meetings / quote requests" value={`${clientFacingCounts.meetingsQuoteRequests}`} />
             <SummaryRow label="Mailbox connected" value={mailboxConnected ? "Yes" : "No"} />
             <SummaryRow label="Sending enabled" value={sendingEnabled ? "Yes" : "No"} />

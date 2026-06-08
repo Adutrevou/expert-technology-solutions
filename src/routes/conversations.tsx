@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Mailbox, MessagesSquare, RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
+import { PageIntro } from "@/components/client-portal";
+import { ReplyDraftEditorDialog } from "@/components/reply-draft-editor-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,6 +35,50 @@ function ConversationsPage() {
   const createReplyDraftMutation = useCreateReplyDraftMutation();
   const updateReplyDraftMutation = useUpdateReplyDraftMutation();
   const [reviewNote, setReviewNote] = useState("");
+  const [editingReplyDraft, setEditingReplyDraft] = useState(false);
+
+  async function handleCreateDraft() {
+    if (!selectedConversation) return;
+    try {
+      await createReplyDraftMutation.mutateAsync({ conversationId: selectedConversation.id });
+      toast.success("Reply draft created.");
+      await Promise.all([conversationsQuery.refetch(), detailQuery.refetch()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to create a reply draft.");
+    }
+  }
+
+  async function handleReplyDecision(status: "approved" | "changes_requested") {
+    if (!latestReplyDraft) return;
+    try {
+      await updateReplyDraftMutation.mutateAsync({
+        draftId: latestReplyDraft.id,
+        status,
+        approval_note: reviewNote.trim() || (status === "approved" ? "Approved from the Conversations page." : "Changes requested from the Conversations page."),
+      });
+      toast.success(status === "approved" ? "Reply approved." : "Reply changes requested.");
+      await Promise.all([conversationsQuery.refetch(), detailQuery.refetch()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save that reply decision.");
+    }
+  }
+
+  async function handleReplyDraftEdit(input: { draftSubject: string; draftBody: string }) {
+    if (!latestReplyDraft) return;
+    try {
+      await updateReplyDraftMutation.mutateAsync({
+        draftId: latestReplyDraft.id,
+        status: "waiting_for_approval",
+        draft_subject: input.draftSubject,
+        draft_body: input.draftBody,
+        approval_note: "Edited from the Conversations page.",
+      });
+      toast.success("Reply draft saved.");
+      await Promise.all([conversationsQuery.refetch(), detailQuery.refetch()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save that reply draft.");
+    }
+  }
 
   useEffect(() => {
     if (!conversations.length) {
@@ -68,24 +115,17 @@ function ConversationsPage() {
 
   return (
     <div className="mx-auto max-w-[1320px] space-y-6">
-      <header className="rounded-[28px] border border-border/70 bg-gradient-subtle px-6 py-6 shadow-card md:px-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">Conversations</Badge>
-              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning-foreground">Reply workflow</Badge>
-            </div>
-            <h1 className="mt-4 text-3xl font-bold md:text-4xl">Outreach history and thread view</h1>
-            <p className="mt-2 text-sm text-muted-foreground md:text-base">
-              Prepared outreach, sent threads, and replies stay visible here in one client-scoped timeline.
-            </p>
-          </div>
+      <PageIntro
+        badge="Conversations"
+        title="Who are we speaking to and what happened?"
+        description="Review prepared emails, sent threads, replies, and approval-gated draft replies in one clear conversation timeline."
+        actions={(
           <Button variant="outline" className="gap-2" onClick={() => conversationsQuery.refetch()}>
             <RefreshCcw className="h-4 w-4" />
             Refresh
           </Button>
-        </div>
-      </header>
+        )}
+      />
 
       {!hasReplies && hasSentConversations ? (
         <Card className="p-4 shadow-card">
@@ -231,7 +271,7 @@ function ConversationsPage() {
                       {inboundMessages.length > 0 && !latestReplyDraft && canDraftReplies ? (
                         <Button
                           size="sm"
-                          onClick={() => createReplyDraftMutation.mutate({ conversationId: selectedConversation.id })}
+                          onClick={() => void handleCreateDraft()}
                           disabled={createReplyDraftMutation.isPending}
                         >
                           Create draft
@@ -275,6 +315,13 @@ function ConversationsPage() {
                         <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
                           {latestReplyDraft.draftBody || "No reply body captured."}
                         </pre>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          {latestReplyDraft.status === "approved"
+                            ? "Approved - ready to send through the approved outreach runner."
+                            : latestReplyDraft.status === "changes_requested"
+                              ? "Changes requested. Edit the draft and save it again."
+                              : "Needs approval before any send path can continue."}
+                        </p>
                         {latestReplyDraft.approvalNote ? (
                           <p className="mt-3 text-xs text-muted-foreground">{latestReplyDraft.approvalNote}</p>
                         ) : null}
@@ -290,14 +337,18 @@ function ConversationsPage() {
                               />
                             </div>
                             <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingReplyDraft(true)}
+                                disabled={updateReplyDraftMutation.isPending}
+                              >
+                                Edit draft
+                              </Button>
                               {latestReplyDraft.status !== "approved" ? (
                                 <Button
                                   size="sm"
-                                  onClick={() => updateReplyDraftMutation.mutate({
-                                    draftId: latestReplyDraft.id,
-                                    status: "approved",
-                                    approval_note: reviewNote.trim() || "Approved from the Conversations workspace.",
-                                  })}
+                                  onClick={() => void handleReplyDecision("approved")}
                                   disabled={updateReplyDraftMutation.isPending}
                                 >
                                   Approve
@@ -307,11 +358,7 @@ function ConversationsPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => updateReplyDraftMutation.mutate({
-                                    draftId: latestReplyDraft.id,
-                                    status: "changes_requested",
-                                    approval_note: reviewNote.trim() || "Changes requested from the Conversations workspace.",
-                                  })}
+                                  onClick={() => void handleReplyDecision("changes_requested")}
                                   disabled={updateReplyDraftMutation.isPending}
                                 >
                                   Request Changes
@@ -371,6 +418,18 @@ function ConversationsPage() {
           </Card>
         </div>
       )}
+
+      <ReplyDraftEditorDialog
+        open={editingReplyDraft}
+        onOpenChange={setEditingReplyDraft}
+        conversation={selectedConversation}
+        draft={latestReplyDraft}
+        busy={updateReplyDraftMutation.isPending}
+        title={`Edit reply draft — ${selectedConversation?.companyName || selectedConversation?.contactName || "Conversation"}`}
+        description="Make the reply clearer, then save it back to approval-gated review."
+        saveLabel="Save draft"
+        onSave={handleReplyDraftEdit}
+      />
     </div>
   );
 }
@@ -434,7 +493,7 @@ function replyStatusLabel(status: string) {
     case "needs_review":
       return "Needs review";
     case "draft_ready":
-      return "Waiting for approval";
+      return "Needs approval";
     case "approved":
       return "Approved";
     case "sent":
@@ -447,9 +506,13 @@ function replyStatusLabel(status: string) {
 function replyDraftStatusLabel(status: string) {
   switch (status) {
     case "waiting_for_approval":
-      return "Waiting for approval";
+      return "Needs approval";
     case "changes_requested":
       return "Changes requested";
+    case "approved":
+      return "Approved";
+    case "sent":
+      return "Sent";
     default:
       return formatLabel(status);
   }

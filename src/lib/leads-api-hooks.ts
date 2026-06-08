@@ -221,8 +221,9 @@ export function useCreateReplyDraftMutation() {
 export function useUpdateReplyDraftMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<ReplyDraftRecord, Error, { draftId: string; status: string; approval_note?: string }>({
-    mutationFn: ({ draftId, status, approval_note }) => updateReplyDraft(draftId, { status, approval_note }),
+  return useMutation<ReplyDraftRecord, Error, { draftId: string; status: string; approval_note?: string; draft_subject?: string; draft_body?: string }>({
+    mutationFn: ({ draftId, status, approval_note, draft_subject, draft_body }) =>
+      updateReplyDraft(draftId, { status, approval_note, draft_subject, draft_body }),
     onSuccess: (draft) => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "conversations"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
@@ -369,12 +370,13 @@ export function useApprovalDecisionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { approvalId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) =>
+    mutationFn: (input: { approvalId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) =>
       decideApproval(input.approvalId, {
         decision: input.decision,
         decision_note: input.decision_note,
       }),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -385,7 +387,7 @@ export function useCampaignApprovalDecisionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { campaignId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) =>
+    mutationFn: (input: { campaignId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) =>
       decideCampaignApproval(input.campaignId, {
         decision: input.decision,
         decision_note: input.decision_note,
@@ -441,12 +443,13 @@ export function useTemplateVariantApprovalDecisionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { variantId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) =>
+    mutationFn: (input: { variantId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) =>
       decideTemplateVariantApproval(input.variantId, {
         decision: input.decision,
         decision_note: input.decision_note,
       }),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -460,6 +463,7 @@ export function useUpdateTemplateVariantContentMutation() {
     mutationFn: ({ variantId, input }: { variantId: string; input: Record<string, unknown> }) =>
       updateTemplateVariantContent(variantId, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -472,6 +476,7 @@ export function useCreateOutreachTemplateMutation() {
   return useMutation({
     mutationFn: (input: Record<string, unknown>) => createOutreachTemplate(input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -484,6 +489,7 @@ export function useArchiveOutreachTemplateVariantMutation() {
   return useMutation({
     mutationFn: ({ variantId }: { variantId: string }) => archiveOutreachTemplateVariant(variantId),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -494,12 +500,13 @@ export function useFollowupSequenceApprovalDecisionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { sequenceId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) =>
+    mutationFn: (input: { sequenceId: string; decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) =>
       decideFollowupSequenceApproval(input.sequenceId, {
         decision: input.decision,
         decision_note: input.decision_note,
       }),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -512,6 +519,7 @@ export function useCreateOutreachAssetMutation() {
   return useMutation<OutreachAssetRecord, Error, Record<string, unknown>>({
     mutationFn: (input) => createOutreachAsset(input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -524,6 +532,7 @@ export function useUploadOutreachAssetMutation() {
   return useMutation<OutreachAssetRecord, Error, FormData>({
     mutationFn: (formData) => uploadOutreachAssetFile(formData),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -536,6 +545,7 @@ export function useUpdateOutreachAssetMutation() {
   return useMutation<OutreachAssetRecord, Error, { assetId: string; input: Record<string, unknown> }>({
     mutationFn: ({ assetId, input }) => updateOutreachAsset(assetId, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
@@ -551,6 +561,7 @@ export function useUpdateCampaignImageSettingsMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
   });
 }
@@ -562,7 +573,9 @@ export function useUpdateTemplateVariantImageSettingsMutation() {
     mutationFn: ({ variantId, input }: { variantId: string; input: Record<string, unknown> }) =>
       updateTemplateVariantImageSettings(variantId, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "campaigns"] });
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "lead-agent"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "dashboard"] });
     },
   });
 }
