@@ -567,6 +567,27 @@ export interface LeadAgentAdminSummary {
   enrichmentProviderStatusSummary: Array<{ status: string; count: number }>;
 }
 
+export interface CampaignLaunchStateRecord {
+  campaignId: string;
+  campaignName: string;
+  campaignApprovalStatus: string;
+  campaignStatusLabel: string;
+  firstContactTemplateStatus: string;
+  followupStatus: string;
+  imageAssetStatus: string;
+  launchState: string;
+  sendableLeadsCount: number;
+  preparedLeadsCount: number;
+  queuedUnsentCount: number;
+  sentCount: number;
+  blockers: string[];
+  nextAction: string;
+  mailboxReady: boolean;
+  sendingEnabled: boolean;
+  limitsMatch: boolean;
+  canSendNow: boolean;
+}
+
 export interface LeadAgentSummary {
   ok: boolean;
   client: ApiClientSummary;
@@ -618,6 +639,17 @@ export interface LeadAgentSummary {
   mailboxLastHealthCheckAt?: string;
   mailboxReadinessBlockers: OutreachBlockerRecord[];
   mailboxConnectionCheck: MailboxConnectionCheck | null;
+  launchMode: string;
+  launchReady: boolean;
+  anyCampaignReady: boolean;
+  campaignLaunchStates: CampaignLaunchStateRecord[];
+  campaignsApprovedCount: number;
+  campaignsWaitingApprovalCount: number;
+  campaignsReadyToLaunchCount: number;
+  campaignsLiveCount: number;
+  templatesWaitingApprovalCount: number;
+  followupsWaitingApprovalCount: number;
+  unapprovedRequiredAssetsCount: number;
   renderPreviewAvailableCount: number;
   outreachAssets: OutreachAssetRecord[];
   responseRules: ResponseRuleRecord[];
@@ -631,6 +663,9 @@ export interface LeadAgentSummary {
   approvals: ApprovalRecord[];
   pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
   clientFacingCounts: LeadAgentClientFacingCounts;
+  currentCampaignFocus: string;
+  newLeadsSourcedToday: number;
+  repliesWaitingApproval: number;
   adminSummary: LeadAgentAdminSummary;
   latestQualificationActions: Array<{
     id: string;
@@ -749,6 +784,15 @@ export interface LeadRecord {
   qualification: LeadQualification;
   status: string;
   campaignName: string;
+  leadScore: number;
+  matchReason: string;
+  sourceUrl: string;
+  sourceEvidence: string;
+  decisionMakerPath: string[];
+  outreachStatus: string;
+  replyDraftStatus: string;
+  nextAction: string;
+  lastActivity?: string;
   createdAt?: string;
 }
 
@@ -769,6 +813,22 @@ export interface CampaignRecord {
   imagesEnabled: boolean;
   hiddenFromClient: boolean;
   leadCount?: number;
+  launchState: string;
+  launchBlockers: string[];
+  launchNextAction: string;
+  firstContactTemplateStatus: string;
+  followupStatus: string;
+  imageAssetStatus: string;
+  sendableLeadsCount: number;
+  queuedUnsentCount: number;
+  sentCount: number;
+  sourcedLeads: number;
+  qualifiedLeads: number;
+  visibleLeads: number;
+  outreachSent: number;
+  replies: number;
+  repliesWaitingApproval: number;
+  nextAction: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1056,23 +1116,29 @@ export function createMission(input: {
   }).then((value) => normalizeMission(asRecord(asRecord(value).mission)));
 }
 
-export function decideApproval(approvalId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+export function decideApproval(approvalId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/approvals/${encodeURIComponent(approvalId)}/decision`, {
     method: "POST",
     body: JSON.stringify(input),
   }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
 }
 
-export function decideCampaignApproval(campaignId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+export function decideCampaignApproval(campaignId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) {
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns/${encodeURIComponent(campaignId)}/approval`, {
     method: "POST",
     body: JSON.stringify(input),
   }).then((value) => normalizeCampaign(asRecord(asRecord(value).campaign)));
 }
 
-export function decideTemplateVariantApproval(variantId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+export function decideTemplateVariantApproval(variantId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) {
   const normalizedDecision = input.decision === "request_changes" ? "changes_requested" : input.decision;
-  const action = normalizedDecision === "approved" ? "approve" : normalizedDecision === "changes_requested" ? "request-changes" : "decline";
+  const action = normalizedDecision === "approved"
+    ? "approve"
+    : normalizedDecision === "changes_requested"
+      ? "request-changes"
+      : normalizedDecision === "waiting_for_approval"
+        ? "unapprove"
+        : "decline";
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-template-variants/${encodeURIComponent(variantId)}/${action}`, {
     method: "POST",
     body: JSON.stringify(input),
@@ -1086,9 +1152,15 @@ export function requestTemplateVariantChanges(variantId: string, input: { decisi
   }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
 }
 
-export function decideFollowupSequenceApproval(sequenceId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes"; decision_note?: string }) {
+export function decideFollowupSequenceApproval(sequenceId: string, input: { decision: "approved" | "rejected" | "changes_requested" | "request_changes" | "waiting_for_approval"; decision_note?: string }) {
   const normalizedDecision = input.decision === "request_changes" ? "changes_requested" : input.decision;
-  const action = normalizedDecision === "approved" ? "approve" : normalizedDecision === "changes_requested" ? "request-changes" : "decline";
+  const action = normalizedDecision === "approved"
+    ? "approve"
+    : normalizedDecision === "changes_requested"
+      ? "request-changes"
+      : normalizedDecision === "waiting_for_approval"
+        ? "unapprove"
+        : "decline";
   return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/${action}`, {
     method: "POST",
     body: JSON.stringify(input),
@@ -1584,6 +1656,19 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     mailboxLastHealthCheckAt: normalizeTimestamp(record.mailbox_last_health_check_at ?? record.mailboxLastHealthCheckAt),
     mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
     mailboxConnectionCheck: normalizeMailboxConnectionCheck(record.mailbox_connection_check ?? record.mailboxConnectionCheck),
+    launchMode: pickString(record, ["launch_mode", "launchMode"]) || "waiting_for_approval",
+    launchReady: pickBoolean(record, ["launch_ready", "launchReady"]) ?? false,
+    anyCampaignReady: pickBoolean(record, ["any_campaign_ready", "anyCampaignReady"]) ?? false,
+    campaignLaunchStates: asArray(record.campaign_launch_states ?? record.campaignLaunchStates).map((item, index) =>
+      normalizeCampaignLaunchState(item, index),
+    ),
+    campaignsApprovedCount: normalizeCount(record.campaigns_approved_count ?? record.campaignsApprovedCount),
+    campaignsWaitingApprovalCount: normalizeCount(record.campaigns_waiting_approval_count ?? record.campaignsWaitingApprovalCount),
+    campaignsReadyToLaunchCount: normalizeCount(record.campaigns_ready_to_launch_count ?? record.campaignsReadyToLaunchCount),
+    campaignsLiveCount: normalizeCount(record.campaigns_live_count ?? record.campaignsLiveCount),
+    templatesWaitingApprovalCount: normalizeCount(record.templates_waiting_approval_count ?? record.templatesWaitingApprovalCount),
+    followupsWaitingApprovalCount: normalizeCount(record.followups_waiting_approval_count ?? record.followupsWaitingApprovalCount),
+    unapprovedRequiredAssetsCount: normalizeCount(record.unapproved_required_assets_count ?? record.unapprovedRequiredAssetsCount),
     renderPreviewAvailableCount: normalizeCount(record.render_preview_available_count ?? record.renderPreviewAvailableCount),
     outreachAssets: asArray(record.outreach_assets).map((item) => normalizeOutreachAsset(item)),
     responseRules: asArray(record.response_rules ?? record.responseRules).map((item, index) => normalizeResponseRule(item, index)),
@@ -1606,6 +1691,9 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       positiveReplies: interestedCount,
       meetingsQuoteRequests: meetingsCount,
     },
+    currentCampaignFocus: pickString(record, ["current_campaign_focus", "currentCampaignFocus"]) || "",
+    newLeadsSourcedToday: normalizeCount(record.new_leads_sourced_today ?? record.newLeadsSourcedToday),
+    repliesWaitingApproval: normalizeCount(record.replies_waiting_approval ?? record.repliesWaitingApproval),
     adminSummary: {
       rawLeadsCount: normalizeCount(adminSummary.raw_leads_count ?? adminSummary.rawLeadsCount),
       enrichmentQueueCount: normalizeCount(adminSummary.enrichment_queue_count ?? adminSummary.enrichmentQueueCount),
@@ -1723,6 +1811,9 @@ function mapApprovalStatus(value?: string): CampaignApprovalStatus {
 
 export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
+  const leadPipeline = asRecord(metadata.lead_pipeline);
+  const sourceEvidence = asRecord(record.source_evidence ?? leadPipeline.source_evidence);
   const normalizedStatus =
     normalizeLeadStatus(
       pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]),
@@ -1762,6 +1853,24 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
       pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]) ||
       normalizedStatus,
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    leadScore: normalizeCount(record.lead_score ?? record.leadScore),
+    matchReason: pickString(record, ["match_reason", "matchReason"]) || pickString(leadPipeline, ["match_reason", "matchReason"]) || "",
+    sourceUrl: pickString(record, ["source_url", "sourceUrl"]) || pickString(sourceEvidence, ["source_url", "sourceUrl"]) || "",
+    sourceEvidence:
+      pickString(record, ["source_url", "sourceUrl"]) ||
+      pickString(sourceEvidence, ["source_url", "sourceUrl"]) ||
+      pickString(record, ["website"]) ||
+      pickString(sourceEvidence, ["website"]) ||
+      pickString(record, ["domain"]) ||
+      pickString(sourceEvidence, ["domain"]) ||
+      "",
+    decisionMakerPath: pickStringArray(record, ["decision_maker_path", "decisionMakerPath"]).length
+      ? pickStringArray(record, ["decision_maker_path", "decisionMakerPath"])
+      : pickStringArray(leadPipeline, ["decision_maker_path", "decisionMakerPath"]),
+    outreachStatus: pickString(record, ["outreach_status", "outreachStatus"]) || "",
+    replyDraftStatus: pickString(record, ["reply_draft_status", "replyDraftStatus"]) || "",
+    nextAction: pickString(record, ["next_action", "nextAction"]) || pickString(leadPipeline, ["next_action", "nextAction"]) || "",
+    lastActivity: normalizeTimestamp(record.last_activity ?? record.lastActivity ?? leadPipeline.last_activity ?? leadPipeline.lastActivity),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
 }
@@ -1786,8 +1895,48 @@ export function normalizeCampaign(value: unknown, index = 0): CampaignRecord {
     imagesEnabled: pickBoolean(record, ["images_enabled", "imagesEnabled"]) ?? false,
     hiddenFromClient: pickBoolean(metadata, ["hidden_from_client", "hiddenFromClient"]) ?? false,
     leadCount: pickNumber(record, ["lead_count", "leadCount"]),
+    launchState: pickString(record, ["launch_state", "launchState"]) || "waiting_for_approval",
+    launchBlockers: pickStringArray(record, ["launch_blockers", "launchBlockers"]),
+    launchNextAction: pickString(record, ["launch_next_action", "launchNextAction"]) || "",
+    firstContactTemplateStatus: pickString(record, ["first_contact_template_status", "firstContactTemplateStatus"]) || "Needs approval",
+    followupStatus: pickString(record, ["followup_status", "followupStatus"]) || "Needs approval",
+    imageAssetStatus: pickString(record, ["image_asset_status", "imageAssetStatus"]) || "Not required",
+    sendableLeadsCount: normalizeCount(record.sendable_leads_count ?? record.sendableLeadsCount),
+    queuedUnsentCount: normalizeCount(record.queued_unsent_count ?? record.queuedUnsentCount),
+    sentCount: normalizeCount(record.sent_count ?? record.sentCount),
+    sourcedLeads: normalizeCount(record.sourced_leads ?? record.sourcedLeads),
+    qualifiedLeads: normalizeCount(record.qualified_leads ?? record.qualifiedLeads),
+    visibleLeads: normalizeCount(record.visible_leads ?? record.visibleLeads),
+    outreachSent: normalizeCount(record.outreach_sent ?? record.outreachSent),
+    replies: normalizeCount(record.replies),
+    repliesWaitingApproval: normalizeCount(record.replies_waiting_approval ?? record.repliesWaitingApproval),
+    nextAction: pickString(record, ["next_action", "nextAction"]) || "",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeCampaignLaunchState(value: unknown, index = 0): CampaignLaunchStateRecord {
+  const record = asRecord(value);
+  return {
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || `campaign-launch-${index}`,
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Campaign",
+    campaignApprovalStatus: pickString(record, ["campaign_approval_status", "campaignApprovalStatus"]) || "waiting_for_approval",
+    campaignStatusLabel: pickString(record, ["campaign_status_label", "campaignStatusLabel"]) || "Needs approval",
+    firstContactTemplateStatus: pickString(record, ["first_contact_template_status", "firstContactTemplateStatus"]) || "Needs approval",
+    followupStatus: pickString(record, ["followup_status", "followupStatus"]) || "Needs approval",
+    imageAssetStatus: pickString(record, ["image_asset_status", "imageAssetStatus"]) || "Not required",
+    launchState: pickString(record, ["launch_state", "launchState"]) || "waiting_for_approval",
+    sendableLeadsCount: normalizeCount(record.sendable_leads_count ?? record.sendableLeadsCount),
+    preparedLeadsCount: normalizeCount(record.prepared_leads_count ?? record.preparedLeadsCount),
+    queuedUnsentCount: normalizeCount(record.queued_unsent_count ?? record.queuedUnsentCount),
+    sentCount: normalizeCount(record.sent_count ?? record.sentCount),
+    blockers: pickStringArray(record, ["blockers"]),
+    nextAction: pickString(record, ["next_action", "nextAction"]) || "",
+    mailboxReady: pickBoolean(record, ["mailbox_ready", "mailboxReady"]) ?? false,
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    limitsMatch: pickBoolean(record, ["limits_match", "limitsMatch"]) ?? false,
+    canSendNow: pickBoolean(record, ["can_send_now", "canSendNow"]) ?? false,
   };
 }
 

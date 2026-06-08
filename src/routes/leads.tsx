@@ -224,9 +224,9 @@ function LeadsPage() {
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryStat label="Total leads" value={all.length} />
-          <SummaryStat label="Hot" value={all.filter((lead) => lead.qualification === "hot").length} />
-          <SummaryStat label="Warm" value={all.filter((lead) => lead.qualification === "warm").length} />
-          <SummaryStat label="Review" value={all.filter((lead) => lead.qualification === "review").length} />
+          <SummaryStat label="Researching" value={all.filter((lead) => lead.status === "Researching").length} />
+          <SummaryStat label="Qualified" value={all.filter((lead) => lead.status !== "Researching").length} />
+          <SummaryStat label="Contacted" value={all.filter((lead) => lead.status === "Contacted" || lead.status === "Replied" || lead.status === "Needs reply approval").length} />
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
@@ -308,7 +308,7 @@ function LeadsPage() {
                     <TableHead className="hidden md:table-cell">Title</TableHead>
                     <TableHead className="hidden lg:table-cell">Industry</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Qualification</TableHead>
+                    <TableHead>Score</TableHead>
                     <TableHead className="hidden xl:table-cell">Campaign</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -348,7 +348,7 @@ function LeadsPage() {
                       <TableCell className="hidden md:table-cell text-muted-foreground">{displayValue(lead.title)}</TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(lead.industry)}</TableCell>
                       <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                      <TableCell><LeadStatusBadge status={lead.qualification} /></TableCell>
+                      <TableCell className="text-muted-foreground">{lead.leadScore ? String(lead.leadScore) : "0"}</TableCell>
                       <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
                     </TableRow>
                   ))}
@@ -440,12 +440,15 @@ function LeadMobileCard({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <LeadStatusBadge status={lead.qualification} />
+        {lead.outreachStatus ? <LeadStatusBadge status={lead.outreachStatus} /> : null}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <LeadField label="Title" value={displayValue(lead.title)} />
         <LeadField label="Industry" value={displayValue(lead.industry)} />
         <LeadField label="Location" value={displayValue(lead.location)} />
         <LeadField label="Campaign" value={displayValue(lead.campaignName)} />
+        <LeadField label="Score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
+        <LeadField label="Source" value={displayValue(lead.sourceEvidence)} />
       </dl>
     </button>
   );
@@ -528,6 +531,20 @@ function LeadDetailPanel({
             <LeadField label="Location" value={displayValue(lead.location)} />
             <LeadField label="Website" value={displayValue(lead.website || lead.domain)} />
             <LeadField label="LinkedIn" value={displayValue(lead.linkedinUrl || lead.companyLinkedin)} />
+            <LeadField label="Source evidence" value={displayValue(lead.sourceEvidence)} />
+            <LeadField label="Lead score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
+            <LeadField label="Outreach status" value={displayValue(lead.outreachStatus)} />
+            <LeadField label="Next action" value={displayValue(lead.nextAction)} />
+            <LeadField label="Last activity" value={lead.lastActivity ? formatDistanceToNow(new Date(lead.lastActivity), { addSuffix: true }) : "Not provided"} />
+          </div>
+          <div className="mt-4 rounded-xl border border-border bg-muted/10 p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Match reason</p>
+            <p className="mt-2 text-sm">{displayValue(lead.matchReason)}</p>
+            {lead.decisionMakerPath.length ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Decision-maker path: {lead.decisionMakerPath.join(" -> ")}
+              </p>
+            ) : null}
           </div>
         </div>
 

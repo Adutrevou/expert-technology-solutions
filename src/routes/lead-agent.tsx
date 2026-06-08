@@ -82,9 +82,11 @@ function LeadAgentPage() {
   }, [data]);
 
   const nextAction = data?.anyCampaignReady
-    ? data.sendingEnabled
-      ? "At least one campaign is ready. Run a dry-run send batch before any live outreach."
-      : "At least one campaign is ready. Keep sending paused until launch is explicitly enabled."
+    ? data.currentCampaignFocus
+      ? `Keep ${data.currentCampaignFocus} topped up while one-by-one outreach continues.`
+      : data.sendingEnabled
+        ? "At least one campaign is ready. Run a dry-run send batch before any live outreach."
+        : "At least one campaign is ready. Keep sending paused until launch is explicitly enabled."
     : data?.approvalsWaiting
       ? "Review campaign, template, and follow-up approvals before launch."
       : data?.mailboxConnected
@@ -179,9 +181,9 @@ function LeadAgentPage() {
           detail="Lead sourcing and qualification are active."
         />
         <StatCard
-          label="Prepared outreach"
-          value={data.clientFacingCounts.outreachPrepared}
-          detail="Drafts stay paused until approval."
+          label="New leads today"
+          value={data.newLeadsSourcedToday}
+          detail="Real campaign-sourced companies added today."
         />
         <StatCard
           label="Ready campaigns"
@@ -192,6 +194,11 @@ function LeadAgentPage() {
           label="Needs approval"
           value={data.approvalsWaiting}
           detail="Approvals page remains the central decision hub."
+        />
+        <StatCard
+          label="Replies waiting"
+          value={data.repliesWaitingApproval}
+          detail="Approval-gated reply drafts waiting for review."
         />
         <StatCard
           label="Safety"
@@ -233,6 +240,11 @@ function LeadAgentPage() {
               Mailbox connected: {data.mailboxConnected ? "Yes" : "No"} · Sending enabled:{" "}
               {data.sendingEnabled ? "Yes" : "No"}
             </p>
+            {data.currentCampaignFocus ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Current campaign focus: {data.currentCampaignFocus}
+              </p>
+            ) : null}
           </div>
         </SectionCard>
 

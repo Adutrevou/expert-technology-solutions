@@ -2,13 +2,19 @@ import { Badge } from "@/components/ui/badge";
 import type { LeadStatus, CampaignStatus, MeetingStatus } from "@/lib/demo-data";
 import type { CampaignApprovalStatus, CampaignLifecycleStatus, LeadQualification, LeadWorkflowStatus } from "@/lib/leads-api";
 
-const LEAD: Record<LeadStatus | LeadQualification | LeadWorkflowStatus, { label: string; cls: string }> = {
+const LEAD: Record<string, { label: string; cls: string }> = {
   new: { label: "New", cls: "bg-muted text-muted-foreground" },
   reviewed: { label: "Reviewed", cls: "bg-muted text-muted-foreground" },
   review: { label: "Review", cls: "bg-muted text-muted-foreground" },
+  Researching: { label: "Researching", cls: "bg-muted text-muted-foreground" },
+  Qualified: { label: "Qualified", cls: "bg-info/15 text-info border-info/30" },
+  "Outreach prepared": { label: "Outreach prepared", cls: "bg-primary/15 text-primary border-primary/30" },
   contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
+  Contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
   follow_up: { label: "Follow up", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   replied: { label: "Replied", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  Replied: { label: "Replied", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  "Needs reply approval": { label: "Needs reply approval", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   warm: { label: "Warm", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   interested: { label: "Interested", cls: "bg-primary/15 text-primary border-primary/30" },
   converted: { label: "Converted", cls: "bg-success/15 text-success border-success/30" },

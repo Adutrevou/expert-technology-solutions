@@ -20,7 +20,7 @@ import {
   useLeadAgentSummaryQuery,
   useUpdateCampaignMutation,
 } from "@/lib/leads-api-hooks";
-import type { ApprovalRecord, CampaignRecord, FollowupSequenceRecord, OutreachTemplateRecord } from "@/lib/leads-api";
+import type { ApprovalRecord, CampaignRecord } from "@/lib/leads-api";
 
 export const Route = createFileRoute("/campaigns")({
   head: () => ({ meta: [{ title: "Campaigns — Expert Technology Solutions" }] }),
@@ -37,6 +37,7 @@ type CampaignEditorState = {
   mode: "create" | "edit";
   campaignId?: string;
   originalApprovalStatus?: string;
+  originalForm?: CampaignFormState;
 } | null;
 
 type CampaignFormState = {
@@ -83,7 +84,7 @@ function CampaignsPage() {
 
   const summary = summaryQuery.data;
   const campaigns = useMemo(() => {
-    const rows = campaignsQuery.data?.campaigns || summary?.campaigns || [];
+    const rows = summary?.campaigns || campaignsQuery.data?.campaigns || [];
     return rows
       .filter((campaign) => !campaign.hiddenFromClient)
       .filter((campaign) => !/(demo|mock|placeholder|untitled)/i.test(campaign.name))
@@ -120,22 +121,13 @@ function CampaignsPage() {
   }
 
   function openEditCampaign(campaign: CampaignRecord) {
-    setCampaignForm({
-      name: campaign.name || "",
-      objective: campaign.objective || "",
-      targetNiche: campaign.targetNiche || "",
-      targetLocation: campaign.targetLocation || "",
-      targetDecisionMakers: campaign.targetDecisionMakers.join("\n"),
-      servicesOffers: campaign.servicesOffers.join("\n"),
-      qualificationQuestions: campaign.qualificationQuestions.join("\n"),
-      keySellingPoints: campaign.keySellingPoints.join("\n"),
-      cta: campaign.callToAction || "",
-      notes: campaign.notes || "",
-    });
+    const originalForm = buildCampaignFormState(campaign);
+    setCampaignForm(originalForm);
     setEditorState({
       mode: "edit",
       campaignId: campaign.id,
       originalApprovalStatus: normalizeApproval(campaign.approvalStatus),
+      originalForm,
     });
   }
 
@@ -144,14 +136,24 @@ function CampaignsPage() {
     setCampaignForm(EMPTY_FORM);
   }
 
-  async function handleCampaignDecision(campaignId: string, decision: "approved" | "changes_requested", decisionNote?: string) {
+  async function handleCampaignDecision(
+    campaignId: string,
+    decision: "approved" | "changes_requested" | "waiting_for_approval",
+    decisionNote?: string,
+  ) {
     try {
       await campaignDecisionMutation.mutateAsync({
         campaignId,
         decision,
         decision_note: decisionNote?.trim() || undefined,
       });
-      toast.success(decision === "approved" ? "Campaign approved." : "Changes requested.");
+      toast.success(
+        decision === "approved"
+          ? "Campaign approved."
+          : decision === "waiting_for_approval"
+            ? "Campaign approval paused."
+            : "Changes requested.",
+      );
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save that campaign decision.");
@@ -194,16 +196,22 @@ function CampaignsPage() {
     };
 
     try {
+      const keyLaunchDetailsChanged = editorState?.mode === "edit"
+        && editorState.originalForm
+        && hasCampaignKeyLaunchFieldChanges(editorState.originalForm, campaignForm);
+
       if (editorState?.mode === "edit" && editorState.campaignId) {
         await updateCampaignMutation.mutateAsync({
           campaignId: editorState.campaignId,
           input,
         });
-        toast.success(
-          editorState.originalApprovalStatus === "approved"
-            ? "Changes saved. This campaign needs approval before the agent can use it again."
-            : "Campaign changes saved.",
-        );
+        if (editorState.originalApprovalStatus === "approved" && keyLaunchDetailsChanged) {
+          toast.success("Campaign updated. Because key launch details changed, this campaign needs approval again before outreach can continue.");
+        } else if (editorState.originalApprovalStatus === "approved") {
+          toast.success("Campaign updated. Approval remains active because only non-critical details changed.");
+        } else {
+          toast.success("Campaign updated. It still needs approval before outreach can continue.");
+        }
       } else {
         await createCampaignMutation.mutateAsync(input);
         toast.success("Campaign saved as draft. It now needs approval before the agent can use it.");
@@ -250,6 +258,8 @@ function CampaignsPage() {
   }
 
   const approvalsWaiting = activeCampaigns.filter((campaign) => normalizeApproval(campaign.approvalStatus) !== "approved").length;
+  const readyToLaunchCount = activeCampaigns.filter((campaign) => campaign.launchState === "approved_ready").length;
+  const pausedCount = activeCampaigns.filter((campaign) => campaign.launchState === "paused_needs_approval").length;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -281,9 +291,9 @@ function CampaignsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active campaigns" value={activeCampaigns.length} detail="Campaigns currently visible for active planning." />
-        <StatCard label="Approved" value={activeCampaigns.filter((campaign) => normalizeApproval(campaign.approvalStatus) === "approved").length} detail="Approved campaigns are clear on scope and ready for linked template review." />
+        <StatCard label="Ready to launch" value={readyToLaunchCount} detail="These campaigns have the required approvals and are ready once sending is enabled." />
         <StatCard label="Needs approval" value={approvalsWaiting} detail="These campaigns still need an approval decision." />
-        <StatCard label="Archived" value={archivedCampaigns.length} detail="Archived campaigns keep their history but stay out of active use." />
+        <StatCard label="Paused" value={pausedCount} detail="Approved work changed and needs approval again before outreach can continue." />
       </div>
 
       <SectionCard title="Active campaigns" description="Start here. Review campaign details, update them safely, and keep approval status clear.">
@@ -291,13 +301,10 @@ function CampaignsPage() {
           <div className="grid gap-4 xl:grid-cols-2">
             {activeCampaigns.map((campaign) => {
               const approval = approvalsByCampaignId.get(campaign.id);
-              const templates = (summary?.outreachTemplates || []).filter((template) => template.campaignId === campaign.id);
-              const sequences = (summary?.followupSequences || []).filter((sequence) => sequence.campaignId === campaign.id);
-              const templateReadiness = describeTemplateReadiness(templates, sequences);
-              const outreachReadiness = describeOutreachReadiness(campaign, templates, sequences);
               const approvalStatus = normalizeApproval(campaign.approvalStatus);
               const latestNote = approval?.decisionNote || "";
               const needsDecision = approvalStatus !== "approved" && approvalStatus !== "archived";
+              const canPauseApproval = approvalStatus === "approved";
 
               return (
                 <Card key={campaign.id} className="rounded-[26px] border-border/70 p-5 shadow-none">
@@ -315,13 +322,22 @@ function CampaignsPage() {
                   <div className="mt-5 grid gap-3 md:grid-cols-2">
                     <InfoRow label="Target audience" value={campaign.targetNiche || "Not specified yet"} />
                     <InfoRow label="Target locations" value={campaign.targetLocation || "Not specified yet"} />
-                    <InfoRow label="Template readiness" value={templateReadiness} />
-                    <InfoRow label="Outreach readiness" value={outreachReadiness} />
+                    <InfoRow label="First email" value={campaign.firstContactTemplateStatus || "Needs approval"} />
+                    <InfoRow label="Follow-ups" value={campaign.followupStatus || "Needs approval"} />
+                    <InfoRow label="Launch state" value={formatLaunchState(campaign.launchState)} />
+                    <InfoRow label="Next action" value={campaign.nextAction || campaign.launchNextAction || "Review approvals before launch."} />
                   </div>
 
-                  {latestNote ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <InfoRow label="Sourced" value={String(campaign.sourcedLeads)} />
+                    <InfoRow label="Qualified" value={String(campaign.qualifiedLeads)} />
+                    <InfoRow label="Outreach sent" value={String(campaign.outreachSent)} />
+                    <InfoRow label="Replies" value={String(campaign.replies)} />
+                  </div>
+
+                  {latestNote || campaign.launchBlockers.length ? (
                     <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/10 px-4 py-3 text-sm text-muted-foreground">
-                      Latest note: {latestNote}
+                      {latestNote ? `Latest note: ${latestNote}` : campaign.launchBlockers[0]}
                     </div>
                   ) : null}
 
@@ -363,6 +379,17 @@ function CampaignsPage() {
                           Request changes
                         </Button>
                       </>
+                    ) : null}
+                    {canPauseApproval ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleCampaignDecision(campaign.id, "waiting_for_approval", "Campaign paused until approval is confirmed again.")}
+                        disabled={!canApprove || campaignDecisionMutation.isPending}
+                        title={!canApprove ? "You do not have permission to pause approvals." : undefined}
+                      >
+                        Unapprove / Pause
+                      </Button>
                     ) : null}
                     <Button asChild variant="outline" size="sm">
                       <Link to="/approvals">View approval details</Link>
@@ -513,42 +540,56 @@ function CampaignsPage() {
   );
 }
 
-function describeTemplateReadiness(templates: OutreachTemplateRecord[], sequences: FollowupSequenceRecord[]) {
-  const variants = templates.flatMap((template) => template.variants);
-  const approvedVariants = variants.filter((variant) => normalizeApproval(variant.approvalStatus || variant.approvalDecisionStatus) === "approved").length;
-  const approvedSequences = sequences.filter((sequence) => normalizeApproval(sequence.approvalStatus || sequence.approvalDecisionStatus) === "approved").length;
-
-  if (!variants.length && !sequences.length) {
-    return "No templates or follow-ups linked yet";
+function formatLaunchState(value: string) {
+  switch (value) {
+    case "approved_ready":
+      return "Ready to launch";
+    case "live":
+      return "Live";
+    case "paused_needs_approval":
+      return "Paused - approval needed";
+    case "archived":
+      return "Archived";
+    default:
+      return "Needs approval";
   }
-
-  if (variants.length === approvedVariants && sequences.length === approvedSequences) {
-    return "Templates and follow-ups are approved";
-  }
-
-  return `${approvedVariants}/${variants.length} email templates approved · ${approvedSequences}/${sequences.length} follow-up sequences approved`;
 }
 
-function describeOutreachReadiness(
-  campaign: CampaignRecord,
-  templates: OutreachTemplateRecord[],
-  sequences: FollowupSequenceRecord[],
-) {
-  const campaignApproved = normalizeApproval(campaign.approvalStatus) === "approved";
-  const templateReady = templates.every((template) =>
-    template.variants.every((variant) => normalizeApproval(variant.approvalStatus || variant.approvalDecisionStatus) === "approved"),
-  );
-  const sequenceReady = sequences.every((sequence) => normalizeApproval(sequence.approvalStatus || sequence.approvalDecisionStatus) === "approved");
+function buildCampaignFormState(campaign: CampaignRecord): CampaignFormState {
+  return {
+    name: campaign.name || "",
+    objective: campaign.objective || "",
+    targetNiche: campaign.targetNiche || "",
+    targetLocation: campaign.targetLocation || "",
+    targetDecisionMakers: campaign.targetDecisionMakers.join("\n"),
+    servicesOffers: campaign.servicesOffers.join("\n"),
+    qualificationQuestions: campaign.qualificationQuestions.join("\n"),
+    keySellingPoints: campaign.keySellingPoints.join("\n"),
+    cta: campaign.callToAction || "",
+    notes: campaign.notes || "",
+  };
+}
 
-  if (!campaignApproved) {
-    return "Blocked until this campaign is approved";
-  }
+function normalizeMultilineText(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("\n");
+}
 
-  if (!templateReady || !sequenceReady) {
-    return "Waiting on linked template or follow-up approvals";
-  }
+function normalizeSingleLineText(value: string) {
+  return value.trim();
+}
 
-  return "Campaign structure is ready. Launch still depends on global sending controls and final approvals.";
+function hasCampaignKeyLaunchFieldChanges(previous: CampaignFormState, next: CampaignFormState) {
+  return normalizeSingleLineText(previous.name) !== normalizeSingleLineText(next.name)
+    || normalizeSingleLineText(previous.objective) !== normalizeSingleLineText(next.objective)
+    || normalizeSingleLineText(previous.targetNiche) !== normalizeSingleLineText(next.targetNiche)
+    || normalizeSingleLineText(previous.targetLocation) !== normalizeSingleLineText(next.targetLocation)
+    || normalizeMultilineText(previous.targetDecisionMakers) !== normalizeMultilineText(next.targetDecisionMakers)
+    || normalizeMultilineText(previous.servicesOffers) !== normalizeMultilineText(next.servicesOffers)
+    || normalizeSingleLineText(previous.cta) !== normalizeSingleLineText(next.cta);
 }
 
 function splitTextareaList(value: string) {
