@@ -109,12 +109,12 @@ function LeadAgentPage() {
         title={
           data.anyCampaignReady
             ? "A campaign is ready for launch"
-            : "Expert Lead Agent is waiting for approval"
+            : "Expert Lead Agent is active"
         }
         description={
           data.anyCampaignReady
             ? "Pipeline work is active and at least one campaign has the approvals needed for launch. Sending continues one-by-one whenever the live send gate passes and caps remain available."
-            : "Pipeline work is active, outreach is prepared, and sending stays paused until a campaign and first-contact template are approved."
+            : "Pipeline work is active. Approvals, templates, and outreach readiness are tracked here without blocking access to the workspace."
         }
         actions={
           <>

@@ -79,7 +79,7 @@ function SettingsPage() {
       <PageIntro
         badge="Settings"
         title="How is access and safety configured?"
-        description="Manage account details, password changes, mailbox status, reply sync, and launch safety in one practical place."
+        description="Manage account details, password changes, mailbox status, reply sync, and workspace safety controls in one practical place."
         actions={(
           <Button variant="outline" onClick={() => { void statusQuery.refetch(); void summaryQuery.refetch(); }}>
             <RefreshCcw className="mr-2 h-4 w-4" />
@@ -122,7 +122,7 @@ function SettingsPage() {
 
             <p className="text-sm text-muted-foreground">{connectionState.detail}</p>
             <p className="text-sm text-muted-foreground">
-              Reply sync and mailbox connectivity are visible here. Outbound sending remains paused until an explicit launch decision.
+              Reply sync and mailbox connectivity are visible here. Auto-replies remain off and sending stays within the approved safety controls.
             </p>
           </div>
 
@@ -139,7 +139,7 @@ function SettingsPage() {
             </Button>
             <div className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm text-muted-foreground">
               <ShieldCheck className="h-4 w-4" />
-              Reply sync only. Sending remains disabled.
+              Reply sync only. Auto-replies remain off.
             </div>
           </div>
         </div>
@@ -192,7 +192,7 @@ function SettingsPage() {
         <Card className="p-6 shadow-card">
           <h2 className="text-xl font-semibold">Launch guardrails</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            What is ready now, what still needs approval, and what stays blocked until launch.
+            What is ready now, what still needs approval, and which live safety controls remain in place.
           </p>
 
           <div className="mt-5 space-y-3">
@@ -205,7 +205,7 @@ function SettingsPage() {
           </div>
 
           <div className="mt-5 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning-foreground">
-            Sending is paused until approvals are complete and launch is explicitly started. No auto-replies are enabled here.
+            Approved one-by-one sending follows live safety rules and caps. No auto-replies are enabled here.
           </div>
         </Card>
       </div>

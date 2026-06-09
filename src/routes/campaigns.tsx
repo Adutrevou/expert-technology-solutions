@@ -286,7 +286,7 @@ function CampaignsPage() {
       />
 
       <div className="rounded-[24px] border border-primary/10 bg-primary/5 px-5 py-4 text-sm text-foreground">
-        New campaigns are saved as drafts and must be approved before the agent can use them. Sending stays disabled until launch approval is complete.
+        New campaigns are saved as drafts and must be approved before the agent uses them in outreach.
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

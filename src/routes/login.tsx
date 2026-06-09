@@ -90,7 +90,7 @@ function LoginPage() {
             <Link to="/forgot-password" className="text-primary transition hover:opacity-80">
               Forgot password?
             </Link>
-            <span className="text-muted-foreground">Sending stays paused until launch approval.</span>
+            <span className="text-muted-foreground">Lead sourcing and enrichment active.</span>
           </div>
 
           <div className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
