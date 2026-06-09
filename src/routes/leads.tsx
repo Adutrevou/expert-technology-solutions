@@ -18,6 +18,7 @@ import {
   useUpdateLeadStatusMutation,
 } from "@/lib/leads-api-hooks";
 import { normalizeLead, type LeadActivityRecord, type LeadRecord, type LeadWorkflowStatus } from "@/lib/leads-api";
+import { deriveNormalizedLeadStatusCounts, normalizeLeadStatus } from "@/lib/lead-status";
 import { useApp } from "@/lib/app-state";
 
 export const Route = createFileRoute("/leads")({
@@ -40,7 +41,7 @@ const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> =
 const DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS = [
   "Finding contact/email",
   "Outreach ready",
-  "Outreach sent",
+  "Contacted",
   "Reply received",
   "Blocked/Avoided",
 ] as const;
@@ -78,46 +79,23 @@ function LeadsPage() {
   const isAdminViewer = user?.role === "intergrai_admin" || user?.role === "system_agent";
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
+  const statusCounts = useMemo(() => deriveNormalizedLeadStatusCounts(all), [all]);
   const pipelineFilterOptions = useMemo(() => {
     const options = [...DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS];
-    if (all.some((lead) => normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) === "Company found")) {
+    if (statusCounts.companyFound > 0) {
       options.unshift("Company found");
     }
-    if (all.some((lead) => normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) === "Needs review")) {
+    if (statusCounts.needsReviewTrueOnly > 0) {
       options.push("Needs review");
     }
     return options;
-  }, [all]);
-  const statusCounts = useMemo(() => {
-    const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)))).length;
-    const apiCounts = leadsQuery.data?.counts;
-    if (apiCounts) {
-      return {
-        total: apiCounts.allLeads || apiCounts.totalLeadsFound,
-        enrichmentQueue: apiCounts.enrichmentQueue,
-        outreachReady: apiCounts.outreachReady,
-        contacted: apiCounts.contacted,
-        replied: apiCounts.repliesReceived,
-        blockedAvoided: apiCounts.blockedAvoided,
-        needsReview: apiCounts.needsReview,
-      };
-    }
-    return {
-      total: all.length,
-      enrichmentQueue: count(["Company found", "Finding contact/email"]),
-      outreachReady: count(["Outreach ready"]),
-      contacted: count(["Outreach sent"]),
-      replied: count(["Reply received"]),
-      blockedAvoided: count(["Blocked/Avoided"]),
-      needsReview: count(["Needs review"]),
-    };
-  }, [all, leadsQuery.data?.counts]);
+  }, [statusCounts.companyFound, statusCounts.needsReviewTrueOnly]);
 
   const filtered = useMemo(() => {
     return all.filter((lead) => {
       if (q && !`${lead.displayContactName || lead.name} ${lead.company} ${lead.email}`.toLowerCase().includes(q.toLowerCase())) return false;
       if (industry !== "all" && lead.industry !== industry) return false;
-      if (pipelineStatus !== "all" && normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) !== pipelineStatus) return false;
+      if (pipelineStatus !== "all" && normalizeLeadStatus(lead) !== pipelineStatus) return false;
       if (campaign !== "all" && lead.campaignName !== campaign) return false;
       return true;
     });
@@ -128,7 +106,7 @@ function LeadsPage() {
   const selectedLead = filtered.find((lead) => lead.id === selectedLeadId) || filtered[0] || null;
   const activityQuery = useLeadActivityQuery(selectedLead?.id);
   const activity = activityQuery.data ?? [];
-  const currentStatus = getLeadDisplayStatus(selectedLead);
+  const currentStatus = normalizeLeadStatus(selectedLead);
   const currentWorkflowStatus = getLeadWorkflowStatus(selectedLead);
   const statusOptions = useMemo(() => {
     if (!currentWorkflowStatus || LEAD_STATUS_OPTIONS.some((item) => item.value === currentWorkflowStatus)) {
@@ -155,6 +133,35 @@ function LeadsPage() {
       setPipelineStatus("all");
     }
   }, [all, campaign, industry, pipelineFilterOptions, pipelineStatus, visibleCampaigns, visibleIndustries]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    const receivedCounts = leadsQuery.data?.counts ?? null;
+    console.debug("[Expert Leads] leads received", all.length);
+    console.debug("[Expert Leads] counts received", receivedCounts);
+    console.debug("[Expert Leads] counts derived from normalized leads", statusCounts);
+
+    if (all.length > 0 && receivedCounts) {
+      const countsAreZero =
+        Number(receivedCounts.allLeads || receivedCounts.totalLeadsFound || 0) === 0 &&
+        Number(receivedCounts.enrichmentQueue || 0) === 0 &&
+        Number(receivedCounts.outreachReady || 0) === 0 &&
+        Number(receivedCounts.contacted || 0) === 0 &&
+        Number(receivedCounts.repliesReceived || 0) === 0 &&
+        Number(receivedCounts.blockedAvoided || 0) === 0;
+
+      if (countsAreZero) {
+        console.warn("[Expert Leads] counts object is zero while leads are rendered", {
+          leadsLength: all.length,
+          receivedCounts,
+          derivedCounts: statusCounts,
+        });
+      }
+    }
+  }, [all.length, leadsQuery.data?.counts, statusCounts]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -184,7 +191,7 @@ function LeadsPage() {
       lead.title,
       lead.industry,
       lead.location,
-      normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)),
+      normalizeLeadStatus(lead),
       lead.campaignName,
       lead.email,
     ]);
@@ -269,7 +276,7 @@ function LeadsPage() {
           <SummaryStat label="Enrichment Queue" value={statusCounts.enrichmentQueue} />
           <SummaryStat label="Outreach Ready" value={statusCounts.outreachReady} />
           <SummaryStat label="Contacted" value={statusCounts.contacted} />
-          <SummaryStat label="Replies" value={statusCounts.replied} />
+          <SummaryStat label="Replies" value={statusCounts.replies} />
           <SummaryStat label="Blocked/Avoided" value={statusCounts.blockedAvoided} />
         </div>
         <div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -277,10 +284,10 @@ function LeadsPage() {
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Enrichment Queue: {statusCounts.enrichmentQueue}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Outreach Ready: {statusCounts.outreachReady}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replies: {statusCounts.replied}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replies: {statusCounts.replies}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Blocked/Avoided: {statusCounts.blockedAvoided}</span>
-          {statusCounts.needsReview > 0 ? (
-            <span className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-warning-foreground">True ambiguity needing review: {statusCounts.needsReview}</span>
+          {statusCounts.needsReviewTrueOnly > 0 ? (
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-warning-foreground">True ambiguity needing review: {statusCounts.needsReviewTrueOnly}</span>
           ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
@@ -397,7 +404,7 @@ function LeadsPage() {
                     >
                       <TableCell className="font-medium">{displayValue(lead.company)}</TableCell>
                       <TableCell className="text-muted-foreground">{displayValue(lead.displayContactName || lead.name || lead.title)}</TableCell>
-                      <TableCell><LeadStatusBadge status={getLeadDisplayStatus(lead)} /></TableCell>
+                      <TableCell><LeadStatusBadge status={normalizeLeadStatus(lead)} /></TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
                         {lead.foundAt ? new Date(lead.foundAt).toLocaleDateString() : "Not provided"}
@@ -490,11 +497,7 @@ function LeadMobileCard({
           <h2 className="truncate font-semibold">{displayValue(lead.displayContactName || lead.name)}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{displayValue(lead.company)}</p>
         </div>
-        <LeadStatusBadge status={getLeadDisplayStatus(lead)} />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <LeadStatusBadge status={getLeadDisplayStatus(lead)} />
-        {lead.outreachStatus ? <LeadStatusBadge status={lead.outreachStatus} /> : lead.enrichmentStatus ? <LeadStatusBadge status={lead.enrichmentStatus} /> : null}
+        <LeadStatusBadge status={normalizeLeadStatus(lead)} />
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <LeadField label="Title" value={displayValue(lead.title)} />
@@ -768,14 +771,6 @@ function displayValue(value?: string | null) {
   return value?.trim() ? value : "Not provided";
 }
 
-function getLeadDisplayStatus(lead: LeadRecord | null | undefined) {
-  if (!lead) {
-    return "Raw company";
-  }
-
-  return lead.displayStatus || lead.status || lead.workflowStatus || "Raw company";
-}
-
 function formatFoundByDetails(lead: LeadRecord) {
   const parts = [
     lead.sourceProvider?.trim(),
@@ -789,63 +784,6 @@ function activityLabel(item: LeadActivityRecord) {
   if (item.type === "comment") return "Comment added";
   if (item.type === "status_change") return item.status ? `Status changed to ${formatStatusLabel(item.status)}` : "Status updated";
   return "Activity recorded";
-}
-
-function normalizeLeadPipelineStatus(value: string) {
-  const normalized = String(value || "").trim().toLowerCase();
-
-  switch (normalized) {
-    case "researching":
-    case "raw company":
-    case "raw_company":
-    case "company found":
-    case "company_found":
-      return "Company found";
-    case "needs enrichment":
-    case "needs_enrichment":
-    case "finding contact/email":
-    case "finding_contact_email":
-      return "Finding contact/email";
-    case "manual review":
-    case "manual_review":
-    case "manual_review_required":
-    case "needs review":
-    case "needs_review":
-    case "review":
-      return "Needs review";
-    case "qualified":
-    case "qualified company":
-    case "qualified_company":
-    case "decision maker found":
-    case "verified contact":
-      return "Finding contact/email";
-    case "outreach ready":
-    case "outreach_ready":
-      return "Outreach ready";
-    case "outreach prepared":
-    case "outreach_prepared":
-      return "Outreach ready";
-    case "excluded":
-    case "duplicate suppressed":
-    case "duplicate_suppressed":
-    case "failed no email":
-    case "failed_no_email":
-    case "blocked/avoided":
-    case "blocked_avoided":
-      return "Blocked/Avoided";
-    case "contacted":
-    case "outreach sent":
-    case "outreach_sent":
-      return "Outreach sent";
-    case "replied":
-    case "reply received":
-    case "reply_received":
-    case "needs reply approval":
-    case "needs_reply_approval":
-      return "Reply received";
-    default:
-      return formatStatusLabel(normalized);
-  }
 }
 
 function getLeadWorkflowStatus(lead: LeadRecord | null | undefined) {
@@ -866,12 +804,12 @@ function getLeadWorkflowStatus(lead: LeadRecord | null | undefined) {
     case "rejected":
       return normalized as LeadWorkflowStatus;
     default:
-      return mapPipelineStatusToWorkflowStatus(normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)));
+      return mapPipelineStatusToWorkflowStatus(normalizeLeadStatus(lead));
   }
 }
 
 function mapPipelineStatusToWorkflowStatus(status: string): LeadWorkflowStatus {
-  switch (normalizeLeadPipelineStatus(status)) {
+  switch (status) {
     case "Company found":
       return "new";
     case "Finding contact/email":
@@ -882,7 +820,7 @@ function mapPipelineStatusToWorkflowStatus(status: string): LeadWorkflowStatus {
       return "reviewed";
     case "Blocked/Avoided":
       return "reviewed";
-    case "Outreach sent":
+    case "Contacted":
       return "contacted";
     case "Reply received":
       return "follow_up";
@@ -912,7 +850,7 @@ function formatStatusLabel(status: string) {
     return "Outreach ready";
   }
   if (normalized === "contacted" || normalized === "outreach sent" || normalized === "outreach_sent") {
-    return "Outreach sent";
+    return "Contacted";
   }
   if (normalized === "replied" || normalized === "reply received" || normalized === "reply_received" || normalized === "needs reply approval" || normalized === "needs_reply_approval") {
     return "Reply received";

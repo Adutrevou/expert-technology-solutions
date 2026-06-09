@@ -821,8 +821,13 @@ export interface LeadRecord {
   linkedinUrl: string;
   companyLinkedin: string;
   qualification: LeadQualification;
+  rawStatus: string;
   status: string;
   displayStatus: string;
+  canonicalStatus: string;
+  clientStatusLabel: string;
+  clientVisibleStatus: string;
+  internalDisplayStatus: string;
   workflowStatus: string;
   campaignName: string;
   leadScore: number;
@@ -837,6 +842,7 @@ export interface LeadRecord {
   replyDraftStatus: string;
   nextAction: string;
   manualReviewRequired: boolean;
+  trueHumanReviewRequired: boolean;
   qualityReasons: string[];
   lastActivity?: string;
   createdAt?: string;
@@ -1988,12 +1994,23 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const metadata = asRecord(record.metadata);
   const leadPipeline = asRecord(metadata.lead_pipeline);
   const sourceEvidence = asRecord(record.source_evidence ?? leadPipeline.source_evidence);
+  const rawStatus = pickString(record, ["status"]) || "";
+  const canonicalStatus =
+    pickString(record, ["canonical_status", "canonicalStatus", "client_status_label", "clientStatusLabel"]) ||
+    "";
+  const clientVisibleStatus =
+    pickString(record, ["client_visible_status", "clientVisibleStatus"]) ||
+    rawStatus;
+  const internalDisplayStatus =
+    pickString(record, ["internal_display_status", "internalDisplayStatus"]) ||
+    clientVisibleStatus;
   const workflowStatus =
     pickString(record, ["workflow_status", "workflowStatus", "lead_status", "leadStatus", "status"]) ||
     "";
   const displayStatus =
+    canonicalStatus ||
     pickString(record, ["display_status", "displayStatus"]) ||
-    pickString(record, ["status"]) ||
+    rawStatus ||
     "";
   const normalizedStatus =
     normalizeLeadStatus(workflowStatus) ||
@@ -2028,8 +2045,13 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     qualification: mapQualification(
       pickString(record, ["qualification"]) || workflowStatus || normalizedStatus,
     ),
-    status: displayStatus || workflowStatus || normalizedStatus,
+    rawStatus,
+    status: rawStatus || workflowStatus || normalizedStatus,
     displayStatus: displayStatus || workflowStatus || normalizedStatus,
+    canonicalStatus: canonicalStatus || displayStatus || workflowStatus || normalizedStatus,
+    clientStatusLabel: canonicalStatus || displayStatus || "",
+    clientVisibleStatus,
+    internalDisplayStatus,
     workflowStatus: workflowStatus || displayStatus || normalizedStatus,
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
     leadScore: normalizeCount(record.lead_score ?? record.leadScore),
@@ -2058,6 +2080,7 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
       || (pickBoolean(record, ["quality_gate_failed", "qualityGateFailed"]) ?? false)
       || asArray(record.quality_gate_blockers ?? record.qualityGateBlockers).length > 0
       || String(record.status || record.lead_status || record.workflow_status || "").toLowerCase() === "manual review",
+    trueHumanReviewRequired: pickBoolean(record, ["true_human_review_required", "trueHumanReviewRequired"]) ?? false,
     qualityReasons: [
       ...asArray(record.quality_reasons ?? record.qualityReasons).map((item) => String(item || "")).filter(Boolean),
       ...asArray(record.quality_gate_blockers ?? record.qualityGateBlockers)
