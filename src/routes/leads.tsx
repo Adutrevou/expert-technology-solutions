@@ -40,8 +40,11 @@ const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> =
 const LEAD_PIPELINE_STATUSES = [
   "all",
   "Researching",
+  "Needs enrichment",
   "Needs review",
+  "Excluded",
   "Qualified",
+  "Outreach ready",
   "Outreach prepared",
   "Contacted",
   "Replied",
@@ -86,8 +89,10 @@ function LeadsPage() {
       visible: all.length,
       qualified: count(["Qualified"]),
       researching: count(["Researching"]),
+      needsEnrichment: count(["Needs enrichment"]),
       manualReview: count(["Needs review"]),
-      outreachPrepared: count(["Outreach prepared"]),
+      outreachPrepared: count(["Outreach ready", "Outreach prepared"]),
+      excluded: count(["Excluded"]),
       contacted: count(["Contacted"]),
       replied: count(["Replied"]),
       needsReplyApproval: count(["Needs reply approval"]),
@@ -772,6 +777,9 @@ function normalizeLeadPipelineStatus(value: string) {
   switch (normalized) {
     case "researching":
       return "Researching";
+    case "needs enrichment":
+    case "needs_enrichment":
+      return "Needs enrichment";
     case "manual review":
     case "manual_review":
     case "manual_review_required":
@@ -781,9 +789,14 @@ function normalizeLeadPipelineStatus(value: string) {
       return "Needs review";
     case "qualified":
       return "Qualified";
+    case "outreach ready":
+    case "outreach_ready":
+      return "Outreach ready";
     case "outreach prepared":
     case "outreach_prepared":
       return "Outreach prepared";
+    case "excluded":
+      return "Excluded";
     case "contacted":
       return "Contacted";
     case "replied":
@@ -800,11 +813,16 @@ function mapPipelineStatusToWorkflowStatus(status: string): LeadWorkflowStatus {
   switch (normalizeLeadPipelineStatus(status)) {
     case "Researching":
       return "new";
+    case "Needs enrichment":
+      return "new";
     case "Needs review":
       return "reviewed";
     case "Qualified":
       return "interested";
+    case "Outreach ready":
     case "Outreach prepared":
+      return "reviewed";
+    case "Excluded":
       return "reviewed";
     case "Contacted":
       return "contacted";
@@ -825,11 +843,20 @@ function formatStatusLabel(status: string) {
   if (normalized === "researching") {
     return "Researching";
   }
+  if (normalized === "needs enrichment" || normalized === "needs_enrichment") {
+    return "Needs enrichment";
+  }
   if (normalized === "qualified") {
     return "Qualified";
   }
+  if (normalized === "outreach ready" || normalized === "outreach_ready") {
+    return "Outreach ready";
+  }
   if (normalized === "outreach prepared" || normalized === "outreach_prepared") {
     return "Outreach prepared";
+  }
+  if (normalized === "excluded") {
+    return "Excluded";
   }
   if (normalized === "needs reply approval" || normalized === "needs_reply_approval") {
     return "Needs reply approval";

@@ -17,8 +17,14 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   skipped_quality_gate: { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   Qualified: { label: "Qualified", cls: "bg-info/15 text-info border-info/30" },
   qualified: { label: "Qualified", cls: "bg-info/15 text-info border-info/30" },
+  "Outreach ready": { label: "Outreach ready", cls: "bg-primary/15 text-primary border-primary/30" },
+  outreach_ready: { label: "Outreach ready", cls: "bg-primary/15 text-primary border-primary/30" },
   "Outreach prepared": { label: "Outreach prepared", cls: "bg-primary/15 text-primary border-primary/30" },
   outreach_prepared: { label: "Outreach prepared", cls: "bg-primary/15 text-primary border-primary/30" },
+  "Needs enrichment": { label: "Needs enrichment", cls: "bg-muted text-muted-foreground" },
+  needs_enrichment: { label: "Needs enrichment", cls: "bg-muted text-muted-foreground" },
+  Excluded: { label: "Excluded", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  excluded: { label: "Excluded", cls: "bg-destructive/15 text-destructive border-destructive/30" },
   contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
   Contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
   follow_up: { label: "Follow up", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
@@ -97,8 +103,17 @@ function formatStatusLabel(status: string) {
   if (normalized === "researching") {
     return "Researching";
   }
+  if (normalized === "needs enrichment" || normalized === "needs_enrichment") {
+    return "Needs enrichment";
+  }
+  if (normalized === "outreach ready" || normalized === "outreach_ready") {
+    return "Outreach ready";
+  }
   if (normalized === "outreach prepared" || normalized === "outreach_prepared") {
     return "Outreach prepared";
+  }
+  if (normalized === "excluded") {
+    return "Excluded";
   }
   if (normalized === "needs reply approval" || normalized === "needs_reply_approval") {
     return "Needs reply approval";
