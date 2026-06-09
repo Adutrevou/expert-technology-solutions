@@ -792,12 +792,17 @@ export interface LeadRecord {
   companyLinkedin: string;
   qualification: LeadQualification;
   status: string;
+  displayStatus: string;
+  workflowStatus: string;
   campaignName: string;
   leadScore: number;
   matchReason: string;
   sourceUrl: string;
   sourceEvidence: string;
+  sourceProvider: string;
+  sourceType: string;
   decisionMakerPath: string[];
+  enrichmentStatus: string;
   outreachStatus: string;
   replyDraftStatus: string;
   nextAction: string;
@@ -805,6 +810,14 @@ export interface LeadRecord {
   qualityReasons: string[];
   lastActivity?: string;
   createdAt?: string;
+  foundAt?: string;
+  lastUpdated?: string;
+  isSendable: boolean;
+  isContacted: boolean;
+  isExcluded: boolean;
+  isDuplicateSuppressed: boolean;
+  isVisible: boolean;
+  clientVisible: boolean;
 }
 
 export interface CampaignRecord {
@@ -1905,10 +1918,15 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const metadata = asRecord(record.metadata);
   const leadPipeline = asRecord(metadata.lead_pipeline);
   const sourceEvidence = asRecord(record.source_evidence ?? leadPipeline.source_evidence);
+  const workflowStatus =
+    pickString(record, ["workflow_status", "workflowStatus", "lead_status", "leadStatus", "status"]) ||
+    "";
+  const displayStatus =
+    pickString(record, ["display_status", "displayStatus"]) ||
+    pickString(record, ["status"]) ||
+    "";
   const normalizedStatus =
-    normalizeLeadStatus(
-      pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]),
-    ) ||
+    normalizeLeadStatus(workflowStatus) ||
     normalizeLeadStatus(pickString(record, ["qualification"])) ||
     "new";
   const firstName = pickString(record, ["first_name", "firstName"]);
@@ -1938,11 +1956,11 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     linkedinUrl: pickString(record, ["linkedin_url", "linkedinUrl"]) || "",
     companyLinkedin: pickString(record, ["company_linkedin", "companyLinkedin"]) || "",
     qualification: mapQualification(
-      pickString(record, ["qualification"]) || normalizedStatus,
+      pickString(record, ["qualification"]) || workflowStatus || normalizedStatus,
     ),
-    status:
-      pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]) ||
-      normalizedStatus,
+    status: displayStatus || workflowStatus || normalizedStatus,
+    displayStatus: displayStatus || workflowStatus || normalizedStatus,
+    workflowStatus: workflowStatus || displayStatus || normalizedStatus,
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
     leadScore: normalizeCount(record.lead_score ?? record.leadScore),
     matchReason: pickString(record, ["match_reason", "matchReason"]) || pickString(leadPipeline, ["match_reason", "matchReason"]) || "",
@@ -1955,9 +1973,12 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
       pickString(record, ["domain"]) ||
       pickString(sourceEvidence, ["domain"]) ||
       "",
+    sourceProvider: pickString(record, ["source_provider", "sourceProvider"]) || pickString(record, ["source", "source_type", "sourceType"]) || "",
+    sourceType: pickString(record, ["source_type", "sourceType"]) || pickString(record, ["source"]) || "",
     decisionMakerPath: pickStringArray(record, ["decision_maker_path", "decisionMakerPath"]).length
       ? pickStringArray(record, ["decision_maker_path", "decisionMakerPath"])
       : pickStringArray(leadPipeline, ["decision_maker_path", "decisionMakerPath"]),
+    enrichmentStatus: pickString(record, ["enrichment_status", "enrichmentStatus"]) || "",
     outreachStatus: pickString(record, ["outreach_status", "outreachStatus"]) || "",
     replyDraftStatus: pickString(record, ["reply_draft_status", "replyDraftStatus"]) || "",
     nextAction: pickString(record, ["next_action", "nextAction"]) || pickString(leadPipeline, ["next_action", "nextAction"]) || "",
@@ -1978,6 +1999,14 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     ],
     lastActivity: normalizeTimestamp(record.last_activity ?? record.lastActivity ?? leadPipeline.last_activity ?? leadPipeline.lastActivity),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    foundAt: normalizeTimestamp(record.found_at ?? record.foundAt ?? record.created_at ?? record.createdAt),
+    lastUpdated: normalizeTimestamp(record.last_updated ?? record.lastUpdated ?? record.updated_at ?? record.updatedAt),
+    isSendable: pickBoolean(record, ["is_sendable", "isSendable"]) ?? false,
+    isContacted: pickBoolean(record, ["is_contacted", "isContacted"]) ?? false,
+    isExcluded: pickBoolean(record, ["is_excluded", "isExcluded"]) ?? false,
+    isDuplicateSuppressed: pickBoolean(record, ["is_duplicate_suppressed", "isDuplicateSuppressed"]) ?? false,
+    isVisible: pickBoolean(record, ["is_visible", "isVisible"]) ?? true,
+    clientVisible: pickBoolean(record, ["client_visible", "clientVisible"]) ?? true,
   };
 }
 

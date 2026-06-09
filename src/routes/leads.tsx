@@ -37,20 +37,24 @@ const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> =
   { value: "converted", label: "Converted" },
   { value: "rejected", label: "Rejected" },
 ];
-const LEAD_PIPELINE_STATUSES = [
-  "all",
+const LEAD_PIPELINE_FILTER_OPTIONS = [
   "Raw company",
-  "Qualified company",
   "Needs enrichment",
   "Decision maker found",
   "Verified contact",
-  "Needs review",
-  "Excluded",
   "Outreach ready",
   "Outreach prepared",
   "Contacted",
   "Replied",
   "Needs reply approval",
+  "Excluded",
+  "Failed no email",
+  "Duplicate suppressed",
+  "Needs review",
+] as const;
+const LEAD_PIPELINE_STATUSES = [
+  "all",
+  ...LEAD_PIPELINE_FILTER_OPTIONS,
 ] as const;
 
 function LeadsPage() {
@@ -86,20 +90,22 @@ function LeadsPage() {
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
   const statusCounts = useMemo(() => {
-    const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(lead.status))).length;
+    const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)))).length;
     return {
-      visible: all.length,
+      total: all.length,
       rawCompany: count(["Raw company"]),
-      qualifiedCompany: count(["Qualified company"]),
       needsEnrichment: count(["Needs enrichment"]),
       decisionMakerFound: count(["Decision maker found"]),
       verifiedContact: count(["Verified contact"]),
-      manualReview: count(["Needs review"]),
-      outreachPrepared: count(["Outreach ready", "Outreach prepared"]),
-      excluded: count(["Excluded"]),
+      outreachReady: count(["Outreach ready"]),
+      outreachPrepared: count(["Outreach prepared"]),
       contacted: count(["Contacted"]),
       replied: count(["Replied"]),
       needsReplyApproval: count(["Needs reply approval"]),
+      excluded: count(["Excluded"]),
+      failedNoEmail: count(["Failed no email"]),
+      duplicateSuppressed: count(["Duplicate suppressed"]),
+      needsReview: count(["Needs review"]),
     };
   }, [all]);
 
@@ -107,7 +113,7 @@ function LeadsPage() {
     return all.filter((lead) => {
       if (q && !`${lead.displayContactName || lead.name} ${lead.company} ${lead.email}`.toLowerCase().includes(q.toLowerCase())) return false;
       if (industry !== "all" && lead.industry !== industry) return false;
-      if (pipelineStatus !== "all" && normalizeLeadPipelineStatus(lead.status) !== pipelineStatus) return false;
+      if (pipelineStatus !== "all" && normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) !== pipelineStatus) return false;
       if (campaign !== "all" && lead.campaignName !== campaign) return false;
       return true;
     });
@@ -118,8 +124,8 @@ function LeadsPage() {
   const selectedLead = filtered.find((lead) => lead.id === selectedLeadId) || filtered[0] || null;
   const activityQuery = useLeadActivityQuery(selectedLead?.id);
   const activity = activityQuery.data ?? [];
-  const currentStatus = normalizeLeadPipelineStatus(selectedLead?.status || "Researching");
-  const currentWorkflowStatus = mapPipelineStatusToWorkflowStatus(currentStatus);
+  const currentStatus = getLeadDisplayStatus(selectedLead);
+  const currentWorkflowStatus = getLeadWorkflowStatus(selectedLead);
   const statusOptions = useMemo(() => {
     if (!currentWorkflowStatus || LEAD_STATUS_OPTIONS.some((item) => item.value === currentWorkflowStatus)) {
       return LEAD_STATUS_OPTIONS;
@@ -141,7 +147,7 @@ function LeadsPage() {
     if (campaign !== "all" && !visibleCampaigns.includes(campaign)) {
       setCampaign("all");
     }
-    if (pipelineStatus !== "all" && !all.some((lead) => normalizeLeadPipelineStatus(lead.status) === pipelineStatus)) {
+    if (pipelineStatus !== "all" && !all.some((lead) => normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) === pipelineStatus)) {
       setPipelineStatus("all");
     }
   }, [all, campaign, industry, pipelineStatus, visibleCampaigns, visibleIndustries]);
@@ -159,13 +165,12 @@ function LeadsPage() {
   }, [filtered, selectedLeadId]);
 
   useEffect(() => {
-    const visibleStatus = normalizeLeadPipelineStatus(selectedLead?.status || "Researching");
-    setStatusDraft(mapPipelineStatusToWorkflowStatus(visibleStatus));
+    setStatusDraft(getLeadWorkflowStatus(selectedLead));
     setCommentDraft("");
     setStatusNotice(null);
     setCommentNotice(null);
     setCommentError(null);
-  }, [selectedLead?.id, selectedLead?.status]);
+  }, [selectedLead?.id, selectedLead?.status, selectedLead?.workflowStatus, selectedLead?.displayStatus]);
 
   const exportCSV = () => {
     const head = ["Name", "Company", "Title", "Industry", "Location", "Pipeline status", "Campaign", "Email"];
@@ -175,7 +180,7 @@ function LeadsPage() {
       lead.title,
       lead.industry,
       lead.location,
-      normalizeLeadPipelineStatus(lead.status),
+      normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)),
       lead.campaignName,
       lead.email,
     ]);
@@ -239,7 +244,7 @@ function LeadsPage() {
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Leads</h1>
+          <h1 className="text-3xl font-bold">Leads <span className="text-muted-foreground">({all.length.toLocaleString()})</span></h1>
           <p className="text-sm text-muted-foreground mt-1">
             Live lead records and status history for Expert Technology Solutions
           </p>
@@ -256,23 +261,27 @@ function LeadsPage() {
 
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryStat label="Visible leads" value={statusCounts.visible} />
+          <SummaryStat label="All real leads" value={statusCounts.total} />
           <SummaryStat label="Raw company" value={statusCounts.rawCompany} />
-          <SummaryStat label="Qualified company" value={statusCounts.qualifiedCompany} />
           <SummaryStat label="Needs enrichment" value={statusCounts.needsEnrichment} />
           <SummaryStat label="Decision maker found" value={statusCounts.decisionMakerFound} />
           <SummaryStat label="Verified contact" value={statusCounts.verifiedContact} />
-          <SummaryStat label="Needs review" value={statusCounts.manualReview} />
+          <SummaryStat label="Outreach ready" value={statusCounts.outreachReady} />
           <SummaryStat label="Outreach prepared" value={statusCounts.outreachPrepared} />
           <SummaryStat label="Contacted" value={statusCounts.contacted} />
           <SummaryStat label="Replied" value={statusCounts.replied} />
           <SummaryStat label="Needs reply approval" value={statusCounts.needsReplyApproval} />
+          <SummaryStat label="Excluded" value={statusCounts.excluded} />
+          <SummaryStat label="Failed no email" value={statusCounts.failedNoEmail} />
+          <SummaryStat label="Duplicate suppressed" value={statusCounts.duplicateSuppressed} />
+          <SummaryStat label="Needs review" value={statusCounts.needsReview} />
         </div>
         <div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Total visible: {statusCounts.visible}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">All real leads: {statusCounts.total}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Raw company: {statusCounts.rawCompany}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Qualified company: {statusCounts.qualifiedCompany}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs review: {statusCounts.manualReview}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs enrichment: {statusCounts.needsEnrichment}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Outreach ready: {statusCounts.outreachReady}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs review: {statusCounts.needsReview}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replied: {statusCounts.replied}</span>
         </div>
@@ -292,16 +301,9 @@ function LeadsPage() {
             <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Pipeline status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="Raw company">Raw company</SelectItem>
-              <SelectItem value="Qualified company">Qualified company</SelectItem>
-              <SelectItem value="Needs enrichment">Needs enrichment</SelectItem>
-              <SelectItem value="Decision maker found">Decision maker found</SelectItem>
-              <SelectItem value="Verified contact">Verified contact</SelectItem>
-              <SelectItem value="Needs review">Needs review</SelectItem>
-              <SelectItem value="Outreach prepared">Outreach prepared</SelectItem>
-              <SelectItem value="Contacted">Contacted</SelectItem>
-              <SelectItem value="Replied">Replied</SelectItem>
-              <SelectItem value="Needs reply approval">Needs reply approval</SelectItem>
+              {LEAD_PIPELINE_FILTER_OPTIONS.map((item) => (
+                <SelectItem key={item} value={item}>{item}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={campaign} onValueChange={(value) => { setCampaign(value); setPage(1); }}>
@@ -330,7 +332,7 @@ function LeadsPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
           <Card className="overflow-hidden shadow-card">
             <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
-              Showing {filtered.length.toLocaleString()} of {all.length.toLocaleString()} synced leads
+              Showing {filtered.length.toLocaleString()} of {all.length.toLocaleString()} real sourced leads
             </div>
             <div className="grid gap-3 p-4 md:hidden">
               {!hasLeadData ? (
@@ -401,7 +403,7 @@ function LeadsPage() {
                       <TableCell className="text-muted-foreground">{displayValue(lead.company)}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">{displayValue(lead.title)}</TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(lead.industry)}</TableCell>
-                      <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                      <TableCell><LeadStatusBadge status={getLeadDisplayStatus(lead)} /></TableCell>
                       <TableCell className="text-muted-foreground">{lead.leadScore ? String(lead.leadScore) : "0"}</TableCell>
                       <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
                     </TableRow>
@@ -491,11 +493,11 @@ function LeadMobileCard({
           <h2 className="truncate font-semibold">{displayValue(lead.displayContactName || lead.name)}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{displayValue(lead.company)}</p>
         </div>
-        <LeadStatusBadge status={lead.status} />
+        <LeadStatusBadge status={getLeadDisplayStatus(lead)} />
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <LeadStatusBadge status={lead.status} />
-        {lead.outreachStatus ? <LeadStatusBadge status={lead.outreachStatus} /> : null}
+        <LeadStatusBadge status={getLeadDisplayStatus(lead)} />
+        {lead.outreachStatus ? <LeadStatusBadge status={lead.outreachStatus} /> : lead.enrichmentStatus ? <LeadStatusBadge status={lead.enrichmentStatus} /> : null}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <LeadField label="Title" value={displayValue(lead.title)} />
@@ -596,7 +598,7 @@ function LeadDetailPanel({
             <LeadField label="Last activity" value={lead.lastActivity ? formatDistanceToNow(new Date(lead.lastActivity), { addSuffix: true }) : "Not provided"} />
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted/10 p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Match reason</p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Match reason</p>
             <p className="mt-2 text-sm">{displayValue(lead.matchReason)}</p>
             {lead.qualityReasons.length ? (
               <div className="mt-3 rounded-xl border border-border/70 bg-background p-3 text-sm text-muted-foreground">
@@ -767,6 +769,14 @@ function displayValue(value?: string | null) {
   return value?.trim() ? value : "Not provided";
 }
 
+function getLeadDisplayStatus(lead: LeadRecord | null | undefined) {
+  if (!lead) {
+    return "Raw company";
+  }
+
+  return lead.displayStatus || lead.status || lead.workflowStatus || "Raw company";
+}
+
 function formatSourceEvidence(lead: LeadRecord) {
   if (lead.sourceEvidence?.trim()) {
     return lead.sourceEvidence;
@@ -816,6 +826,28 @@ function normalizeLeadPipelineStatus(value: string) {
       return "Needs reply approval";
     default:
       return formatStatusLabel(normalized);
+  }
+}
+
+function getLeadWorkflowStatus(lead: LeadRecord | null | undefined) {
+  if (!lead) {
+    return "new" as LeadWorkflowStatus;
+  }
+
+  const normalized = String(lead.workflowStatus || lead.status || "").trim().toLowerCase();
+  switch (normalized) {
+    case "new":
+    case "reviewed":
+    case "contacted":
+    case "interested":
+    case "not_interested":
+    case "follow_up":
+    case "meeting_booked":
+    case "converted":
+    case "rejected":
+      return normalized as LeadWorkflowStatus;
+    default:
+      return mapPipelineStatusToWorkflowStatus(normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)));
   }
 }
 
