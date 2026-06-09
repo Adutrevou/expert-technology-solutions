@@ -72,7 +72,7 @@ function LeadsPage() {
   }, [leadsQuery.data]);
 
   const effectiveLeadsData = leadsQuery.data ?? lastGoodLeadsData;
-  const all = useMemo(() => (effectiveLeadsData?.leads ?? []).map(normalizeLead), [effectiveLeadsData?.leads]);
+  const all = useMemo(() => safeNormalizeLeadsArray(effectiveLeadsData?.records ?? effectiveLeadsData?.leads), [effectiveLeadsData?.records, effectiveLeadsData?.leads]);
   const leadActor = useMemo(
     () => ({
       name: user?.name?.trim() || "Expert Admin",
@@ -93,8 +93,8 @@ function LeadsPage() {
     [derivedStatusCounts, effectiveLeadsData?.counts, effectiveLeadsData?.totalCount],
   );
   const totalLeadCount = statusCounts.total;
-  const loadedLeadCount = effectiveLeadsData?.loadedCount ?? effectiveLeadsData?.returnedCount ?? all.length;
-  const returnedLeadCount = effectiveLeadsData?.returnedCount ?? all.length;
+  const loadedLeadCount = safePositiveCount(effectiveLeadsData?.loadedCount, effectiveLeadsData?.returnedCount, all.length);
+  const returnedLeadCount = safePositiveCount(effectiveLeadsData?.returnedCount, all.length);
   const pipelineFilterOptions = useMemo(() => {
     const options = [...DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS];
     if (statusCounts.companyFound > 0) {
@@ -268,6 +268,25 @@ function LeadsPage() {
 
   const showHardFailure = !effectiveLeadsData && leadsQuery.isError;
   const showingLastGoodData = Boolean(lastGoodLeadsData) && Boolean(leadsQuery.isError || (leadsQuery.isFetching && !leadsQuery.isLoading));
+
+  try {
+    void totalLeadCount;
+    void loadedLeadCount;
+    void returnedLeadCount;
+  } catch (error) {
+    console.error("[Expert Leads] route render guard tripped", error);
+    return (
+      <Card className="p-10 shadow-card">
+        <h2 className="text-xl font-semibold">Leads temporarily unavailable</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Live lead data could not be rendered safely right now. Refresh to retry.
+        </p>
+        <Button onClick={() => leadsQuery.refetch()} variant="outline" className="mt-6">
+          <RefreshCcw className="h-4 w-4 mr-2" /> Try again
+        </Button>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -503,18 +522,53 @@ function LeadsLoadingState() {
 
 function hasLeadDataSignal(data: LeadsResponse | null | undefined) {
   if (!data) return false;
+  const counts = data.counts ?? {
+    allLeads: 0,
+    totalLeadsFound: 0,
+    companyFound: 0,
+    enrichmentQueue: 0,
+    outreachReady: 0,
+    contacted: 0,
+    repliesReceived: 0,
+    blockedAvoided: 0,
+    needsReview: 0,
+    emailsSentToday: 0,
+  };
   return Boolean(
-    data.leads.length
+    (Array.isArray(data.records) ? data.records.length : 0)
+    || (Array.isArray(data.leads) ? data.leads.length : 0)
     || data.totalCount
     || data.returnedCount
     || data.loadedCount
-    || data.counts.allLeads
-    || data.counts.enrichmentQueue
-    || data.counts.outreachReady
-    || data.counts.contacted
-    || data.counts.repliesReceived
-    || data.counts.blockedAvoided
+    || counts.allLeads
+    || counts.enrichmentQueue
+    || counts.outreachReady
+    || counts.contacted
+    || counts.repliesReceived
+    || counts.blockedAvoided
   );
+}
+
+function safeNormalizeLeadsArray(value: unknown): LeadRecord[] {
+  const items = Array.isArray(value) ? value : [];
+  return items.map((item, index) => {
+    try {
+      return normalizeLead(item, index);
+    } catch (error) {
+      console.error("[Expert Leads] failed to normalize lead row", { index, error, item });
+      return normalizeLead({}, index);
+    }
+  });
+}
+
+function safePositiveCount(...values: Array<number | null | undefined>) {
+  for (const value of values) {
+    const next = Number(value);
+    if (Number.isFinite(next) && next >= 0) {
+      return next;
+    }
+  }
+  return 0;
 }
 
 function LeadMobileCard({

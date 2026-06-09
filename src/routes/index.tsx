@@ -29,7 +29,7 @@ function Dashboard() {
 
   const data = dashboardQuery.data ?? EMPTY_DASHBOARD;
   const summaryData = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
-  const normalizedLeads = (leadsQuery.data?.leads ?? []).map(normalizeLead);
+  const normalizedLeads = safeNormalizeLeadsArray(leadsQuery.data?.records ?? leadsQuery.data?.leads);
   const derivedLeadCounts = deriveNormalizedLeadStatusCounts(normalizedLeads);
   const leadCounts = resolveDashboardLeadCounts({
     dashboardLeadCounts: data.lead_counts,
@@ -204,6 +204,18 @@ function Dashboard() {
       </div>
     </div>
   );
+}
+
+function safeNormalizeLeadsArray(value: unknown): ReturnType<typeof normalizeLead>[] {
+  const items = Array.isArray(value) ? value : [];
+  return items.map((item, index) => {
+    try {
+      return normalizeLead(item, index);
+    } catch (error) {
+      console.error("[Expert Dashboard] failed to normalize lead row", { index, error, item });
+      return normalizeLead({}, index);
+    }
+  });
 }
 
 function hasCanonicalLeadSignal(leadCounts: ReturnType<typeof resolveDashboardLeadCounts>, loadedLeadCount: number) {

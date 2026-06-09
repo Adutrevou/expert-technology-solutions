@@ -67,6 +67,8 @@ export function useDashboardQuery() {
     queryFn: getDashboard,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData,
   });
 }
 

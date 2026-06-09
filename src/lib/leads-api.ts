@@ -60,6 +60,7 @@ export interface LeadsResponse {
   ok: boolean;
   client: ApiClientSummary;
   count: number;
+  records: unknown[];
   returnedCount: number;
   loadedCount: number;
   totalCount: number;
@@ -1640,6 +1641,21 @@ function normalizeCanonicalLeadCounts(value: unknown): CanonicalLeadCounts {
   };
 }
 
+function buildZeroCanonicalLeadCounts(): CanonicalLeadCounts {
+  return {
+    allLeads: 0,
+    totalLeadsFound: 0,
+    companyFound: 0,
+    enrichmentQueue: 0,
+    outreachReady: 0,
+    contacted: 0,
+    repliesReceived: 0,
+    blockedAvoided: 0,
+    needsReview: 0,
+    emailsSentToday: 0,
+  };
+}
+
 function normalizeDashboardResponse(value: unknown): DashboardResponse {
   const record = asRecord(value);
   const campaignCounts = asRecord(record.campaign_counts);
@@ -1683,12 +1699,13 @@ function normalizeDashboardResponse(value: unknown): DashboardResponse {
   };
 }
 
-function normalizeLeadsResponse(value: unknown): LeadsResponse {
+export function normalizeLeadsApiResponse(value: unknown): LeadsResponse {
   if (Array.isArray(value)) {
     return {
       ok: true,
       client: normalizeClientSummary({}),
       count: value.length,
+      records: value,
       returnedCount: value.length,
       loadedCount: value.length,
       totalCount: value.length,
@@ -1703,6 +1720,10 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
 
   const record = asRecord(value);
   const nestedData = asRecord(record.data);
+  const nestedRecords = asArray(nestedData.records);
+  const nestedItems = asArray(nestedData.items);
+  const nestedResults = asArray(nestedData.results);
+  const nestedRows = asArray(nestedData.rows);
   const directLeads = asArray(record.leads);
   const directRecords = asArray(record.records);
   const directItems = asArray(record.items);
@@ -1717,30 +1738,65 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
     directResults.length ? directResults :
     directRows.length ? directRows :
     nestedLeads.length ? nestedLeads :
+    nestedRecords.length ? nestedRecords :
+    nestedItems.length ? nestedItems :
+    nestedResults.length ? nestedResults :
+    nestedRows.length ? nestedRows :
     nestedDataArray;
-  const trueHumanReviewRequired = pickBoolean(record, ["true_human_review_required", "trueHumanReviewRequired"]) ?? false;
+  const trueHumanReviewRequired =
+    pickBoolean(record, ["true_human_review_required", "trueHumanReviewRequired"])
+    ?? pickBoolean(nestedData, ["true_human_review_required", "trueHumanReviewRequired"])
+    ?? false;
+  const counts = normalizeCanonicalLeadCounts(record.counts ?? record.canonical_counts ?? nestedData.counts ?? nestedData.canonical_counts);
+  const totalCount =
+    normalizeCount(record.total_count ?? record.totalCount ?? nestedData.total_count ?? nestedData.totalCount ?? record.total)
+    || normalizeCount(counts.allLeads || counts.totalLeadsFound)
+    || normalizeCount(record.count ?? nestedData.count)
+    || leads.length;
+  const returnedCount =
+    normalizeCount(record.returned_count ?? record.returnedCount ?? nestedData.returned_count ?? nestedData.returnedCount)
+    || leads.length;
+  const loadedCount =
+    normalizeCount(record.loaded_count ?? record.loadedCount ?? nestedData.loaded_count ?? nestedData.loadedCount)
+    || returnedCount
+    || leads.length;
+  const page =
+    normalizeCount(record.page ?? nestedData.page)
+    || 1;
+  const limit =
+    normalizeCount(record.limit ?? nestedData.limit)
+    || leads.length
+    || loadedCount
+    || 0;
+  const hasMore =
+    pickBoolean(record, ["has_more", "hasMore"])
+    ?? pickBoolean(nestedData, ["has_more", "hasMore"])
+    ?? (loadedCount < totalCount);
 
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client ?? nestedData.client),
-    count: normalizeCount(record.count) || leads.length,
-    returnedCount: normalizeCount(record.returned_count ?? record.returnedCount) || leads.length,
-    loadedCount:
-      normalizeCount(record.loaded_count ?? record.loadedCount)
-      || normalizeCount(record.returned_count ?? record.returnedCount)
-      || leads.length,
-    totalCount:
-      normalizeCount(record.total_count ?? record.totalCount)
-      || normalizeCount(asRecord(record.counts ?? record.canonical_counts ?? nestedData.counts).all_leads ?? asRecord(record.counts ?? record.canonical_counts ?? nestedData.counts).allLeads)
-      || normalizeCount(record.count)
-      || leads.length,
-    page: normalizeCount(record.page) || 1,
-    limit: normalizeCount(record.limit) || leads.length,
-    hasMore: pickBoolean(record, ["has_more", "hasMore"]) ?? false,
-    counts: normalizeCanonicalLeadCounts(record.counts ?? record.canonical_counts ?? nestedData.counts),
+    count: normalizeCount(record.count ?? nestedData.count) || leads.length,
+    records: leads,
+    returnedCount,
+    loadedCount,
+    totalCount,
+    page,
+    limit,
+    hasMore,
+    counts: {
+      ...buildZeroCanonicalLeadCounts(),
+      ...counts,
+      allLeads: counts.allLeads || counts.totalLeadsFound || totalCount,
+      totalLeadsFound: counts.totalLeadsFound || counts.allLeads || totalCount,
+    },
     summary: asRecord(record.summary ?? nestedData.summary),
     leads,
   };
+}
+
+function normalizeLeadsResponse(value: unknown): LeadsResponse {
+  return normalizeLeadsApiResponse(value);
 }
 
 function normalizeCampaignsResponse(value: unknown): CampaignsResponse {
