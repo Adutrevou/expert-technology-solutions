@@ -29,16 +29,39 @@ export interface DashboardResponse {
     warm: number;
     review: number;
     not_qualified: number;
+    enrichment_queue?: number;
+    outreach_ready?: number;
+    contacted?: number;
+    emails_sent_today?: number;
+    replies_received?: number;
+    blocked_avoided?: number;
+    company_found?: number;
+    needs_review?: number;
   };
   recent_leads: unknown[];
   pending_approvals: unknown[];
   recent_reports: unknown[];
 }
 
+export interface CanonicalLeadCounts {
+  allLeads: number;
+  totalLeadsFound: number;
+  companyFound: number;
+  enrichmentQueue: number;
+  outreachReady: number;
+  contacted: number;
+  repliesReceived: number;
+  blockedAvoided: number;
+  needsReview: number;
+  emailsSentToday: number;
+}
+
 export interface LeadsResponse {
   ok: boolean;
   client: ApiClientSummary;
   count: number;
+  counts: CanonicalLeadCounts;
+  summary: Record<string, unknown>;
   leads: unknown[];
 }
 
@@ -559,11 +582,13 @@ export interface LeadAgentClientFacingCounts {
   enrichmentQueue: number;
   outreachReady: number;
   outreachPrepared: number;
+  contacted: number;
   emailsSent: number;
   emailsSentToday: number;
   repliesReceived: number;
   blockedAvoided: number;
   companyFound: number;
+  needsReview: number;
   positiveReplies: number;
   meetingsQuoteRequests: number;
 }
@@ -1587,10 +1612,27 @@ function normalizeClientSummary(value: unknown): ApiClientSummary {
   };
 }
 
+function normalizeCanonicalLeadCounts(value: unknown): CanonicalLeadCounts {
+  const record = asRecord(value);
+  return {
+    allLeads: normalizeCount(record.all_leads ?? record.allLeads ?? record.total_leads_found ?? record.totalLeadsFound),
+    totalLeadsFound: normalizeCount(record.total_leads_found ?? record.totalLeadsFound ?? record.all_leads ?? record.allLeads),
+    companyFound: normalizeCount(record.company_found ?? record.companyFound),
+    enrichmentQueue: normalizeCount(record.enrichment_queue ?? record.enrichmentQueue),
+    outreachReady: normalizeCount(record.outreach_ready ?? record.outreachReady),
+    contacted: normalizeCount(record.contacted),
+    repliesReceived: normalizeCount(record.replies_received ?? record.repliesReceived),
+    blockedAvoided: normalizeCount(record.blocked_avoided ?? record.blockedAvoided),
+    needsReview: normalizeCount(record.needs_review ?? record.needsReview ?? record.manual_review ?? record.manualReview),
+    emailsSentToday: normalizeCount(record.emails_sent_today ?? record.emailsSentToday),
+  };
+}
+
 function normalizeDashboardResponse(value: unknown): DashboardResponse {
   const record = asRecord(value);
   const campaignCounts = asRecord(record.campaign_counts);
   const leadCounts = asRecord(record.lead_counts);
+  const normalizedCanonicalCounts = normalizeCanonicalLeadCounts(leadCounts);
   const normalizedCampaignActive = normalizeCount(campaignCounts.active);
   const normalizedCampaignDraft = normalizeCount(campaignCounts.draft);
   const normalizedCampaignTotal = normalizeCount(campaignCounts.total);
@@ -1614,6 +1656,14 @@ function normalizeDashboardResponse(value: unknown): DashboardResponse {
       warm: normalizedLeadWarm,
       review: normalizedLeadReview,
       not_qualified: normalizedLeadNotQualified,
+      enrichment_queue: normalizedCanonicalCounts.enrichmentQueue,
+      outreach_ready: normalizedCanonicalCounts.outreachReady,
+      contacted: normalizedCanonicalCounts.contacted,
+      emails_sent_today: normalizedCanonicalCounts.emailsSentToday,
+      replies_received: normalizedCanonicalCounts.repliesReceived,
+      blocked_avoided: normalizedCanonicalCounts.blockedAvoided,
+      company_found: normalizedCanonicalCounts.companyFound,
+      needs_review: normalizedCanonicalCounts.needsReview,
     },
     recent_leads: asArray(record.recent_leads),
     pending_approvals: asArray(record.pending_approvals),
@@ -1627,6 +1677,8 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
       ok: true,
       client: normalizeClientSummary({}),
       count: value.length,
+      counts: normalizeCanonicalLeadCounts({ all_leads: value.length, total_leads_found: value.length }),
+      summary: {},
       leads: value,
     };
   }
@@ -1650,6 +1702,8 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client ?? nestedData.client),
     count: normalizeCount(record.count) || leads.length,
+    counts: normalizeCanonicalLeadCounts(record.counts ?? nestedData.counts),
+    summary: asRecord(record.summary ?? nestedData.summary),
     leads,
   };
 }
@@ -1799,11 +1853,13 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       enrichmentQueue: enrichmentQueueCount || normalizeCount(record.enrichment_queue_count ?? record.enrichmentQueueCount),
       outreachReady: outreachReadyCount,
       outreachPrepared: preparedCount,
+      contacted: normalizeCount(clientFacingCounts.contacted) || contactedCount,
       emailsSent: contactedCount,
-      emailsSentToday: contactedCount,
+      emailsSentToday: normalizeCount(clientFacingCounts.emails_sent_today ?? clientFacingCounts.emailsSentToday),
       repliesReceived: repliesReceivedCount,
       blockedAvoided: blockedAvoidedCount,
       companyFound: companyFoundCount,
+      needsReview: normalizeCount(clientFacingCounts.needs_review ?? clientFacingCounts.needsReview ?? clientFacingCounts.manual_review ?? clientFacingCounts.manualReview),
       positiveReplies: interestedCount,
       meetingsQuoteRequests: meetingsCount,
     },

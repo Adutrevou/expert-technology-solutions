@@ -37,24 +37,12 @@ const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> =
   { value: "converted", label: "Converted" },
   { value: "rejected", label: "Rejected" },
 ];
-const LEAD_PIPELINE_FILTER_OPTIONS = [
-  "Raw company",
-  "Needs enrichment",
-  "Decision maker found",
-  "Verified contact",
+const DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS = [
+  "Finding contact/email",
   "Outreach ready",
-  "Outreach prepared",
-  "Contacted",
-  "Replied",
-  "Needs reply approval",
-  "Excluded",
-  "Failed no email",
-  "Duplicate suppressed",
-  "Needs review",
-] as const;
-const LEAD_PIPELINE_STATUSES = [
-  "all",
-  ...LEAD_PIPELINE_FILTER_OPTIONS,
+  "Outreach sent",
+  "Reply received",
+  "Blocked/Avoided",
 ] as const;
 
 function LeadsPage() {
@@ -65,7 +53,7 @@ function LeadsPage() {
 
   const [q, setQ] = useState("");
   const [industry, setIndustry] = useState("all");
-  const [pipelineStatus, setPipelineStatus] = useState<(typeof LEAD_PIPELINE_STATUSES)[number]>("all");
+  const [pipelineStatus, setPipelineStatus] = useState("all");
   const [campaign, setCampaign] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -87,21 +75,43 @@ function LeadsPage() {
   const industries = useMemo(() => Array.from(new Set(all.map((lead) => lead.industry))).sort(), [all]);
   const campaigns = useMemo(() => Array.from(new Set(all.map((lead) => lead.campaignName))).sort(), [all]);
   const hasLeadData = all.length > 0;
+  const isAdminViewer = user?.role === "intergrai_admin" || user?.role === "system_agent";
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
+  const pipelineFilterOptions = useMemo(() => {
+    const options = [...DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS];
+    if (all.some((lead) => normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) === "Company found")) {
+      options.unshift("Company found");
+    }
+    if (all.some((lead) => normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) === "Needs review")) {
+      options.push("Needs review");
+    }
+    return options;
+  }, [all]);
   const statusCounts = useMemo(() => {
     const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)))).length;
+    const apiCounts = leadsQuery.data?.counts;
+    if (apiCounts) {
+      return {
+        total: apiCounts.allLeads || apiCounts.totalLeadsFound,
+        enrichmentQueue: apiCounts.enrichmentQueue,
+        outreachReady: apiCounts.outreachReady,
+        contacted: apiCounts.contacted,
+        replied: apiCounts.repliesReceived,
+        blockedAvoided: apiCounts.blockedAvoided,
+        needsReview: apiCounts.needsReview,
+      };
+    }
     return {
       total: all.length,
-      companyFound: count(["Company found"]),
-      enrichmentQueue: count(["Finding contact/email"]),
+      enrichmentQueue: count(["Company found", "Finding contact/email"]),
       outreachReady: count(["Outreach ready"]),
       contacted: count(["Outreach sent"]),
       replied: count(["Reply received"]),
       blockedAvoided: count(["Blocked/Avoided"]),
       needsReview: count(["Needs review"]),
     };
-  }, [all]);
+  }, [all, leadsQuery.data?.counts]);
 
   const filtered = useMemo(() => {
     return all.filter((lead) => {
@@ -141,10 +151,10 @@ function LeadsPage() {
     if (campaign !== "all" && !visibleCampaigns.includes(campaign)) {
       setCampaign("all");
     }
-    if (pipelineStatus !== "all" && !all.some((lead) => normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)) === pipelineStatus)) {
+    if (pipelineStatus !== "all" && !pipelineFilterOptions.includes(pipelineStatus as (typeof pipelineFilterOptions)[number])) {
       setPipelineStatus("all");
     }
-  }, [all, campaign, industry, pipelineStatus, visibleCampaigns, visibleIndustries]);
+  }, [all, campaign, industry, pipelineFilterOptions, pipelineStatus, visibleCampaigns, visibleIndustries]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -256,22 +266,22 @@ function LeadsPage() {
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryStat label="All Leads" value={statusCounts.total} />
-          <SummaryStat label="Company found" value={statusCounts.companyFound} />
           <SummaryStat label="Enrichment Queue" value={statusCounts.enrichmentQueue} />
           <SummaryStat label="Outreach Ready" value={statusCounts.outreachReady} />
           <SummaryStat label="Contacted" value={statusCounts.contacted} />
           <SummaryStat label="Replies" value={statusCounts.replied} />
           <SummaryStat label="Blocked/Avoided" value={statusCounts.blockedAvoided} />
-          <SummaryStat label="Needs review" value={statusCounts.needsReview} />
         </div>
         <div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">All Leads: {statusCounts.total}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Enrichment Queue: {statusCounts.enrichmentQueue}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Outreach Ready: {statusCounts.outreachReady}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs review: {statusCounts.needsReview}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replies: {statusCounts.replied}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Blocked/Avoided: {statusCounts.blockedAvoided}</span>
+          {statusCounts.needsReview > 0 ? (
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-warning-foreground">True ambiguity needing review: {statusCounts.needsReview}</span>
+          ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
@@ -285,11 +295,11 @@ function LeadsPage() {
               {visibleIndustries.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={pipelineStatus} onValueChange={(value) => { setPipelineStatus(value as (typeof LEAD_PIPELINE_STATUSES)[number]); setPage(1); }}>
+          <Select value={pipelineStatus} onValueChange={(value) => { setPipelineStatus(value); setPage(1); }}>
             <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Pipeline status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {LEAD_PIPELINE_FILTER_OPTIONS.map((item) => (
+              {pipelineFilterOptions.map((item) => (
                 <SelectItem key={item} value={item}>{item}</SelectItem>
               ))}
             </SelectContent>
@@ -430,6 +440,7 @@ function LeadsPage() {
             statusNotice={statusNotice}
             statusOptions={statusOptions}
             commentLoading={addCommentMutation.isPending}
+            isAdminViewer={isAdminViewer}
             userLine={`${leadActor.name} · ${leadActor.email} · ${leadActor.role}`}
           />
         </div>
@@ -491,7 +502,7 @@ function LeadMobileCard({
         <LeadField label="Location" value={displayValue(lead.location)} />
         <LeadField label="Campaign" value={displayValue(lead.campaignName)} />
         <LeadField label="Score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
-        <LeadField label="Source" value={formatSourceEvidence(lead)} />
+        <LeadField label="Found by" value="Found by Agent" />
       </dl>
     </button>
   );
@@ -518,6 +529,7 @@ function LeadDetailPanel({
   statusNotice,
   statusOptions,
   userLine,
+  isAdminViewer,
 }: {
   lead: LeadRecord | null;
   activity: LeadActivityRecord[];
@@ -539,6 +551,7 @@ function LeadDetailPanel({
   statusNotice: string | null;
   statusOptions: Array<{ value: LeadWorkflowStatus; label: string }>;
   userLine: string;
+  isAdminViewer: boolean;
 }) {
   if (!lead) {
     return (
@@ -576,11 +589,11 @@ function LeadDetailPanel({
             <LeadField label="Location" value={displayValue(lead.location)} />
             <LeadField label="Website" value={displayValue(lead.website || lead.domain)} />
             <LeadField label="LinkedIn" value={displayValue(lead.linkedinUrl || lead.companyLinkedin)} />
-            <LeadField label="Source evidence" value={formatSourceEvidence(lead)} />
+            <LeadField label="Found by" value={isAdminViewer ? formatFoundByDetails(lead) : "Found by Agent"} />
             <LeadField label="Lead score" value={lead.leadScore ? String(lead.leadScore) : "0"} />
             <LeadField label="Outreach status" value={displayValue(lead.outreachStatus)} />
             <LeadField label="Next action" value={displayValue(lead.nextAction)} />
-            <LeadField label="Review" value={lead.manualReviewRequired ? "Needs review" : "Ready for outreach checks"} />
+            <LeadField label="Routing" value={currentStatus === "Needs review" ? "Needs human review" : "Operational"} />
             <LeadField label="Last activity" value={lead.lastActivity ? formatDistanceToNow(new Date(lead.lastActivity), { addSuffix: true }) : "Not provided"} />
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted/10 p-4">
@@ -763,12 +776,13 @@ function getLeadDisplayStatus(lead: LeadRecord | null | undefined) {
   return lead.displayStatus || lead.status || lead.workflowStatus || "Raw company";
 }
 
-function formatSourceEvidence(lead: LeadRecord) {
-  if (lead.sourceEvidence?.trim()) {
-    return lead.sourceEvidence;
-  }
-
-  return "Source evidence missing";
+function formatFoundByDetails(lead: LeadRecord) {
+  const parts = [
+    lead.sourceProvider?.trim(),
+    lead.sourceType?.trim(),
+    lead.sourceEvidence?.trim(),
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Found by Agent";
 }
 
 function activityLabel(item: LeadActivityRecord) {

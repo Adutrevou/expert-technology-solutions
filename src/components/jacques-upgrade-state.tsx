@@ -55,12 +55,12 @@ export function JacquesUpgradeState() {
               Temporary client view
             </Badge>
             <div>
-              <p className="text-sm uppercase tracking-[0.26em] text-muted-foreground">Expert Lead Agent is being upgraded</p>
+              <p className="text-sm uppercase tracking-[0.26em] text-muted-foreground">Expert Lead Agent is being upgraded.</p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Agent is being upgraded. Emails and outreach will still continue in the background.
+                Lead sourcing and enrichment are still running in the background.
               </h1>
               <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Outreach remains active while the lead workspace is refreshed. Your live totals stay visible here, and the full portal view returns at 13:00 South Africa time.
+                Outreach remains safely controlled while we complete the upgrade. The workspace will reopen at 16:00.
               </p>
             </div>
 
@@ -123,7 +123,7 @@ export function JacquesUpgradeState() {
                 Refresh live metrics
               </Button>
               <p className="text-sm text-muted-foreground">
-                The full view will be back at 13:00 South Africa time.
+                The workspace will reopen at 16:00.
               </p>
             </div>
 
@@ -155,7 +155,7 @@ export function JacquesUpgradeState() {
                 <p className="mt-3 text-sm text-muted-foreground">
                   {isComplete
                     ? "Finalising update..."
-                    : "System will be fully back at 13:00 South Africa time."}
+                    : "System will be fully back at 16:00 South Africa time."}
                 </p>
               </div>
 

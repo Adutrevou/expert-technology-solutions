@@ -2,7 +2,7 @@ import type { AuthUser } from "@/lib/auth-api";
 
 export const EXPERT_CLIENT_SLUG = "expert-technology-solutions";
 export const EXPERT_JACQUES_UPGRADE_END_AT =
-  String(import.meta.env.VITE_EXPERT_JACQUES_UPGRADE_END_AT || "2026-06-09T13:00:00+02:00");
+  String(import.meta.env.VITE_EXPERT_JACQUES_UPGRADE_END_AT || "2026-06-09T16:00:00+02:00");
 export const EXPERT_JACQUES_UPGRADE_MODE = readBooleanEnv(
   import.meta.env.VITE_EXPERT_JACQUES_UPGRADE_MODE,
   true,
