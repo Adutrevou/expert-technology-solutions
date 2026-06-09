@@ -6,8 +6,12 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   new: { label: "New", cls: "bg-muted text-muted-foreground" },
   reviewed: { label: "Reviewed", cls: "bg-muted text-muted-foreground" },
   review: { label: "Review", cls: "bg-muted text-muted-foreground" },
-  Researching: { label: "Researching", cls: "bg-muted text-muted-foreground" },
-  researching: { label: "Researching", cls: "bg-muted text-muted-foreground" },
+  Researching: { label: "Raw company", cls: "bg-muted text-muted-foreground" },
+  researching: { label: "Raw company", cls: "bg-muted text-muted-foreground" },
+  "Raw company": { label: "Raw company", cls: "bg-muted text-muted-foreground" },
+  raw_company: { label: "Raw company", cls: "bg-muted text-muted-foreground" },
+  "Qualified company": { label: "Qualified company", cls: "bg-info/15 text-info border-info/30" },
+  qualified_company: { label: "Qualified company", cls: "bg-info/15 text-info border-info/30" },
   "Manual review": { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   "manual review": { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   manual_review: { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
@@ -15,6 +19,10 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   "Needs review": { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   needs_review: { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   skipped_quality_gate: { label: "Needs review", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  "Decision maker found": { label: "Decision maker found", cls: "bg-info/15 text-info border-info/30" },
+  decision_maker_found: { label: "Decision maker found", cls: "bg-info/15 text-info border-info/30" },
+  "Verified contact": { label: "Verified contact", cls: "bg-primary/15 text-primary border-primary/30" },
+  verified_contact: { label: "Verified contact", cls: "bg-primary/15 text-primary border-primary/30" },
   Qualified: { label: "Qualified", cls: "bg-info/15 text-info border-info/30" },
   qualified: { label: "Qualified", cls: "bg-info/15 text-info border-info/30" },
   "Outreach ready": { label: "Outreach ready", cls: "bg-primary/15 text-primary border-primary/30" },
@@ -25,6 +33,10 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   needs_enrichment: { label: "Needs enrichment", cls: "bg-muted text-muted-foreground" },
   Excluded: { label: "Excluded", cls: "bg-destructive/15 text-destructive border-destructive/30" },
   excluded: { label: "Excluded", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  duplicate_suppressed: { label: "Duplicate suppressed", cls: "bg-muted text-muted-foreground" },
+  "Duplicate suppressed": { label: "Duplicate suppressed", cls: "bg-muted text-muted-foreground" },
+  failed_no_email: { label: "Failed no email", cls: "bg-muted text-muted-foreground" },
+  "Failed no email": { label: "Failed no email", cls: "bg-muted text-muted-foreground" },
   contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
   Contacted: { label: "Contacted", cls: "bg-info/15 text-info border-info/30" },
   follow_up: { label: "Follow up", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
@@ -101,10 +113,13 @@ function formatStatusLabel(status: string) {
     return "Needs review";
   }
   if (normalized === "researching") {
-    return "Researching";
+    return "Raw company";
   }
   if (normalized === "needs enrichment" || normalized === "needs_enrichment") {
     return "Needs enrichment";
+  }
+  if (normalized === "qualified") {
+    return "Qualified company";
   }
   if (normalized === "outreach ready" || normalized === "outreach_ready") {
     return "Outreach ready";

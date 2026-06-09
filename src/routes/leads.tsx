@@ -39,11 +39,13 @@ const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> =
 ];
 const LEAD_PIPELINE_STATUSES = [
   "all",
-  "Researching",
+  "Raw company",
+  "Qualified company",
   "Needs enrichment",
+  "Decision maker found",
+  "Verified contact",
   "Needs review",
   "Excluded",
-  "Qualified",
   "Outreach ready",
   "Outreach prepared",
   "Contacted",
@@ -87,9 +89,11 @@ function LeadsPage() {
     const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(lead.status))).length;
     return {
       visible: all.length,
-      qualified: count(["Qualified"]),
-      researching: count(["Researching"]),
+      rawCompany: count(["Raw company"]),
+      qualifiedCompany: count(["Qualified company"]),
       needsEnrichment: count(["Needs enrichment"]),
+      decisionMakerFound: count(["Decision maker found"]),
+      verifiedContact: count(["Verified contact"]),
       manualReview: count(["Needs review"]),
       outreachPrepared: count(["Outreach ready", "Outreach prepared"]),
       excluded: count(["Excluded"]),
@@ -253,8 +257,11 @@ function LeadsPage() {
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryStat label="Visible leads" value={statusCounts.visible} />
-          <SummaryStat label="Qualified" value={statusCounts.qualified} />
-          <SummaryStat label="Researching" value={statusCounts.researching} />
+          <SummaryStat label="Raw company" value={statusCounts.rawCompany} />
+          <SummaryStat label="Qualified company" value={statusCounts.qualifiedCompany} />
+          <SummaryStat label="Needs enrichment" value={statusCounts.needsEnrichment} />
+          <SummaryStat label="Decision maker found" value={statusCounts.decisionMakerFound} />
+          <SummaryStat label="Verified contact" value={statusCounts.verifiedContact} />
           <SummaryStat label="Needs review" value={statusCounts.manualReview} />
           <SummaryStat label="Outreach prepared" value={statusCounts.outreachPrepared} />
           <SummaryStat label="Contacted" value={statusCounts.contacted} />
@@ -263,8 +270,8 @@ function LeadsPage() {
         </div>
         <div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Total visible: {statusCounts.visible}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Qualified: {statusCounts.qualified}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Researching: {statusCounts.researching}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Raw company: {statusCounts.rawCompany}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Qualified company: {statusCounts.qualifiedCompany}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs review: {statusCounts.manualReview}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replied: {statusCounts.replied}</span>
@@ -285,9 +292,12 @@ function LeadsPage() {
             <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Pipeline status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="Researching">Researching</SelectItem>
+              <SelectItem value="Raw company">Raw company</SelectItem>
+              <SelectItem value="Qualified company">Qualified company</SelectItem>
+              <SelectItem value="Needs enrichment">Needs enrichment</SelectItem>
+              <SelectItem value="Decision maker found">Decision maker found</SelectItem>
+              <SelectItem value="Verified contact">Verified contact</SelectItem>
               <SelectItem value="Needs review">Needs review</SelectItem>
-              <SelectItem value="Qualified">Qualified</SelectItem>
               <SelectItem value="Outreach prepared">Outreach prepared</SelectItem>
               <SelectItem value="Contacted">Contacted</SelectItem>
               <SelectItem value="Replied">Replied</SelectItem>
@@ -776,7 +786,7 @@ function normalizeLeadPipelineStatus(value: string) {
 
   switch (normalized) {
     case "researching":
-      return "Researching";
+      return "Raw company";
     case "needs enrichment":
     case "needs_enrichment":
       return "Needs enrichment";
@@ -788,7 +798,7 @@ function normalizeLeadPipelineStatus(value: string) {
     case "review":
       return "Needs review";
     case "qualified":
-      return "Qualified";
+      return "Qualified company";
     case "outreach ready":
     case "outreach_ready":
       return "Outreach ready";
@@ -841,13 +851,13 @@ function formatStatusLabel(status: string) {
     return "Needs review";
   }
   if (normalized === "researching") {
-    return "Researching";
+    return "Raw company";
   }
   if (normalized === "needs enrichment" || normalized === "needs_enrichment") {
     return "Needs enrichment";
   }
   if (normalized === "qualified") {
-    return "Qualified";
+    return "Qualified company";
   }
   if (normalized === "outreach ready" || normalized === "outreach_ready") {
     return "Outreach ready";
