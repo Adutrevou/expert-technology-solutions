@@ -1696,6 +1696,7 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
   const record = asRecord(value);
   const nestedData = asRecord(record.data);
   const directLeads = asArray(record.leads);
+  const directRecords = asArray(record.records);
   const directItems = asArray(record.items);
   const directResults = asArray(record.results);
   const directRows = asArray(record.rows);
@@ -1703,11 +1704,14 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
   const nestedDataArray = asArray(record.data);
   const leads =
     directLeads.length ? directLeads :
+    directRecords.length ? directRecords :
     directItems.length ? directItems :
     directResults.length ? directResults :
     directRows.length ? directRows :
     nestedLeads.length ? nestedLeads :
     nestedDataArray;
+  const trueHumanReviewRequired = pickBoolean(record, ["true_human_review_required", "trueHumanReviewRequired"]) ?? false;
+
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client ?? nestedData.client),
@@ -1715,10 +1719,10 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
     returnedCount: normalizeCount(record.returned_count ?? record.returnedCount) || leads.length,
     totalCount:
       normalizeCount(record.total_count ?? record.totalCount)
-      || normalizeCount(asRecord(record.counts ?? nestedData.counts).all_leads ?? asRecord(record.counts ?? nestedData.counts).allLeads)
+      || normalizeCount(asRecord(record.counts ?? record.canonical_counts ?? nestedData.counts).all_leads ?? asRecord(record.counts ?? record.canonical_counts ?? nestedData.counts).allLeads)
       || normalizeCount(record.count)
       || leads.length,
-    counts: normalizeCanonicalLeadCounts(record.counts ?? nestedData.counts),
+    counts: normalizeCanonicalLeadCounts(record.counts ?? record.canonical_counts ?? nestedData.counts),
     summary: asRecord(record.summary ?? nestedData.summary),
     leads,
   };
@@ -2085,12 +2089,8 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     replyDraftStatus: pickString(record, ["reply_draft_status", "replyDraftStatus"]) || "",
     nextAction: pickString(record, ["next_action", "nextAction"]) || pickString(leadPipeline, ["next_action", "nextAction"]) || "",
     displayContactName: formatLeadDisplayName(record, pickString(record, ["company", "company_name", "companyName"]) || ""),
-    manualReviewRequired:
-      (pickBoolean(record, ["manual_review_required", "manualReviewRequired"]) ?? false)
-      || (pickBoolean(record, ["quality_gate_failed", "qualityGateFailed"]) ?? false)
-      || asArray(record.quality_gate_blockers ?? record.qualityGateBlockers).length > 0
-      || String(record.status || record.lead_status || record.workflow_status || "").toLowerCase() === "manual review",
-    trueHumanReviewRequired: pickBoolean(record, ["true_human_review_required", "trueHumanReviewRequired"]) ?? false,
+    manualReviewRequired: trueHumanReviewRequired,
+    trueHumanReviewRequired,
     qualityReasons: [
       ...asArray(record.quality_reasons ?? record.qualityReasons).map((item) => String(item || "")).filter(Boolean),
       ...asArray(record.quality_gate_blockers ?? record.qualityGateBlockers)

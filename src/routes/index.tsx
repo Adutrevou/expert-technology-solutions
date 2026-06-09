@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { ArrowRight, RefreshCcw } from "lucide-react";
 import { ApprovalStatusBadge } from "@/components/status-badges";
 import { buildApprovalHubItems, getActionableApprovalItems } from "@/lib/approval-hub";
@@ -36,9 +37,7 @@ function Dashboard() {
     leadTotalCount: leadsQuery.data?.totalCount,
     derivedLeadCounts,
   });
-  const recentLeads = data.recent_leads?.length
-    ? data.recent_leads.map(normalizeLead).slice(0, 4)
-    : normalizedLeads.slice(0, 4);
+  const canonicalLeadSignal = hasCanonicalLeadSignal(leadCounts, normalizedLeads.length);
   const approvalItems = buildApprovalHubItems(
     summaryData,
     conversationsQuery.data || [],
@@ -46,7 +45,33 @@ function Dashboard() {
   );
   const pendingApprovals = getActionableApprovalItems(approvalItems).filter((item) => item.kind !== "credit_approval");
   const attentionItems = pendingApprovals.slice(0, 4);
-  const hasWarnings = dashboardQuery.isError || summaryQuery.isError || leadsQuery.isError || conversationsQuery.isError || requestsQuery.isError;
+  const clientFacingMetricFailure = !canonicalLeadSignal && dashboardQuery.isError && leadsQuery.isError;
+  const recentLeads = normalizedLeads.length
+    ? normalizedLeads.slice(0, 4)
+    : (canonicalLeadSignal && data.recent_leads?.length ? data.recent_leads.map(normalizeLead).slice(0, 4) : []);
+  const shouldWarnInConsole = (import.meta.env.DEV || Boolean(data.is_intergrai_admin))
+    && (dashboardQuery.isError || leadsQuery.isError || summaryQuery.isError || conversationsQuery.isError || requestsQuery.isError);
+
+  useEffect(() => {
+    if (!shouldWarnInConsole) {
+      return;
+    }
+
+    console.warn("[Expert Dashboard] non-client-facing data warning", {
+      dashboardError: dashboardQuery.error instanceof Error ? dashboardQuery.error.message : null,
+      leadsError: leadsQuery.error instanceof Error ? leadsQuery.error.message : null,
+      summaryError: summaryQuery.error instanceof Error ? summaryQuery.error.message : null,
+      conversationsError: conversationsQuery.error instanceof Error ? conversationsQuery.error.message : null,
+      requestsError: requestsQuery.error instanceof Error ? requestsQuery.error.message : null,
+    });
+  }, [
+    shouldWarnInConsole,
+    dashboardQuery.error,
+    leadsQuery.error,
+    summaryQuery.error,
+    conversationsQuery.error,
+    requestsQuery.error,
+  ]);
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -66,9 +91,9 @@ function Dashboard() {
         )}
       />
 
-      {hasWarnings ? (
+      {clientFacingMetricFailure ? (
         <Card className="rounded-[24px] border-warning/30 bg-warning/10 px-5 py-4 text-sm text-warning-foreground shadow-card">
-          Some live metrics are unavailable right now. The dashboard is still rendering with safe fallbacks.
+          Live dashboard metrics are temporarily unavailable. Refresh to retry the canonical lead summary.
           <Button variant="outline" size="sm" className="ml-4" onClick={() => void Promise.allSettled([
             dashboardQuery.refetch(),
             summaryQuery.refetch(),
@@ -109,7 +134,7 @@ function Dashboard() {
           detail="Inbound replies captured across live conversations."
         />
         <StatCard
-          label="Blocked/Avoided Count"
+          label="Blocked/Avoided"
           value={leadCounts.blockedAvoided}
           detail="Unsafe, duplicate, competitor, or bad-fit rows suppressed."
         />
@@ -178,6 +203,18 @@ function Dashboard() {
         </SectionCard>
       </div>
     </div>
+  );
+}
+
+function hasCanonicalLeadSignal(leadCounts: ReturnType<typeof resolveDashboardLeadCounts>, loadedLeadCount: number) {
+  return Boolean(
+    loadedLeadCount
+    || leadCounts.totalLeadsFound
+    || leadCounts.enrichmentQueue
+    || leadCounts.outreachReady
+    || leadCounts.emailsSentToday
+    || leadCounts.repliesReceived
+    || leadCounts.blockedAvoided,
   );
 }
 

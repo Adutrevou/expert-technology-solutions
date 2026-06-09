@@ -85,7 +85,7 @@ function LeadsPage() {
     [derivedStatusCounts, leadsQuery.data?.counts, leadsQuery.data?.totalCount],
   );
   const totalLeadCount = statusCounts.total;
-  const loadedLeadCount = all.length;
+  const loadedLeadCount = leadsQuery.data?.returnedCount ?? all.length;
   const pipelineFilterOptions = useMemo(() => {
     const options = [...DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS];
     if (statusCounts.companyFound > 0) {
@@ -343,7 +343,8 @@ function LeadsPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
           <Card className="overflow-hidden shadow-card">
             <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
-              Showing {paged.length.toLocaleString()} of {filtered.length.toLocaleString()} matching leads ({loadedLeadCount.toLocaleString()} loaded / {totalLeadCount.toLocaleString()} total sourced)
+              Showing {loadedLeadCount.toLocaleString()} of {totalLeadCount.toLocaleString()} real sourced leads
+              {filtered.length !== totalLeadCount ? ` · ${filtered.length.toLocaleString()} match current filters` : ""}
             </div>
             <div className="grid gap-3 p-4 md:hidden">
               {!hasLeadData ? (
