@@ -61,7 +61,11 @@ export interface LeadsResponse {
   client: ApiClientSummary;
   count: number;
   returnedCount: number;
+  loadedCount: number;
   totalCount: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
   counts: CanonicalLeadCounts;
   summary: Record<string, unknown>;
   leads: unknown[];
@@ -1686,7 +1690,11 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
       client: normalizeClientSummary({}),
       count: value.length,
       returnedCount: value.length,
+      loadedCount: value.length,
       totalCount: value.length,
+      page: 1,
+      limit: value.length,
+      hasMore: false,
       counts: normalizeCanonicalLeadCounts({ all_leads: value.length, total_leads_found: value.length }),
       summary: {},
       leads: value,
@@ -1717,11 +1725,18 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
     client: normalizeClientSummary(record.client ?? nestedData.client),
     count: normalizeCount(record.count) || leads.length,
     returnedCount: normalizeCount(record.returned_count ?? record.returnedCount) || leads.length,
+    loadedCount:
+      normalizeCount(record.loaded_count ?? record.loadedCount)
+      || normalizeCount(record.returned_count ?? record.returnedCount)
+      || leads.length,
     totalCount:
       normalizeCount(record.total_count ?? record.totalCount)
       || normalizeCount(asRecord(record.counts ?? record.canonical_counts ?? nestedData.counts).all_leads ?? asRecord(record.counts ?? record.canonical_counts ?? nestedData.counts).allLeads)
       || normalizeCount(record.count)
       || leads.length,
+    page: normalizeCount(record.page) || 1,
+    limit: normalizeCount(record.limit) || leads.length,
+    hasMore: pickBoolean(record, ["has_more", "hasMore"]) ?? false,
     counts: normalizeCanonicalLeadCounts(record.counts ?? record.canonical_counts ?? nestedData.counts),
     summary: asRecord(record.summary ?? nestedData.summary),
     leads,

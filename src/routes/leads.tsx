@@ -17,7 +17,7 @@ import {
   useLeadsQuery,
   useUpdateLeadStatusMutation,
 } from "@/lib/leads-api-hooks";
-import { normalizeLead, type CanonicalLeadCounts, type LeadActivityRecord, type LeadRecord, type LeadWorkflowStatus } from "@/lib/leads-api";
+import { normalizeLead, type CanonicalLeadCounts, type LeadActivityRecord, type LeadRecord, type LeadsResponse, type LeadWorkflowStatus } from "@/lib/leads-api";
 import { deriveNormalizedLeadStatusCounts, normalizeLeadStatus, type NormalizedLeadStatusCounts } from "@/lib/lead-status";
 import { useApp } from "@/lib/app-state";
 
@@ -63,8 +63,16 @@ function LeadsPage() {
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
   const [commentNotice, setCommentNotice] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [lastGoodLeadsData, setLastGoodLeadsData] = useState<typeof leadsQuery.data | null>(null);
 
-  const all = useMemo(() => (leadsQuery.data?.leads ?? []).map(normalizeLead), [leadsQuery.data?.leads]);
+  useEffect(() => {
+    if (hasLeadDataSignal(leadsQuery.data)) {
+      setLastGoodLeadsData(leadsQuery.data);
+    }
+  }, [leadsQuery.data]);
+
+  const effectiveLeadsData = leadsQuery.data ?? lastGoodLeadsData;
+  const all = useMemo(() => (effectiveLeadsData?.leads ?? []).map(normalizeLead), [effectiveLeadsData?.leads]);
   const leadActor = useMemo(
     () => ({
       name: user?.name?.trim() || "Expert Admin",
@@ -81,11 +89,12 @@ function LeadsPage() {
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
   const derivedStatusCounts = useMemo(() => deriveNormalizedLeadStatusCounts(all), [all]);
   const statusCounts = useMemo(
-    () => resolveCanonicalStatusCounts(derivedStatusCounts, leadsQuery.data?.counts, leadsQuery.data?.totalCount),
-    [derivedStatusCounts, leadsQuery.data?.counts, leadsQuery.data?.totalCount],
+    () => resolveCanonicalStatusCounts(derivedStatusCounts, effectiveLeadsData?.counts, effectiveLeadsData?.totalCount),
+    [derivedStatusCounts, effectiveLeadsData?.counts, effectiveLeadsData?.totalCount],
   );
   const totalLeadCount = statusCounts.total;
-  const loadedLeadCount = leadsQuery.data?.returnedCount ?? all.length;
+  const loadedLeadCount = effectiveLeadsData?.loadedCount ?? effectiveLeadsData?.returnedCount ?? all.length;
+  const returnedLeadCount = effectiveLeadsData?.returnedCount ?? all.length;
   const pipelineFilterOptions = useMemo(() => {
     const options = [...DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS];
     if (statusCounts.companyFound > 0) {
@@ -145,7 +154,7 @@ function LeadsPage() {
       return;
     }
 
-    const receivedCounts = leadsQuery.data?.counts ?? null;
+    const receivedCounts = effectiveLeadsData?.counts ?? null;
     console.debug("[Expert Leads] leads received", all.length);
     console.debug("[Expert Leads] counts received", receivedCounts);
     console.debug("[Expert Leads] counts derived from normalized leads", statusCounts);
@@ -167,7 +176,7 @@ function LeadsPage() {
         });
       }
     }
-  }, [all.length, leadsQuery.data?.counts, statusCounts]);
+  }, [all.length, effectiveLeadsData?.counts, statusCounts]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -257,6 +266,9 @@ function LeadsPage() {
     }
   };
 
+  const showHardFailure = !effectiveLeadsData && leadsQuery.isError;
+  const showingLastGoodData = Boolean(lastGoodLeadsData) && Boolean(leadsQuery.isError || (leadsQuery.isFetching && !leadsQuery.isLoading));
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -268,7 +280,7 @@ function LeadsPage() {
         </div>
         <div className="flex gap-2">
           <Button onClick={() => leadsQuery.refetch()} variant="outline" className="gap-2">
-            <RefreshCcw className="h-4 w-4" /> Refresh
+            <RefreshCcw className={`h-4 w-4 ${leadsQuery.isFetching ? "animate-spin" : ""}`} /> {leadsQuery.isFetching ? "Refreshing…" : "Refresh"}
           </Button>
           <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Export CSV
@@ -329,7 +341,7 @@ function LeadsPage() {
 
       {leadsQuery.isLoading ? (
         <LeadsLoadingState />
-      ) : leadsQuery.isError || !leadsQuery.data ? (
+      ) : showHardFailure ? (
         <Card className="p-10 text-center shadow-card">
           <h2 className="text-xl font-semibold">Leads unavailable</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -342,9 +354,14 @@ function LeadsPage() {
       ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
           <Card className="overflow-hidden shadow-card">
+            {showingLastGoodData ? (
+              <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+                {leadsQuery.isError ? "Showing last good live snapshot while refresh retries." : "Refreshing live lead data…"}
+              </div>
+            ) : null}
             <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
-              Showing {loadedLeadCount.toLocaleString()} of {totalLeadCount.toLocaleString()} real sourced leads
-              {filtered.length !== totalLeadCount ? ` · ${filtered.length.toLocaleString()} match current filters` : ""}
+              Showing {paged.length.toLocaleString()} of {filtered.length.toLocaleString()} matching leads ({loadedLeadCount.toLocaleString()} loaded / {totalLeadCount.toLocaleString()} total sourced)
+              {returnedLeadCount !== loadedLeadCount ? ` · ${returnedLeadCount.toLocaleString()} returned this page` : ""}
             </div>
             <div className="grid gap-3 p-4 md:hidden">
               {!hasLeadData ? (
@@ -481,6 +498,22 @@ function LeadsLoadingState() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function hasLeadDataSignal(data: LeadsResponse | null | undefined) {
+  if (!data) return false;
+  return Boolean(
+    data.leads.length
+    || data.totalCount
+    || data.returnedCount
+    || data.loadedCount
+    || data.counts.allLeads
+    || data.counts.enrichmentQueue
+    || data.counts.outreachReady
+    || data.counts.contacted
+    || data.counts.repliesReceived
+    || data.counts.blockedAvoided
   );
 }
 

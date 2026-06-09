@@ -78,6 +78,8 @@ export function useLeadsQuery() {
     queryFn: getLeads,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData,
   });
 }
 
