@@ -2113,6 +2113,11 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     [pickString(record, ["city"]), pickString(record, ["state"]), pickString(record, ["country"])]
       .filter(Boolean)
       .join(", ");
+  const trueHumanReviewRequired =
+    pickBoolean(record, ["true_human_review_required", "trueHumanReviewRequired", "manual_review_required", "manualReviewRequired"])
+    ?? pickBoolean(leadPipeline, ["true_human_review_required", "trueHumanReviewRequired", "manual_review_required", "manualReviewRequired"])
+    ?? pickBoolean(metadata, ["true_human_review_required", "trueHumanReviewRequired", "manual_review_required", "manualReviewRequired"])
+    ?? false;
 
   return {
     id: pickString(record, ["id", "_id"]) || `lead-${index}`,
@@ -2181,6 +2186,54 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     isDuplicateSuppressed: pickBoolean(record, ["is_duplicate_suppressed", "isDuplicateSuppressed"]) ?? false,
     isVisible: pickBoolean(record, ["is_visible", "isVisible"]) ?? true,
     clientVisible: pickBoolean(record, ["client_visible", "clientVisible"]) ?? true,
+  };
+}
+
+export function buildFallbackLeadRecord(index = 0): LeadRecord {
+  return {
+    id: `lead-fallback-${index}`,
+    name: "Decision-maker not verified yet",
+    displayContactName: "Decision-maker not verified yet",
+    company: "",
+    title: "",
+    industry: "",
+    location: "",
+    email: "",
+    phone: "",
+    website: "",
+    domain: "",
+    linkedinUrl: "",
+    companyLinkedin: "",
+    qualification: "review",
+    rawStatus: "",
+    status: "new",
+    displayStatus: "new",
+    canonicalStatus: "new",
+    clientStatusLabel: "",
+    clientVisibleStatus: "",
+    internalDisplayStatus: "",
+    workflowStatus: "new",
+    campaignName: "Unassigned",
+    leadScore: 0,
+    matchReason: "",
+    sourceUrl: "",
+    sourceEvidence: "",
+    sourceProvider: "",
+    sourceType: "",
+    decisionMakerPath: [],
+    enrichmentStatus: "",
+    outreachStatus: "",
+    replyDraftStatus: "",
+    nextAction: "",
+    manualReviewRequired: false,
+    trueHumanReviewRequired: false,
+    qualityReasons: [],
+    isSendable: false,
+    isContacted: false,
+    isExcluded: false,
+    isDuplicateSuppressed: false,
+    isVisible: true,
+    clientVisible: true,
   };
 }
 

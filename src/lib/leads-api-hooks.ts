@@ -69,6 +69,7 @@ export function useDashboardQuery() {
     retry: 1,
     staleTime: 30_000,
     placeholderData: (previousData) => previousData,
+    throwOnError: false,
   });
 }
 
@@ -82,6 +83,7 @@ export function useLeadsQuery() {
     retry: 1,
     staleTime: 30_000,
     placeholderData: (previousData) => previousData,
+    throwOnError: false,
   });
 }
 
@@ -104,6 +106,7 @@ export function useReportsQuery() {
     queryFn: getReports,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
+    throwOnError: false,
   });
 }
 
@@ -115,6 +118,7 @@ export function useRequestsQuery() {
     queryFn: getRequests,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
+    throwOnError: false,
   });
 }
 
@@ -126,6 +130,7 @@ export function useRequestDetailQuery(requestId?: string) {
     queryFn: () => getRequestDetail(requestId || ""),
     enabled: isBrowser && isAuthenticated && Boolean(requestId),
     retry: 1,
+    throwOnError: false,
   });
 }
 
@@ -137,6 +142,7 @@ export function useLeadActivityQuery(leadId?: string) {
     queryFn: () => getLeadActivity(leadId || ""),
     enabled: isBrowser && isAuthenticated && Boolean(leadId),
     retry: 1,
+    throwOnError: false,
   });
 }
 
@@ -148,6 +154,7 @@ export function useLeadAgentSummaryQuery() {
     queryFn: getLeadAgentSummary,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
+    throwOnError: false,
   });
 }
 
@@ -192,6 +199,7 @@ export function useConversationsQuery() {
     queryFn: getConversations,
     enabled: isBrowser && isAuthenticated,
     retry: 1,
+    throwOnError: false,
   });
 }
 
@@ -203,6 +211,7 @@ export function useConversationDetailQuery(conversationId?: string) {
     queryFn: () => getConversationDetail(conversationId || ""),
     enabled: isBrowser && isAuthenticated && Boolean(conversationId),
     retry: 1,
+    throwOnError: false,
   });
 }
 

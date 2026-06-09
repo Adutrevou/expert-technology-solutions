@@ -17,13 +17,22 @@ import {
   useLeadsQuery,
   useUpdateLeadStatusMutation,
 } from "@/lib/leads-api-hooks";
-import { normalizeLead, type CanonicalLeadCounts, type LeadActivityRecord, type LeadRecord, type LeadsResponse, type LeadWorkflowStatus } from "@/lib/leads-api";
+import {
+  buildFallbackLeadRecord,
+  normalizeLead,
+  type CanonicalLeadCounts,
+  type LeadActivityRecord,
+  type LeadRecord,
+  type LeadsResponse,
+  type LeadWorkflowStatus,
+} from "@/lib/leads-api";
 import { deriveNormalizedLeadStatusCounts, normalizeLeadStatus, type NormalizedLeadStatusCounts } from "@/lib/lead-status";
 import { useApp } from "@/lib/app-state";
 
 export const Route = createFileRoute("/leads")({
   head: () => ({ meta: [{ title: "Leads — Expert Technology Solutions" }] }),
   component: LeadsPage,
+  errorComponent: LeadsRouteError,
 });
 
 const PAGE_SIZE = 50;
@@ -450,7 +459,7 @@ function LeadsPage() {
                       <TableCell><LeadStatusBadge status={normalizeLeadStatus(lead)} /></TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
-                        {lead.foundAt ? new Date(lead.foundAt).toLocaleDateString() : "Not provided"}
+                        {formatShortDate(lead.foundAt)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -556,9 +565,54 @@ function safeNormalizeLeadsArray(value: unknown): LeadRecord[] {
       return normalizeLead(item, index);
     } catch (error) {
       console.error("[Expert Leads] failed to normalize lead row", { index, error, item });
-      return normalizeLead({}, index);
+      return buildFallbackLeadRecord(index);
     }
   });
+}
+
+function LeadsRouteError({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  return (
+    <div className="space-y-6 max-w-[1400px] mx-auto">
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Leads</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Live lead records and status history for Expert Technology Solutions
+          </p>
+        </div>
+      </header>
+      <Alert className="border-warning/30 bg-warning/10 text-warning-foreground">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Live leads are refreshing</AlertTitle>
+        <AlertDescription>
+          The leads view hit a client-side rendering error. The workspace shell is still available and lead data will retry safely.
+        </AlertDescription>
+      </Alert>
+      <Card className="p-6 shadow-card">
+        <Button
+          variant="outline"
+          onClick={() => {
+            reset();
+            window.location.reload();
+          }}
+        >
+          <RefreshCcw className="mr-2 h-4 w-4" />
+          Retry leads
+        </Button>
+        {import.meta.env.DEV && error.message ? (
+          <pre className="mt-4 overflow-auto rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+            {error.message}
+          </pre>
+        ) : null}
+      </Card>
+    </div>
+  );
 }
 
 function safePositiveCount(...values: Array<number | null | undefined>) {
@@ -691,7 +745,7 @@ function LeadDetailPanel({
             <LeadField label="Outreach status" value={displayValue(lead.outreachStatus)} />
             <LeadField label="Next action" value={displayValue(lead.nextAction)} />
             <LeadField label="Routing" value={currentStatus === "Needs review" ? "Needs human review" : "Operational"} />
-            <LeadField label="Last activity" value={lead.lastActivity ? formatDistanceToNow(new Date(lead.lastActivity), { addSuffix: true }) : "Not provided"} />
+            <LeadField label="Last activity" value={formatRelativeDate(lead.lastActivity)} />
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted/10 p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Match reason</p>
@@ -810,7 +864,7 @@ function ActivityItem({ item }: { item: LeadActivityRecord }) {
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>{item.userName || item.userEmail || "System update"}</span>
         {item.userRole ? <span>{item.userRole}</span> : null}
-        {item.createdAt ? <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span> : null}
+        {item.createdAt ? <span>{formatRelativeDate(item.createdAt)}</span> : null}
       </div>
     </article>
   );
@@ -859,6 +913,20 @@ function LeadField({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-sm break-words">{value}</dd>
     </div>
   );
+}
+
+function formatShortDate(value?: string) {
+  if (!value) return "Not provided";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not provided";
+  return date.toLocaleDateString();
+}
+
+function formatRelativeDate(value?: string) {
+  if (!value) return "Not provided";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not provided";
+  return formatDistanceToNow(date, { addSuffix: true });
 }
 
 function displayValue(value?: string | null) {

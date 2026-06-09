@@ -8,12 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useLeadsQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
-import { normalizeLead, type CanonicalLeadCounts, type DashboardResponse, type LeadAgentSummary } from "@/lib/leads-api";
+import {
+  buildFallbackLeadRecord,
+  normalizeLead,
+  type CanonicalLeadCounts,
+  type DashboardResponse,
+  type LeadAgentSummary,
+} from "@/lib/leads-api";
 import { deriveNormalizedLeadStatusCounts, type NormalizedLeadStatusCounts } from "@/lib/lead-status";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Expert Technology Solutions" }] }),
   component: Dashboard,
+  errorComponent: DashboardRouteError,
 });
 
 function Dashboard() {
@@ -22,11 +29,6 @@ function Dashboard() {
   const leadsQuery = useLeadsQuery();
   const conversationsQuery = useConversationsQuery();
   const requestsQuery = useRequestsQuery();
-
-  if (dashboardQuery.isLoading || summaryQuery.isLoading || leadsQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading) {
-    return <DashboardLoadingState />;
-  }
-
   const data = dashboardQuery.data ?? EMPTY_DASHBOARD;
   const summaryData = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
   const normalizedLeads = safeNormalizeLeadsArray(leadsQuery.data?.records ?? leadsQuery.data?.leads);
@@ -48,7 +50,7 @@ function Dashboard() {
   const clientFacingMetricFailure = !canonicalLeadSignal && dashboardQuery.isError && leadsQuery.isError;
   const recentLeads = normalizedLeads.length
     ? normalizedLeads.slice(0, 4)
-    : (canonicalLeadSignal && data.recent_leads?.length ? data.recent_leads.map(normalizeLead).slice(0, 4) : []);
+    : (canonicalLeadSignal && data.recent_leads?.length ? safeNormalizeLeadsArray(data.recent_leads).slice(0, 4) : []);
   const shouldWarnInConsole = (import.meta.env.DEV || Boolean(data.is_intergrai_admin))
     && (dashboardQuery.isError || leadsQuery.isError || summaryQuery.isError || conversationsQuery.isError || requestsQuery.isError);
 
@@ -72,6 +74,10 @@ function Dashboard() {
     conversationsQuery.error,
     requestsQuery.error,
   ]);
+
+  if (dashboardQuery.isLoading || summaryQuery.isLoading || leadsQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading) {
+    return <DashboardLoadingState />;
+  }
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -213,9 +219,47 @@ function safeNormalizeLeadsArray(value: unknown): ReturnType<typeof normalizeLea
       return normalizeLead(item, index);
     } catch (error) {
       console.error("[Expert Dashboard] failed to normalize lead row", { index, error, item });
-      return normalizeLead({}, index);
+      return buildFallbackLeadRecord(index);
     }
   });
+}
+
+function DashboardRouteError({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-[1240px] space-y-6">
+      <PageIntro
+        badge="Dashboard"
+        title="How is my lead agent performing?"
+        description="See overall pipeline progress, what is ready now, and what needs your attention next."
+      />
+      <Card className="rounded-[24px] border-warning/30 bg-warning/10 px-5 py-4 text-sm text-warning-foreground shadow-card">
+        Live metrics refreshing. The dashboard hit a client-side rendering error, but the workspace shell is still available.
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-4"
+          onClick={() => {
+            reset();
+            window.location.reload();
+          }}
+        >
+          <RefreshCcw className="mr-2 h-4 w-4" />
+          Retry dashboard
+        </Button>
+        {import.meta.env.DEV && error.message ? (
+          <pre className="mt-4 overflow-auto rounded-xl bg-background/80 p-3 text-xs text-warning-foreground">
+            {error.message}
+          </pre>
+        ) : null}
+      </Card>
+    </div>
+  );
 }
 
 function hasCanonicalLeadSignal(leadCounts: ReturnType<typeof resolveDashboardLeadCounts>, loadedLeadCount: number) {
