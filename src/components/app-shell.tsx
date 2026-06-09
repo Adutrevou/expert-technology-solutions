@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { JacquesUpgradeState } from "@/components/jacques-upgrade-state";
+import { shouldShowExpertJacquesUpgrade } from "@/lib/expert-upgrade";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouterState();
   const path = router.location.pathname;
   const isIntergraiAdmin = user?.role === "intergrai_admin";
+  const showJacquesUpgrade = shouldShowExpertJacquesUpgrade(user, client.id);
   const navItems = BASE_NAV;
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const currentPage = navItems.find(({ to }) => (to === "/" ? path === "/" : path.startsWith(to)));
@@ -185,7 +188,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-8">{children}</main>
+        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-8">
+          {showJacquesUpgrade ? <JacquesUpgradeState /> : children}
+        </main>
       </div>
     </div>
   );
