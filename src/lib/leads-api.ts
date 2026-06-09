@@ -361,6 +361,7 @@ export interface ConversationRecord {
   campaignName: string;
   companyName: string;
   contactName: string;
+  displayContactName?: string;
   contactEmail: string;
   status: string;
   replyStatus: string;
@@ -1499,22 +1500,27 @@ function isPlaceholderLeadLabel(value: unknown): boolean {
   ].includes(normalized);
 }
 
+function hasMaskedDisplayMarker(value: unknown): boolean {
+  return /[*•·]{2,}/.test(String(value || ""));
+}
+
 function formatLeadDisplayName(record: Record<string, unknown>, fallbackCompany = ""): string {
   const company = pickString(record, ["company_name", "company", "lead_company_name", "raw_company_name"]) || fallbackCompany;
   const serverDisplayName = pickString(record, ["display_contact_name", "displayContactName"]) || "";
-  const contactName =
-    (serverDisplayName && !isPlaceholderLeadLabel(serverDisplayName) ? serverDisplayName : "") ||
-    pickString(record, ["contact_name", "enriched_contact_name", "lead_contact_name", "raw_contact_name", "name", "full_name", "fullName"]) ||
-    "";
+  const title = pickString(record, ["title", "contact_title", "lead_title", "enriched_contact_title", "job_title", "jobTitle", "role", "position"]) || "";
+  const contactCandidates = [
+    serverDisplayName,
+    pickString(record, ["contact_name", "enriched_contact_name", "lead_contact_name", "raw_contact_name", "name", "full_name", "fullName"]) || ""
+  ].filter((candidate) => Boolean(candidate) && !isPlaceholderLeadLabel(candidate) && !hasMaskedDisplayMarker(candidate));
+  const contactName = contactCandidates[0] || "";
   const email = pickString(record, ["enriched_email", "lead_email", "email"]) || "";
 
   if (contactName && !isPlaceholderLeadLabel(contactName)) {
     return contactName;
   }
 
-  const emailName = getPersonalDisplayNameFromEmail(email);
-  if (emailName) {
-    return emailName;
+  if (title && !isPlaceholderLeadLabel(title) && !hasMaskedDisplayMarker(title)) {
+    return title;
   }
 
   if (company) {
@@ -2627,13 +2633,15 @@ function normalizeReplyDraft(value: unknown, index = 0): ReplyDraftRecord {
 function normalizeConversation(value: unknown, index = 0): ConversationRecord {
   const record = asRecord(value);
   const companyName = pickString(record, ["company_name", "companyName"]) || "";
+  const displayContactName = pickString(record, ["display_contact_name", "displayContactName"]) || "";
   return {
     id: pickString(record, ["id", "_id"]) || `conversation-${index}`,
     outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
     campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
     companyName,
-    contactName: pickString(record, ["contact_name", "contactName", "contact_display_name", "contactDisplayName"]) || formatLeadDisplayName(record, companyName),
+    contactName: displayContactName || pickString(record, ["contact_name", "contactName", "contact_display_name", "contactDisplayName"]) || formatLeadDisplayName(record, companyName),
+    displayContactName: displayContactName || undefined,
     contactEmail: pickString(record, ["contact_email", "contactEmail"]) || "",
     status: pickString(record, ["status"]) || "prepared",
     replyStatus: pickString(record, ["reply_status", "replyStatus"]) || "",

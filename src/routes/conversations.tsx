@@ -179,7 +179,7 @@ function ConversationsPage() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {conversation.contactName || conversation.contactEmail || "Decision-maker not verified yet"}{conversation.contactEmail ? ` · ${conversation.contactEmail}` : ""}{conversation.campaignName ? ` · ${conversation.campaignName}` : ""}
+                    {conversation.displayContactName || conversation.contactName || conversation.contactEmail || "Decision-maker not verified yet"}{conversation.contactEmail ? ` · ${conversation.contactEmail}` : ""}{conversation.campaignName ? ` · ${conversation.campaignName}` : ""}
                   </p>
                   <p className="mt-2 text-sm text-foreground">{conversation.latestSubject || "Prepared email preview"}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{conversation.latestSnippet || "No message body captured yet."}</p>
@@ -234,7 +234,7 @@ function ConversationsPage() {
                 </div>
 
                 <MetaCard label="Company" value={selectedConversation.companyName || "Unknown company"} />
-                <MetaCard label="Contact" value={selectedConversation.contactName || selectedConversation.contactEmail || "Decision-maker not verified yet"} />
+                <MetaCard label="Contact" value={selectedConversation.displayContactName || selectedConversation.contactName || selectedConversation.contactEmail || "Decision-maker not verified yet"} />
                 <MetaCard label="Email" value={selectedConversation.contactEmail || "No email captured"} />
                 <MetaCard label="Campaign" value={selectedConversation.campaignName || "No linked campaign"} />
                 <MetaCard label="Subject" value={selectedConversation.latestSubject || latestOutboundMessage?.subject || "No subject captured"} />
@@ -425,7 +425,7 @@ function ConversationsPage() {
         conversation={selectedConversation}
         draft={latestReplyDraft}
         busy={updateReplyDraftMutation.isPending}
-        title={`Edit reply draft — ${selectedConversation?.companyName || selectedConversation?.contactName || "Conversation"}`}
+        title={`Edit reply draft — ${selectedConversation?.companyName || selectedConversation?.displayContactName || selectedConversation?.contactName || "Conversation"}`}
         description="Make the reply clearer, then save it back to approval-gated review."
         saveLabel="Save draft"
         onSave={handleReplyDraftEdit}
@@ -471,13 +471,19 @@ function isSentOrLaterStatus(status: string) {
 
 function conversationStatusLabel(status: string) {
   if (status === "sent") {
-    return "Sent";
+    return "Outreach sent";
   }
   if (status === "prepared") {
-    return "Draft reply ready";
+    return "Draft ready";
   }
   if (status === "replied") {
     return "Reply received";
+  }
+  if (status === "bounced") {
+    return "Bounced";
+  }
+  if (status === "unsubscribed") {
+    return "Unsubscribed";
   }
   if (status === "closed") {
     return "Closed";
@@ -488,13 +494,19 @@ function conversationStatusLabel(status: string) {
 
 function conversationStatusDescription(status: string) {
   if (status === "prepared") {
-    return "Draft reply ready";
+    return "Draft ready";
   }
   if (status === "sent") {
-    return "Sent / Waiting for reply";
+    return "Outreach sent / Waiting for reply";
   }
   if (status === "replied") {
     return "Reply received";
+  }
+  if (status === "bounced") {
+    return "Bounced";
+  }
+  if (status === "unsubscribed") {
+    return "Unsubscribed";
   }
   if (status === "closed") {
     return "Closed";
@@ -509,6 +521,8 @@ function replyStatusLabel(status: string) {
       return "Awaiting approval";
     case "draft_ready":
       return "Draft reply ready";
+    case "waiting_for_approval":
+      return "Awaiting approval";
     case "approved":
       return "Approved";
     case "sent":
@@ -547,13 +561,19 @@ function replyDraftStatusClassName(status: string) {
 
 function conversationTimestampLabel(status: string) {
   if (status === "prepared") {
-    return "Draft reply ready";
+    return "Draft ready";
   }
   if (status === "sent") {
-    return "Sent";
+    return "Outreach sent";
   }
   if (status === "replied") {
     return "Reply received";
+  }
+  if (status === "bounced") {
+    return "Bounced";
+  }
+  if (status === "unsubscribed") {
+    return "Unsubscribed";
   }
   if (status === "closed") {
     return "Closed";
