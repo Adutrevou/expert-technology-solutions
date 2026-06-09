@@ -556,9 +556,14 @@ export interface VerifiedContactPlanningRecord {
 export interface LeadAgentClientFacingCounts {
   totalLeadsFound: number;
   qualifiedLeads: number;
+  enrichmentQueue: number;
+  outreachReady: number;
   outreachPrepared: number;
   emailsSent: number;
+  emailsSentToday: number;
   repliesReceived: number;
+  blockedAvoided: number;
+  companyFound: number;
   positiveReplies: number;
   meetingsQuoteRequests: number;
 }
@@ -1687,9 +1692,13 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
   const pipelineCount = (stageName: string) => pipelineEntries.find((entry) => normalizeStageLabel(entry.stage) === stageName)?.count ?? 0;
   const foundCount = normalizeCount(clientFacingCounts.total_leads_found ?? clientFacingCounts.totalLeadsFound) || pipelineCount("Found");
   const qualifiedCount = normalizeCount(clientFacingCounts.qualified_leads ?? clientFacingCounts.qualifiedLeads) || pipelineCount("Qualified");
-  const preparedCount = normalizeCount(clientFacingCounts.outreach_prepared ?? clientFacingCounts.outreachPrepared) || pipelineCount("Prepared");
-  const contactedCount = normalizeCount(clientFacingCounts.emails_sent ?? clientFacingCounts.emailsSent) || pipelineCount("Contacted");
+  const enrichmentQueueCount = normalizeCount(clientFacingCounts.enrichment_queue ?? clientFacingCounts.enrichmentQueue);
+  const outreachReadyCount = normalizeCount(clientFacingCounts.outreach_ready ?? clientFacingCounts.outreachReady ?? clientFacingCounts.outreach_prepared ?? clientFacingCounts.outreachPrepared) || pipelineCount("Prepared");
+  const preparedCount = outreachReadyCount;
+  const contactedCount = normalizeCount(clientFacingCounts.emails_sent_today ?? clientFacingCounts.emailsSentToday ?? clientFacingCounts.emails_sent ?? clientFacingCounts.emailsSent) || pipelineCount("Contacted");
   const repliesReceivedCount = normalizeCount(clientFacingCounts.replies_received ?? clientFacingCounts.repliesReceived);
+  const blockedAvoidedCount = normalizeCount(clientFacingCounts.blocked_avoided ?? clientFacingCounts.blockedAvoided);
+  const companyFoundCount = normalizeCount(clientFacingCounts.company_found ?? clientFacingCounts.companyFound);
   const interestedCount = normalizeCount(clientFacingCounts.positive_replies ?? clientFacingCounts.positiveReplies) || pipelineCount("Interested");
   const meetingsCount = normalizeCount(clientFacingCounts.meetings_quote_requests ?? clientFacingCounts.meetingsQuoteRequests) || pipelineCount("Meetings / Quotes");
 
@@ -1787,9 +1796,14 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     clientFacingCounts: {
       totalLeadsFound: foundCount,
       qualifiedLeads: qualifiedCount,
+      enrichmentQueue: enrichmentQueueCount || normalizeCount(record.enrichment_queue_count ?? record.enrichmentQueueCount),
+      outreachReady: outreachReadyCount,
       outreachPrepared: preparedCount,
       emailsSent: contactedCount,
+      emailsSentToday: contactedCount,
       repliesReceived: repliesReceivedCount,
+      blockedAvoided: blockedAvoidedCount,
+      companyFound: companyFoundCount,
       positiveReplies: interestedCount,
       meetingsQuoteRequests: meetingsCount,
     },

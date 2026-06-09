@@ -93,18 +93,12 @@ function LeadsPage() {
     const count = (statuses: string[]) => all.filter((lead) => statuses.includes(normalizeLeadPipelineStatus(getLeadDisplayStatus(lead)))).length;
     return {
       total: all.length,
-      rawCompany: count(["Raw company"]),
-      needsEnrichment: count(["Needs enrichment"]),
-      decisionMakerFound: count(["Decision maker found"]),
-      verifiedContact: count(["Verified contact"]),
+      companyFound: count(["Company found"]),
+      enrichmentQueue: count(["Finding contact/email"]),
       outreachReady: count(["Outreach ready"]),
-      outreachPrepared: count(["Outreach prepared"]),
-      contacted: count(["Contacted"]),
-      replied: count(["Replied"]),
-      needsReplyApproval: count(["Needs reply approval"]),
-      excluded: count(["Excluded"]),
-      failedNoEmail: count(["Failed no email"]),
-      duplicateSuppressed: count(["Duplicate suppressed"]),
+      contacted: count(["Outreach sent"]),
+      replied: count(["Reply received"]),
+      blockedAvoided: count(["Blocked/Avoided"]),
       needsReview: count(["Needs review"]),
     };
   }, [all]);
@@ -261,29 +255,23 @@ function LeadsPage() {
 
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryStat label="All real leads" value={statusCounts.total} />
-          <SummaryStat label="Raw company" value={statusCounts.rawCompany} />
-          <SummaryStat label="Needs enrichment" value={statusCounts.needsEnrichment} />
-          <SummaryStat label="Decision maker found" value={statusCounts.decisionMakerFound} />
-          <SummaryStat label="Verified contact" value={statusCounts.verifiedContact} />
-          <SummaryStat label="Outreach ready" value={statusCounts.outreachReady} />
-          <SummaryStat label="Outreach prepared" value={statusCounts.outreachPrepared} />
+          <SummaryStat label="All Leads" value={statusCounts.total} />
+          <SummaryStat label="Company found" value={statusCounts.companyFound} />
+          <SummaryStat label="Enrichment Queue" value={statusCounts.enrichmentQueue} />
+          <SummaryStat label="Outreach Ready" value={statusCounts.outreachReady} />
           <SummaryStat label="Contacted" value={statusCounts.contacted} />
-          <SummaryStat label="Replied" value={statusCounts.replied} />
-          <SummaryStat label="Needs reply approval" value={statusCounts.needsReplyApproval} />
-          <SummaryStat label="Excluded" value={statusCounts.excluded} />
-          <SummaryStat label="Failed no email" value={statusCounts.failedNoEmail} />
-          <SummaryStat label="Duplicate suppressed" value={statusCounts.duplicateSuppressed} />
+          <SummaryStat label="Replies" value={statusCounts.replied} />
+          <SummaryStat label="Blocked/Avoided" value={statusCounts.blockedAvoided} />
           <SummaryStat label="Needs review" value={statusCounts.needsReview} />
         </div>
         <div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">All real leads: {statusCounts.total}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Raw company: {statusCounts.rawCompany}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs enrichment: {statusCounts.needsEnrichment}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Outreach ready: {statusCounts.outreachReady}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">All Leads: {statusCounts.total}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Enrichment Queue: {statusCounts.enrichmentQueue}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Outreach Ready: {statusCounts.outreachReady}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Needs review: {statusCounts.needsReview}</span>
           <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Contacted: {statusCounts.contacted}</span>
-          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replied: {statusCounts.replied}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Replies: {statusCounts.replied}</span>
+          <span className="rounded-full border border-border/70 bg-muted/20 px-3 py-1">Blocked/Avoided: {statusCounts.blockedAvoided}</span>
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
@@ -359,29 +347,27 @@ function LeadsPage() {
               <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Name</TableHead>
                     <TableHead>Company</TableHead>
-                    <TableHead className="hidden md:table-cell">Title</TableHead>
-                    <TableHead className="hidden lg:table-cell">Industry</TableHead>
+                    <TableHead>Contact / Decision-maker</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead className="hidden xl:table-cell">Campaign</TableHead>
+                    <TableHead className="hidden lg:table-cell">Campaign / Focus Area</TableHead>
+                    <TableHead className="hidden md:table-cell">Found date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!hasLeadData && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-16">
+                      <TableCell colSpan={5} className="py-16">
                         <EmptyState
                           title="No leads synced yet"
-                          description="The live leads endpoint is connected, but this client does not have any leads yet."
+                          description="The live leads endpoint is connected. Agent-found companies and contact opportunities will appear here."
                         />
                       </TableCell>
                     </TableRow>
                   )}
                   {hasLeadData && paged.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No leads match your filters.</TableCell>
+                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No leads match your filters.</TableCell>
                     </TableRow>
                   )}
                   {paged.map((lead) => (
@@ -399,13 +385,13 @@ function LeadsPage() {
                       }}
                       className={lead.id === selectedLead?.id ? "cursor-pointer bg-primary/5 ring-1 ring-primary/30" : "cursor-pointer transition-smooth hover:bg-muted/30"}
                     >
-                      <TableCell className="font-medium">{displayValue(lead.displayContactName || lead.name)}</TableCell>
-                      <TableCell className="text-muted-foreground">{displayValue(lead.company)}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">{displayValue(lead.title)}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(lead.industry)}</TableCell>
+                      <TableCell className="font-medium">{displayValue(lead.company)}</TableCell>
+                      <TableCell className="text-muted-foreground">{displayValue(lead.displayContactName || lead.name || lead.title)}</TableCell>
                       <TableCell><LeadStatusBadge status={getLeadDisplayStatus(lead)} /></TableCell>
-                      <TableCell className="text-muted-foreground">{lead.leadScore ? String(lead.leadScore) : "0"}</TableCell>
-                      <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{displayValue(lead.campaignName)}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
+                        {lead.foundAt ? new Date(lead.foundAt).toLocaleDateString() : "Not provided"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -796,10 +782,16 @@ function normalizeLeadPipelineStatus(value: string) {
 
   switch (normalized) {
     case "researching":
-      return "Raw company";
+    case "raw company":
+    case "raw_company":
+    case "company found":
+    case "company_found":
+      return "Company found";
     case "needs enrichment":
     case "needs_enrichment":
-      return "Needs enrichment";
+    case "finding contact/email":
+    case "finding_contact_email":
+      return "Finding contact/email";
     case "manual review":
     case "manual_review":
     case "manual_review_required":
@@ -808,22 +800,35 @@ function normalizeLeadPipelineStatus(value: string) {
     case "review":
       return "Needs review";
     case "qualified":
-      return "Qualified company";
+    case "qualified company":
+    case "qualified_company":
+    case "decision maker found":
+    case "verified contact":
+      return "Finding contact/email";
     case "outreach ready":
     case "outreach_ready":
       return "Outreach ready";
     case "outreach prepared":
     case "outreach_prepared":
-      return "Outreach prepared";
+      return "Outreach ready";
     case "excluded":
-      return "Excluded";
+    case "duplicate suppressed":
+    case "duplicate_suppressed":
+    case "failed no email":
+    case "failed_no_email":
+    case "blocked/avoided":
+    case "blocked_avoided":
+      return "Blocked/Avoided";
     case "contacted":
-      return "Contacted";
+    case "outreach sent":
+    case "outreach_sent":
+      return "Outreach sent";
     case "replied":
-      return "Replied";
+    case "reply received":
+    case "reply_received":
     case "needs reply approval":
     case "needs_reply_approval":
-      return "Needs reply approval";
+      return "Reply received";
     default:
       return formatStatusLabel(normalized);
   }
@@ -853,24 +858,19 @@ function getLeadWorkflowStatus(lead: LeadRecord | null | undefined) {
 
 function mapPipelineStatusToWorkflowStatus(status: string): LeadWorkflowStatus {
   switch (normalizeLeadPipelineStatus(status)) {
-    case "Researching":
+    case "Company found":
       return "new";
-    case "Needs enrichment":
+    case "Finding contact/email":
       return "new";
     case "Needs review":
       return "reviewed";
-    case "Qualified":
-      return "interested";
     case "Outreach ready":
-    case "Outreach prepared":
       return "reviewed";
-    case "Excluded":
+    case "Blocked/Avoided":
       return "reviewed";
-    case "Contacted":
+    case "Outreach sent":
       return "contacted";
-    case "Replied":
-      return "follow_up";
-    case "Needs reply approval":
+    case "Reply received":
       return "follow_up";
     default:
       return "reviewed";
@@ -882,26 +882,29 @@ function formatStatusLabel(status: string) {
   if (normalized === "manual review" || normalized === "manual_review" || normalized === "manual_review_required" || normalized === "needs review" || normalized === "needs_review" || normalized === "review") {
     return "Needs review";
   }
-  if (normalized === "researching") {
-    return "Raw company";
+  if (normalized === "researching" || normalized === "raw company" || normalized === "raw_company" || normalized === "company found" || normalized === "company_found") {
+    return "Company found";
   }
-  if (normalized === "needs enrichment" || normalized === "needs_enrichment") {
-    return "Needs enrichment";
+  if (normalized === "needs enrichment" || normalized === "needs_enrichment" || normalized === "finding contact/email" || normalized === "finding_contact_email") {
+    return "Finding contact/email";
   }
-  if (normalized === "qualified") {
-    return "Qualified company";
+  if (normalized === "qualified" || normalized === "qualified company" || normalized === "qualified_company" || normalized === "decision maker found" || normalized === "verified contact") {
+    return "Finding contact/email";
   }
   if (normalized === "outreach ready" || normalized === "outreach_ready") {
     return "Outreach ready";
   }
   if (normalized === "outreach prepared" || normalized === "outreach_prepared") {
-    return "Outreach prepared";
+    return "Outreach ready";
   }
-  if (normalized === "excluded") {
-    return "Excluded";
+  if (normalized === "contacted" || normalized === "outreach sent" || normalized === "outreach_sent") {
+    return "Outreach sent";
   }
-  if (normalized === "needs reply approval" || normalized === "needs_reply_approval") {
-    return "Needs reply approval";
+  if (normalized === "replied" || normalized === "reply received" || normalized === "reply_received" || normalized === "needs reply approval" || normalized === "needs_reply_approval") {
+    return "Reply received";
+  }
+  if (normalized === "excluded" || normalized === "duplicate suppressed" || normalized === "duplicate_suppressed" || normalized === "failed no email" || normalized === "failed_no_email" || normalized === "blocked/avoided" || normalized === "blocked_avoided") {
+    return "Blocked/Avoided";
   }
 
   return status

@@ -72,49 +72,34 @@ function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Campaigns"
-          value={data.campaign_counts.total}
-          detail={data.campaign_counts.total === 1 ? "1 campaign in view" : `${data.campaign_counts.total} campaigns in view`}
-        />
-        <StatCard
-          label="Leads found"
+          label="All Leads"
           value={leadCounts.totalLeadsFound}
-          detail={leadCounts.totalLeadsFound === 0 ? "No visible leads yet" : `${leadCounts.qualifiedLeads} qualified and ${leadCounts.outreachPrepared} prepared`}
+          detail={leadCounts.totalLeadsFound === 0 ? "No visible leads yet" : "Companies and contact opportunities found by the agent."}
         />
         <StatCard
-          label="Qualified leads"
-          value={leadCounts.qualifiedLeads}
-          detail="Lead-quality gated opportunities in the visible pipeline."
+          label="Enrichment Queue"
+          value={leadCounts.enrichmentQueue}
+          detail="Company or contact opportunities still missing a usable email."
         />
         <StatCard
-          label="Outreach sent"
-          value={leadCounts.emailsSent}
-          detail="One-by-one outreach already sent."
+          label="Outreach Ready"
+          value={leadCounts.outreachReady}
+          detail="Leads with a usable email and enough data to send safely."
         />
         <StatCard
-          label="Replies received"
+          label="Emails Sent Today"
+          value={leadCounts.emailsSentToday}
+          detail="First outreach and approved replies sent today."
+        />
+        <StatCard
+          label="Replies Received"
           value={leadCounts.repliesReceived}
           detail="Inbound replies captured across live conversations."
         />
         <StatCard
-          label="Reply drafts needing approval"
-          value={summaryData.repliesWaitingApproval}
-          detail="Draft replies are waiting for review before they can move forward."
-        />
-        <StatCard
-          label="Meetings / quotes"
-          value={leadCounts.meetingsQuoteRequests}
-          detail="Positive replies that ask for a meeting or quote."
-        />
-        <StatCard
-          label="Approvals waiting"
-          value={pendingApprovals.length}
-          detail={pendingApprovals.length ? "Real client decisions waiting now" : "All clear right now"}
-        />
-        <StatCard
-          label="Workspace"
-          value={data.client.status === "active" ? "Ready" : data.client.status || "Unknown"}
-          detail="Mailbox readiness and approved launch state determine whether sending is active."
+          label="Blocked/Avoided Count"
+          value={leadCounts.blockedAvoided}
+          detail="Unsafe, duplicate, competitor, or bad-fit rows suppressed."
         />
       </div>
 
@@ -304,9 +289,14 @@ const EMPTY_LEAD_AGENT_SUMMARY: LeadAgentSummary = {
   clientFacingCounts: {
     totalLeadsFound: 0,
     qualifiedLeads: 0,
+    enrichmentQueue: 0,
+    outreachReady: 0,
     outreachPrepared: 0,
     emailsSent: 0,
+    emailsSentToday: 0,
     repliesReceived: 0,
+    blockedAvoided: 0,
+    companyFound: 0,
     positiveReplies: 0,
     meetingsQuoteRequests: 0,
   },

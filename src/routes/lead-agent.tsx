@@ -138,29 +138,34 @@ function LeadAgentPage() {
           detail="Lead sourcing, verification, and sending stay within the approved safety limits."
         />
         <StatCard
-          label="Leads found"
+          label="All Leads"
           value={data.clientFacingCounts.totalLeadsFound}
-          detail="Real client-visible leads in the active pipeline."
+          detail="Companies and contact opportunities found by the agent."
         />
         <StatCard
-          label="Qualified leads"
-          value={data.clientFacingCounts.qualifiedLeads}
-          detail="Leads that meet the quality gate."
+          label="Enrichment Queue"
+          value={data.clientFacingCounts.enrichmentQueue}
+          detail="Leads still missing a usable email."
         />
         <StatCard
-          label="Outreach sent"
-          value={data.clientFacingCounts.emailsSent}
-          detail="One-by-one outreach already sent."
+          label="Outreach Ready"
+          value={data.clientFacingCounts.outreachReady}
+          detail="Leads ready for safe first outreach."
         />
         <StatCard
-          label="Replies received"
+          label="Emails Sent Today"
+          value={data.clientFacingCounts.emailsSentToday}
+          detail="Messages sent today under the approved caps."
+        />
+        <StatCard
+          label="Replies Received"
           value={data.clientFacingCounts.repliesReceived}
           detail="Inbound replies captured across live conversations."
         />
         <StatCard
-          label="Reply drafts needing approval"
-          value={data.repliesWaitingApproval}
-          detail="Reply drafts waiting for client approval."
+          label="Blocked/Avoided Count"
+          value={data.clientFacingCounts.blockedAvoided}
+          detail="Duplicates, competitors, bad-fit, and unsafe rows suppressed."
         />
         <StatCard
           label="Approvals waiting"

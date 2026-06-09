@@ -6,6 +6,10 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   new: { label: "New", cls: "bg-muted text-muted-foreground" },
   reviewed: { label: "Reviewed", cls: "bg-muted text-muted-foreground" },
   review: { label: "Review", cls: "bg-muted text-muted-foreground" },
+  "Company found": { label: "Company found", cls: "bg-muted text-muted-foreground" },
+  company_found: { label: "Company found", cls: "bg-muted text-muted-foreground" },
+  "Finding contact/email": { label: "Finding contact/email", cls: "bg-muted text-muted-foreground" },
+  finding_contact_email: { label: "Finding contact/email", cls: "bg-muted text-muted-foreground" },
   Researching: { label: "Raw company", cls: "bg-muted text-muted-foreground" },
   researching: { label: "Raw company", cls: "bg-muted text-muted-foreground" },
   "Raw company": { label: "Raw company", cls: "bg-muted text-muted-foreground" },
@@ -29,8 +33,14 @@ const LEAD: Record<string, { label: string; cls: string }> = {
   outreach_ready: { label: "Outreach ready", cls: "bg-primary/15 text-primary border-primary/30" },
   "Outreach prepared": { label: "Outreach prepared", cls: "bg-primary/15 text-primary border-primary/30" },
   outreach_prepared: { label: "Outreach prepared", cls: "bg-primary/15 text-primary border-primary/30" },
+  "Outreach sent": { label: "Outreach sent", cls: "bg-info/15 text-info border-info/30" },
+  outreach_sent: { label: "Outreach sent", cls: "bg-info/15 text-info border-info/30" },
+  "Reply received": { label: "Reply received", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
+  reply_received: { label: "Reply received", cls: "bg-warning/15 text-warning-foreground border-warning/40" },
   "Needs enrichment": { label: "Needs enrichment", cls: "bg-muted text-muted-foreground" },
   needs_enrichment: { label: "Needs enrichment", cls: "bg-muted text-muted-foreground" },
+  "Blocked/Avoided": { label: "Blocked/Avoided", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  blocked_avoided: { label: "Blocked/Avoided", cls: "bg-destructive/15 text-destructive border-destructive/30" },
   Excluded: { label: "Excluded", cls: "bg-destructive/15 text-destructive border-destructive/30" },
   excluded: { label: "Excluded", cls: "bg-destructive/15 text-destructive border-destructive/30" },
   duplicate_suppressed: { label: "Duplicate suppressed", cls: "bg-muted text-muted-foreground" },
@@ -113,25 +123,34 @@ function formatStatusLabel(status: string) {
     return "Needs review";
   }
   if (normalized === "researching") {
-    return "Raw company";
+    return "Company found";
   }
-  if (normalized === "needs enrichment" || normalized === "needs_enrichment") {
-    return "Needs enrichment";
+  if (normalized === "raw company" || normalized === "raw_company") {
+    return "Company found";
   }
-  if (normalized === "qualified") {
-    return "Qualified company";
+  if (normalized === "company found" || normalized === "company_found") {
+    return "Company found";
+  }
+  if (normalized === "finding contact/email" || normalized === "finding_contact_email" || normalized === "needs enrichment" || normalized === "needs_enrichment") {
+    return "Finding contact/email";
+  }
+  if (normalized === "qualified" || normalized === "qualified company" || normalized === "qualified_company" || normalized === "decision maker found" || normalized === "verified contact") {
+    return "Finding contact/email";
   }
   if (normalized === "outreach ready" || normalized === "outreach_ready") {
     return "Outreach ready";
   }
   if (normalized === "outreach prepared" || normalized === "outreach_prepared") {
-    return "Outreach prepared";
+    return "Outreach ready";
+  }
+  if (normalized === "contacted" || normalized === "outreach sent" || normalized === "outreach_sent") {
+    return "Outreach sent";
+  }
+  if (normalized === "replied" || normalized === "reply received" || normalized === "reply_received" || normalized === "needs reply approval" || normalized === "needs_reply_approval") {
+    return "Reply received";
   }
   if (normalized === "excluded") {
-    return "Excluded";
-  }
-  if (normalized === "needs reply approval" || normalized === "needs_reply_approval") {
-    return "Needs reply approval";
+    return "Blocked/Avoided";
   }
 
   return status
