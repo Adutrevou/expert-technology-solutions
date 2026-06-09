@@ -17,8 +17,8 @@ import {
   useLeadsQuery,
   useUpdateLeadStatusMutation,
 } from "@/lib/leads-api-hooks";
-import { normalizeLead, type LeadActivityRecord, type LeadRecord, type LeadWorkflowStatus } from "@/lib/leads-api";
-import { deriveNormalizedLeadStatusCounts, normalizeLeadStatus } from "@/lib/lead-status";
+import { normalizeLead, type CanonicalLeadCounts, type LeadActivityRecord, type LeadRecord, type LeadWorkflowStatus } from "@/lib/leads-api";
+import { deriveNormalizedLeadStatusCounts, normalizeLeadStatus, type NormalizedLeadStatusCounts } from "@/lib/lead-status";
 import { useApp } from "@/lib/app-state";
 
 export const Route = createFileRoute("/leads")({
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/leads")({
   component: LeadsPage,
 });
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 50;
 const LEAD_STATUS_OPTIONS: Array<{ value: LeadWorkflowStatus; label: string }> = [
   { value: "new", label: "New" },
   { value: "reviewed", label: "Reviewed" },
@@ -79,7 +79,13 @@ function LeadsPage() {
   const isAdminViewer = user?.role === "intergrai_admin" || user?.role === "system_agent";
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
   const visibleCampaigns = useMemo(() => campaigns.filter(Boolean), [campaigns]);
-  const statusCounts = useMemo(() => deriveNormalizedLeadStatusCounts(all), [all]);
+  const derivedStatusCounts = useMemo(() => deriveNormalizedLeadStatusCounts(all), [all]);
+  const statusCounts = useMemo(
+    () => resolveCanonicalStatusCounts(derivedStatusCounts, leadsQuery.data?.counts, leadsQuery.data?.totalCount),
+    [derivedStatusCounts, leadsQuery.data?.counts, leadsQuery.data?.totalCount],
+  );
+  const totalLeadCount = statusCounts.total;
+  const loadedLeadCount = all.length;
   const pipelineFilterOptions = useMemo(() => {
     const options = [...DEFAULT_LEAD_PIPELINE_FILTER_OPTIONS];
     if (statusCounts.companyFound > 0) {
@@ -255,7 +261,7 @@ function LeadsPage() {
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Leads <span className="text-muted-foreground">({all.length.toLocaleString()})</span></h1>
+          <h1 className="text-3xl font-bold">Leads <span className="text-muted-foreground">({totalLeadCount.toLocaleString()})</span></h1>
           <p className="text-sm text-muted-foreground mt-1">
             Live lead records and status history for Expert Technology Solutions
           </p>
@@ -337,7 +343,7 @@ function LeadsPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
           <Card className="overflow-hidden shadow-card">
             <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
-              Showing {filtered.length.toLocaleString()} of {all.length.toLocaleString()} real sourced leads
+              Showing {paged.length.toLocaleString()} of {filtered.length.toLocaleString()} matching leads ({loadedLeadCount.toLocaleString()} loaded / {totalLeadCount.toLocaleString()} total sourced)
             </div>
             <div className="grid gap-3 p-4 md:hidden">
               {!hasLeadData ? (
@@ -864,4 +870,41 @@ function formatStatusLabel(status: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ") || "Unknown";
+}
+
+function resolveCanonicalStatusCounts(
+  derivedCounts: NormalizedLeadStatusCounts,
+  apiCounts?: CanonicalLeadCounts | null,
+  totalCount?: number,
+): NormalizedLeadStatusCounts {
+  const canonicalTotal = Number(apiCounts?.allLeads || apiCounts?.totalLeadsFound || totalCount || 0);
+  const apiHasSignal = Boolean(
+    canonicalTotal
+    || Number(apiCounts?.enrichmentQueue || 0)
+    || Number(apiCounts?.outreachReady || 0)
+    || Number(apiCounts?.contacted || 0)
+    || Number(apiCounts?.repliesReceived || 0)
+    || Number(apiCounts?.blockedAvoided || 0)
+    || Number(apiCounts?.companyFound || 0)
+    || Number(apiCounts?.needsReview || 0),
+  );
+
+  if (!apiCounts || !apiHasSignal) {
+    return derivedCounts;
+  }
+
+  const companyFound = Number(apiCounts.companyFound || 0);
+  const enrichmentQueue = Number(apiCounts.enrichmentQueue || 0);
+
+  return {
+    total: canonicalTotal || derivedCounts.total,
+    companyFound,
+    findingContactEmail: Math.max(0, enrichmentQueue - companyFound),
+    enrichmentQueue,
+    outreachReady: Number(apiCounts.outreachReady || 0),
+    contacted: Number(apiCounts.contacted || 0),
+    replies: Number(apiCounts.repliesReceived || 0),
+    blockedAvoided: Number(apiCounts.blockedAvoided || 0),
+    needsReviewTrueOnly: Number(apiCounts.needsReview || 0),
+  };
 }

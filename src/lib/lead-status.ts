@@ -139,6 +139,48 @@ const FINDING_STATUS_TOKENS = new Set([
   "verified_contact",
 ]);
 
+function mapStatusTokenToClientStatus(
+  token: string,
+  lead: LeadRecord,
+  context: { hasEmail: boolean; namedContact: boolean },
+): NormalizedLeadStatus | null {
+  if (!token) {
+    return null;
+  }
+
+  if (BLOCKED_STATUS_TOKENS.has(token)) {
+    return "Blocked/Avoided";
+  }
+
+  if (REPLY_STATUS_TOKENS.has(token)) {
+    return "Reply received";
+  }
+
+  if (CONTACTED_STATUS_TOKENS.has(token)) {
+    return "Contacted";
+  }
+
+  if (READY_STATUS_TOKENS.has(token)) {
+    return lead.isSendable ? "Outreach ready" : "Finding contact/email";
+  }
+
+  if (PREPARED_STATUS_TOKENS.has(token)) {
+    return lead.isSendable ? "Outreach ready" : "Finding contact/email";
+  }
+
+  if (COMPANY_FOUND_STATUS_TOKENS.has(token)) {
+    return context.namedContact || context.hasEmail ? "Finding contact/email" : "Company found";
+  }
+
+  if (FINDING_STATUS_TOKENS.has(token)) {
+    return lead.trueHumanReviewRequired && (token === "needs review" || token === "needs_review" || token === "manual review" || token === "manual_review")
+      ? "Needs review"
+      : "Finding contact/email";
+  }
+
+  return null;
+}
+
 function normalizeToken(value: string) {
   return String(value || "").trim().toLowerCase();
 }
@@ -228,7 +270,6 @@ export function normalizeLeadStatus(lead: LeadRecord | null | undefined): Normal
 
   const statusCandidates = getStatusCandidates(lead);
   const hasEmail = Boolean(lead.email && isRealLookingEmail(lead.email));
-  const usableEmail = hasUsableLeadEmail(lead);
   const namedContact = hasNamedContact(lead);
 
   if (lead.isExcluded || lead.isDuplicateSuppressed || hasAnyStatusToken(statusCandidates, BLOCKED_STATUS_TOKENS)) {
@@ -251,24 +292,11 @@ export function normalizeLeadStatus(lead: LeadRecord | null | undefined): Normal
     return "Outreach ready";
   }
 
-  if (hasAnyStatusToken(statusCandidates, READY_STATUS_TOKENS)) {
-    return usableEmail ? "Outreach ready" : "Finding contact/email";
-  }
-
-  if (hasAnyStatusToken(statusCandidates, PREPARED_STATUS_TOKENS)) {
-    return usableEmail ? "Outreach ready" : "Finding contact/email";
-  }
-
-  if (usableEmail) {
-    return "Outreach ready";
-  }
-
-  if (hasAnyStatusToken(statusCandidates, COMPANY_FOUND_STATUS_TOKENS)) {
-    return namedContact || hasEmail ? "Finding contact/email" : "Company found";
-  }
-
-  if (hasAnyStatusToken(statusCandidates, FINDING_STATUS_TOKENS)) {
-    return "Finding contact/email";
+  for (const token of statusCandidates) {
+    const explicitStatus = mapStatusTokenToClientStatus(token, lead, { hasEmail, namedContact });
+    if (explicitStatus) {
+      return explicitStatus;
+    }
   }
 
   if (namedContact || hasEmail) {

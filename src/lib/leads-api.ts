@@ -60,6 +60,8 @@ export interface LeadsResponse {
   ok: boolean;
   client: ApiClientSummary;
   count: number;
+  returnedCount: number;
+  totalCount: number;
   counts: CanonicalLeadCounts;
   summary: Record<string, unknown>;
   leads: unknown[];
@@ -993,7 +995,7 @@ export function getDashboard() {
 }
 
 export function getLeads() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads`).then(normalizeLeadsResponse);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads?limit=100`).then(normalizeLeadsResponse);
 }
 
 export function getCampaigns(options: { includeArchived?: boolean } = {}) {
@@ -1683,6 +1685,8 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
       ok: true,
       client: normalizeClientSummary({}),
       count: value.length,
+      returnedCount: value.length,
+      totalCount: value.length,
       counts: normalizeCanonicalLeadCounts({ all_leads: value.length, total_leads_found: value.length }),
       summary: {},
       leads: value,
@@ -1708,6 +1712,12 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client ?? nestedData.client),
     count: normalizeCount(record.count) || leads.length,
+    returnedCount: normalizeCount(record.returned_count ?? record.returnedCount) || leads.length,
+    totalCount:
+      normalizeCount(record.total_count ?? record.totalCount)
+      || normalizeCount(asRecord(record.counts ?? nestedData.counts).all_leads ?? asRecord(record.counts ?? nestedData.counts).allLeads)
+      || normalizeCount(record.count)
+      || leads.length,
     counts: normalizeCanonicalLeadCounts(record.counts ?? nestedData.counts),
     summary: asRecord(record.summary ?? nestedData.summary),
     leads,

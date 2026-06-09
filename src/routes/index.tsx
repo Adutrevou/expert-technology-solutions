@@ -6,8 +6,9 @@ import { EmptyCard, formatPortalDate, PageIntro, SectionCard, StatCard } from "@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
-import { normalizeLead, type DashboardResponse, type LeadAgentSummary } from "@/lib/leads-api";
+import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useLeadsQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
+import { normalizeLead, type CanonicalLeadCounts, type DashboardResponse, type LeadAgentSummary } from "@/lib/leads-api";
+import { deriveNormalizedLeadStatusCounts, type NormalizedLeadStatusCounts } from "@/lib/lead-status";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Expert Technology Solutions" }] }),
@@ -17,16 +18,27 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const dashboardQuery = useDashboardQuery();
   const summaryQuery = useLeadAgentSummaryQuery();
+  const leadsQuery = useLeadsQuery();
   const conversationsQuery = useConversationsQuery();
   const requestsQuery = useRequestsQuery();
 
-  if (dashboardQuery.isLoading || summaryQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading) {
+  if (dashboardQuery.isLoading || summaryQuery.isLoading || leadsQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading) {
     return <DashboardLoadingState />;
   }
 
   const data = dashboardQuery.data ?? EMPTY_DASHBOARD;
   const summaryData = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
-  const recentLeads = (data.recent_leads || []).map(normalizeLead).slice(0, 4);
+  const normalizedLeads = (leadsQuery.data?.leads ?? []).map(normalizeLead);
+  const derivedLeadCounts = deriveNormalizedLeadStatusCounts(normalizedLeads);
+  const leadCounts = resolveDashboardLeadCounts({
+    dashboardLeadCounts: data.lead_counts,
+    leadsApiCounts: leadsQuery.data?.counts,
+    leadTotalCount: leadsQuery.data?.totalCount,
+    derivedLeadCounts,
+  });
+  const recentLeads = data.recent_leads?.length
+    ? data.recent_leads.map(normalizeLead).slice(0, 4)
+    : normalizedLeads.slice(0, 4);
   const approvalItems = buildApprovalHubItems(
     summaryData,
     conversationsQuery.data || [],
@@ -34,8 +46,7 @@ function Dashboard() {
   );
   const pendingApprovals = getActionableApprovalItems(approvalItems).filter((item) => item.kind !== "credit_approval");
   const attentionItems = pendingApprovals.slice(0, 4);
-  const leadCounts = summaryData.clientFacingCounts;
-  const hasWarnings = dashboardQuery.isError || summaryQuery.isError || conversationsQuery.isError || requestsQuery.isError;
+  const hasWarnings = dashboardQuery.isError || summaryQuery.isError || leadsQuery.isError || conversationsQuery.isError || requestsQuery.isError;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -61,6 +72,7 @@ function Dashboard() {
           <Button variant="outline" size="sm" className="ml-4" onClick={() => void Promise.allSettled([
             dashboardQuery.refetch(),
             summaryQuery.refetch(),
+            leadsQuery.refetch(),
             conversationsQuery.refetch(),
             requestsQuery.refetch(),
           ])}>
@@ -184,6 +196,54 @@ function DashboardLoadingState() {
       </div>
     </div>
   );
+}
+
+function resolveDashboardLeadCounts({
+  dashboardLeadCounts,
+  leadsApiCounts,
+  leadTotalCount,
+  derivedLeadCounts,
+}: {
+  dashboardLeadCounts: DashboardResponse["lead_counts"];
+  leadsApiCounts?: CanonicalLeadCounts | null;
+  leadTotalCount?: number;
+  derivedLeadCounts: NormalizedLeadStatusCounts;
+}) {
+  const canonicalTotal = Number(
+    leadsApiCounts?.allLeads
+    || leadsApiCounts?.totalLeadsFound
+    || leadTotalCount
+    || dashboardLeadCounts.total
+    || 0,
+  );
+  const leadsApiHasSignal = Boolean(
+    canonicalTotal
+    || Number(leadsApiCounts?.enrichmentQueue || 0)
+    || Number(leadsApiCounts?.outreachReady || 0)
+    || Number(leadsApiCounts?.contacted || 0)
+    || Number(leadsApiCounts?.repliesReceived || 0)
+    || Number(leadsApiCounts?.blockedAvoided || 0),
+  );
+
+  if (leadsApiHasSignal) {
+    return {
+      totalLeadsFound: canonicalTotal || derivedLeadCounts.total,
+      enrichmentQueue: Number(leadsApiCounts?.enrichmentQueue || 0),
+      outreachReady: Number(leadsApiCounts?.outreachReady || 0),
+      emailsSentToday: Number(leadsApiCounts?.emailsSentToday || dashboardLeadCounts.emails_sent_today || 0),
+      repliesReceived: Number(leadsApiCounts?.repliesReceived || 0),
+      blockedAvoided: Number(leadsApiCounts?.blockedAvoided || 0),
+    };
+  }
+
+  return {
+    totalLeadsFound: Number(dashboardLeadCounts.total || derivedLeadCounts.total || 0),
+    enrichmentQueue: Number(dashboardLeadCounts.enrichment_queue || derivedLeadCounts.enrichmentQueue || 0),
+    outreachReady: Number(dashboardLeadCounts.outreach_ready || derivedLeadCounts.outreachReady || 0),
+    emailsSentToday: Number(dashboardLeadCounts.emails_sent_today || 0),
+    repliesReceived: Number(dashboardLeadCounts.replies_received || derivedLeadCounts.replies || 0),
+    blockedAvoided: Number(dashboardLeadCounts.blocked_avoided || derivedLeadCounts.blockedAvoided || 0),
+  };
 }
 
 const EMPTY_DASHBOARD: DashboardResponse = {
