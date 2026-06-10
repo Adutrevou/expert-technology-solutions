@@ -27,6 +27,7 @@ import { Route as AgentTrainingRouteImport } from './routes/agent-training'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLeadsSplatRouteImport } from './routes/api/leads.$'
 import { Route as ApiGmailMessagesRouteImport } from './routes/api/gmail.messages'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
 
 const UpdatesRoute = UpdatesRouteImport.update({
   id: '/updates',
@@ -118,6 +119,11 @@ const ApiGmailMessagesRoute = ApiGmailMessagesRouteImport.update({
   path: '/api/gmail/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesByTo: FileRoutesByTo
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   id:
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesById: FileRoutesById
@@ -260,6 +272,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   UpdatesRoute: typeof UpdatesRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiGmailMessagesRoute: typeof ApiGmailMessagesRoute
   ApiLeadsSplatRoute: typeof ApiLeadsSplatRoute
 }
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGmailMessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -412,6 +432,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   UpdatesRoute: UpdatesRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiGmailMessagesRoute: ApiGmailMessagesRoute,
   ApiLeadsSplatRoute: ApiLeadsSplatRoute,
 }

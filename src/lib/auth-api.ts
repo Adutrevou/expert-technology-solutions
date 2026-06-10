@@ -242,14 +242,15 @@ function pickString(record: Record<string, unknown>, keys: string[]) {
 
 function resolveAuthApiBaseUrl(value: string) {
   const trimmed = value.replace(/\/+$/, "");
-  if (!trimmed) return "https://api.intergrai.co.za";
-  if (trimmed.startsWith("/")) return "https://api.intergrai.co.za";
+  // No override → use same-origin proxy to sidestep CORS in preview/published.
+  if (!trimmed) return "/api";
+  if (trimmed.startsWith("/")) return "/api";
 
   try {
     const url = new URL(trimmed);
     return url.toString().replace(/\/+$/, "");
   } catch {
-    return "https://api.intergrai.co.za";
+    return "/api";
   }
 }
 
