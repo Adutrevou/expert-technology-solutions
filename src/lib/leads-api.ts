@@ -1,4 +1,5 @@
-// Leads requests must go directly to the upstream API for the static build.
+// Leads requests use the same-origin `/api` proxy in production so the
+// browser never depends on a flaky public API host.
 const ENV_BASE_URL = String(import.meta.env.VITE_LEADS_API_BASE_URL || "").trim();
 export const LEADS_API_BASE_URL = resolveApiBaseUrl(ENV_BASE_URL);
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
@@ -1000,8 +1001,25 @@ export function getDashboard() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(normalizeDashboardResponse);
 }
 
-export function getLeads() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads?limit=100`).then(normalizeLeadsResponse);
+export function getLeads(options: {
+  status?: string;
+  campaign_id?: string;
+  qualification?: string;
+  industry?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+} = {}) {
+  const params = new URLSearchParams();
+  if (options.status) params.set("status", options.status);
+  if (options.campaign_id) params.set("campaign_id", options.campaign_id);
+  if (options.qualification) params.set("qualification", options.qualification);
+  if (options.industry) params.set("industry", options.industry);
+  if (options.search) params.set("search", options.search);
+  if (options.page) params.set("page", String(options.page));
+  if (options.limit) params.set("limit", String(options.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads${suffix}`).then(normalizeLeadsResponse);
 }
 
 export function getCampaigns(options: { includeArchived?: boolean } = {}) {
@@ -1364,8 +1382,8 @@ function normalizeNullableRecord<T>(value: unknown, normalizer: (value: unknown)
 
 function resolveApiBaseUrl(value: string): string {
   const trimmed = value.replace(/\/+$/, "");
-  if (!trimmed) return "https://api.intergrai.co.za";
-  if (trimmed.startsWith("/")) return "https://api.intergrai.co.za";
+  if (!trimmed) return "/api";
+  if (trimmed.startsWith("/")) return trimmed;
 
   try {
     return new URL(trimmed).toString().replace(/\/+$/, "");
@@ -1373,7 +1391,7 @@ function resolveApiBaseUrl(value: string): string {
     try {
       return new URL(`https://${trimmed}`).toString().replace(/\/+$/, "");
     } catch {
-      return "https://api.intergrai.co.za";
+      return "/api";
     }
   }
 }
