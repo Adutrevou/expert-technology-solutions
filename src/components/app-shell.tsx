@@ -1,15 +1,43 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Users, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, ClipboardList, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Megaphone,
+  FileBarChart,
+  Settings,
+  Sun,
+  Moon,
+  LogOut,
+  Activity,
+  ShieldCheck,
+  ClipboardList,
+  Bot,
+  Mail,
+  CheckSquare,
+  MessagesSquare,
+  BrainCircuit,
+  GitBranch,
+  Gauge,
+} from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/lead-agent", label: "Expert Lead Agent", icon: Bot },
+  { to: "/ai-agent-status", label: "AI Agent Status", icon: Gauge },
   { to: "/leads", label: "Leads", icon: Users },
+  { to: "/sequences", label: "Sequences", icon: GitBranch },
   { to: "/requests", label: "Requests", icon: ClipboardList },
   { to: "/approvals", label: "Approvals", icon: CheckSquare },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
@@ -19,9 +47,7 @@ const BASE_NAV = [
   { to: "/reports", label: "Reports", icon: FileBarChart },
 ] as const;
 
-const ADMIN_NAV = [
-  { to: "/settings", label: "Settings/Admin", icon: Settings },
-] as const;
+const ADMIN_NAV = [{ to: "/settings", label: "Settings/Admin", icon: Settings }] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, client, logout, theme, toggleTheme } = useApp();
@@ -76,12 +102,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex h-full items-center justify-between px-4 md:px-8 gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card">
-                <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden"
+                  style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}
+                >
                   {client.logoUrl ? (
                     <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
-                  ) : client.initials}
+                  ) : (
+                    client.initials
+                  )}
                 </span>
-                <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">{client.companyName}</span>
+                <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">
+                  {client.companyName}
+                </span>
               </div>
               <Badge variant="outline" className="hidden md:inline-flex gap-1 text-[10px]">
                 <Activity className="h-3 w-3" />
@@ -130,7 +163,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {navItems.map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? path === "/" : path.startsWith(to);
             return (
-              <Link key={to} to={to} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-smooth ${active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              <Link
+                key={to}
+                to={to}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-smooth ${active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
               </Link>

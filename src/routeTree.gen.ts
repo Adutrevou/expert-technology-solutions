@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SequencesRouteImport } from './routes/sequences'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ProgressRouteImport } from './routes/progress'
@@ -23,6 +24,7 @@ import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
 import { Route as ConversationsRouteImport } from './routes/conversations'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AiAgentStatusRouteImport } from './routes/ai-agent-status'
 import { Route as AgentTrainingRouteImport } from './routes/agent-training'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLeadsSplatRouteImport } from './routes/api/leads.$'
@@ -42,6 +44,11 @@ const TemplatesRoute = TemplatesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SequencesRoute = SequencesRouteImport.update({
+  id: '/sequences',
+  path: '/sequences',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RequestsRoute = RequestsRouteImport.update({
@@ -99,6 +106,11 @@ const ApprovalsRoute = ApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiAgentStatusRoute = AiAgentStatusRouteImport.update({
+  id: '/ai-agent-status',
+  path: '/ai-agent-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentTrainingRoute = AgentTrainingRouteImport.update({
   id: '/agent-training',
   path: '/agent-training',
@@ -128,6 +140,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
@@ -139,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
@@ -149,6 +163,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
@@ -160,6 +175,7 @@ export interface FileRoutesByTo {
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
@@ -171,6 +187,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
@@ -182,6 +199,7 @@ export interface FileRoutesById {
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
@@ -194,6 +212,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent-training'
+    | '/ai-agent-status'
     | '/approvals'
     | '/campaigns'
     | '/conversations'
@@ -205,6 +224,7 @@ export interface FileRouteTypes {
     | '/progress'
     | '/reports'
     | '/requests'
+    | '/sequences'
     | '/settings'
     | '/templates'
     | '/updates'
@@ -215,6 +235,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agent-training'
+    | '/ai-agent-status'
     | '/approvals'
     | '/campaigns'
     | '/conversations'
@@ -226,6 +247,7 @@ export interface FileRouteTypes {
     | '/progress'
     | '/reports'
     | '/requests'
+    | '/sequences'
     | '/settings'
     | '/templates'
     | '/updates'
@@ -236,6 +258,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/agent-training'
+    | '/ai-agent-status'
     | '/approvals'
     | '/campaigns'
     | '/conversations'
@@ -247,6 +270,7 @@ export interface FileRouteTypes {
     | '/progress'
     | '/reports'
     | '/requests'
+    | '/sequences'
     | '/settings'
     | '/templates'
     | '/updates'
@@ -258,6 +282,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentTrainingRoute: typeof AgentTrainingRoute
+  AiAgentStatusRoute: typeof AiAgentStatusRoute
   ApprovalsRoute: typeof ApprovalsRoute
   CampaignsRoute: typeof CampaignsRoute
   ConversationsRoute: typeof ConversationsRoute
@@ -269,6 +294,7 @@ export interface RootRouteChildren {
   ProgressRoute: typeof ProgressRoute
   ReportsRoute: typeof ReportsRoute
   RequestsRoute: typeof RequestsRoute
+  SequencesRoute: typeof SequencesRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   UpdatesRoute: typeof UpdatesRoute
@@ -298,6 +324,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sequences': {
+      id: '/sequences'
+      path: '/sequences'
+      fullPath: '/sequences'
+      preLoaderRoute: typeof SequencesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/requests': {
@@ -377,6 +410,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApprovalsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-agent-status': {
+      id: '/ai-agent-status'
+      path: '/ai-agent-status'
+      fullPath: '/ai-agent-status'
+      preLoaderRoute: typeof AiAgentStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent-training': {
       id: '/agent-training'
       path: '/agent-training'
@@ -418,6 +458,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentTrainingRoute: AgentTrainingRoute,
+  AiAgentStatusRoute: AiAgentStatusRoute,
   ApprovalsRoute: ApprovalsRoute,
   CampaignsRoute: CampaignsRoute,
   ConversationsRoute: ConversationsRoute,
@@ -429,6 +470,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProgressRoute: ProgressRoute,
   ReportsRoute: ReportsRoute,
   RequestsRoute: RequestsRoute,
+  SequencesRoute: SequencesRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   UpdatesRoute: UpdatesRoute,

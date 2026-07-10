@@ -611,7 +611,10 @@ export interface RequestDetailRecord extends RequestHistoryRecord {
   replies: RequestReplyRecord[];
 }
 
-async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+// Exported (additive only - purely adding visibility, no behavior change)
+// so the new sequences/contacts-import/ai-health API modules can reuse the
+// exact same fetch/auth/error-handling path instead of duplicating it.
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = buildApiUrl(path);
   let response: Response;
   try {
@@ -662,7 +665,9 @@ async function apiGet<T>(path: string): Promise<T> {
 }
 
 export function getDashboard() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(normalizeDashboardResponse);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(
+    normalizeDashboardResponse,
+  );
 }
 
 export function getLeads() {
@@ -670,27 +675,39 @@ export function getLeads() {
 }
 
 export function getCampaigns() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`).then(normalizeCampaignsResponse);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`).then(
+    normalizeCampaignsResponse,
+  );
 }
 
 export function getReports() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`).then(normalizeReportsResponse);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`).then(
+    normalizeReportsResponse,
+  );
 }
 
 export function getRequests() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`).then(normalizeRequestsResponse);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`).then(
+    normalizeRequestsResponse,
+  );
 }
 
 export function getRequestDetail(requestId: string) {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests/${encodeURIComponent(requestId)}`).then(normalizeRequestDetail);
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/requests/${encodeURIComponent(requestId)}`,
+  ).then(normalizeRequestDetail);
 }
 
 export function getLeadAgentSummary() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(normalizeLeadAgentSummary);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(
+    normalizeLeadAgentSummary,
+  );
 }
 
 export function getOutreachRenderPreview(queueItemId: string) {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/outreach-queue/${encodeURIComponent(queueItemId)}/render-preview`).then(normalizeOutreachRenderPreviewResponse);
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/outreach-queue/${encodeURIComponent(queueItemId)}/render-preview`,
+  ).then(normalizeOutreachRenderPreviewResponse);
 }
 
 export function getConversations() {
@@ -701,22 +718,31 @@ export function getConversations() {
 }
 
 export function getConversationDetail(conversationId: string) {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}`).then((value) =>
-    normalizeConversation(asRecord(asRecord(value).conversation))
-  );
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}`,
+  ).then((value) => normalizeConversation(asRecord(asRecord(value).conversation)));
 }
 
 export function createReplyDraft(conversationId: string) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}/reply-drafts`, {
-    method: "POST",
-  }).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}/reply-drafts`,
+    {
+      method: "POST",
+    },
+  ).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
 }
 
-export function updateReplyDraft(draftId: string, input: { status: string; approval_note?: string }) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-drafts/${encodeURIComponent(draftId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  }).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+export function updateReplyDraft(
+  draftId: string,
+  input: { status: string; approval_note?: string },
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/reply-drafts/${encodeURIComponent(draftId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  ).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
 }
 
 export function getAgentTraining() {
@@ -740,23 +766,32 @@ export function createAgentTrainingEntry(input: {
   }).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
 }
 
-export function updateAgentTrainingEntry(entryId: string, input: {
-  title?: string;
-  content?: string;
-  status?: string;
-  visibility?: string;
-  applies_to?: string;
-}) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/agent-training/${encodeURIComponent(entryId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  }).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
+export function updateAgentTrainingEntry(
+  entryId: string,
+  input: {
+    title?: string;
+    content?: string;
+    status?: string;
+    visibility?: string;
+    applies_to?: string;
+  },
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/agent-training/${encodeURIComponent(entryId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  ).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
 }
 
 export function startMailboxOAuth(mailboxId: string) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/mailboxes/${encodeURIComponent(mailboxId)}/oauth/google/start`, {
-    method: "POST",
-  }).then(normalizeMailboxOAuthStartResponse);
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/mailboxes/${encodeURIComponent(mailboxId)}/oauth/google/start`,
+    {
+      method: "POST",
+    },
+  ).then(normalizeMailboxOAuthStartResponse);
 }
 
 export function startMicrosoftReplySyncOAuth() {
@@ -766,13 +801,17 @@ export function startMicrosoftReplySyncOAuth() {
 }
 
 export function getMicrosoftReplySyncStatus() {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-sync/microsoft/status`).then(normalizeMicrosoftReplySyncStatus);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-sync/microsoft/status`).then(
+    normalizeMicrosoftReplySyncStatus,
+  );
 }
 
 export function getEnrichmentApprovals() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals`).then((value) => {
     const record = asRecord(value);
-    return asArray(record.enrichment_approvals).map((item, index) => normalizeEnrichmentCreditApproval(item, index));
+    return asArray(record.enrichment_approvals).map((item, index) =>
+      normalizeEnrichmentCreditApproval(item, index),
+    );
   });
 }
 
@@ -788,19 +827,33 @@ export function createMission(input: {
   }).then((value) => normalizeMission(asRecord(asRecord(value).mission)));
 }
 
-export function decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decision_note?: string }) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/approvals/${encodeURIComponent(approvalId)}/decision`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  }).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+export function decideApproval(
+  approvalId: string,
+  input: { decision: "approved" | "rejected"; decision_note?: string },
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/approvals/${encodeURIComponent(approvalId)}/decision`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
 }
 
-export function decideEnrichmentCreditApproval(queueItemId: string, input: { decision: "approved" | "rejected"; decision_note?: string }) {
+export function decideEnrichmentCreditApproval(
+  queueItemId: string,
+  input: { decision: "approved" | "rejected"; decision_note?: string },
+) {
   const action = input.decision === "approved" ? "approve" : "decline";
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals/${encodeURIComponent(queueItemId)}/${action}`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  }).then((value) => normalizeEnrichmentCreditApproval(asRecord(asRecord(value).enrichment_queue_item)));
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals/${encodeURIComponent(queueItemId)}/${action}`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ).then((value) =>
+    normalizeEnrichmentCreditApproval(asRecord(asRecord(value).enrichment_queue_item)),
+  );
 }
 
 export function createRequest(input: {
@@ -817,31 +870,43 @@ export function createRequest(input: {
   }).then(normalizeRequestDetail);
 }
 
-export function updateLeadStatus(leadId: string, status: LeadWorkflowStatus, user: LeadUserSummary) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      status,
-      updated_by_name: user.name,
-      updated_by_email: user.email,
-    }),
-  }).then((value) => normalizeLeadStatus(getActivityStatus(value)) || status);
+export function updateLeadStatus(
+  leadId: string,
+  status: LeadWorkflowStatus,
+  user: LeadUserSummary,
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status,
+        updated_by_name: user.name,
+        updated_by_email: user.email,
+      }),
+    },
+  ).then((value) => normalizeLeadStatus(getActivityStatus(value)) || status);
 }
 
 export function addLeadComment(leadId: string, comment: string, user: LeadUserSummary) {
-  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/comments`, {
-    method: "POST",
-    body: JSON.stringify({
-      comment,
-      created_by_name: user.name,
-      created_by_email: user.email,
-      visibility: "client",
-    }),
-  }).then(normalizeLeadActivityRecord);
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        comment,
+        created_by_name: user.name,
+        created_by_email: user.email,
+        visibility: "client",
+      }),
+    },
+  ).then(normalizeLeadActivityRecord);
 }
 
 export function getLeadActivity(leadId: string) {
-  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/activity`).then(normalizeLeadActivityResponse);
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/activity`,
+  ).then(normalizeLeadActivityResponse);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -962,7 +1027,8 @@ function normalizeClientSummary(value: unknown): ApiClientSummary {
   return {
     id: pickString(record, ["id", "_id"]) || INTERGRAI_CLIENT_SLUG,
     slug: pickString(record, ["slug"]) || INTERGRAI_CLIENT_SLUG,
-    name: pickString(record, ["name", "client_name", "clientName"]) || "Expert Technology Solutions",
+    name:
+      pickString(record, ["name", "client_name", "clientName"]) || "Expert Technology Solutions",
     domain: pickString(record, ["domain", "website", "url"]),
     status: pickString(record, ["status"]) || "unknown",
     client_agent_name: pickString(record, ["client_agent_name", "clientAgentName"]),
@@ -980,7 +1046,9 @@ function normalizeDashboardResponse(value: unknown): DashboardResponse {
   const normalizedLeadHot = normalizeCount(leadCounts.hot);
   const normalizedLeadWarm = normalizeCount(leadCounts.warm);
   const normalizedLeadReview = normalizeCount(leadCounts.review);
-  const normalizedLeadNotQualified = normalizeCount(leadCounts.not_qualified ?? leadCounts.notQualified);
+  const normalizedLeadNotQualified = normalizeCount(
+    leadCounts.not_qualified ?? leadCounts.notQualified,
+  );
   const normalizedLeadTotal = normalizeCount(leadCounts.total);
 
   return {
@@ -992,7 +1060,9 @@ function normalizeDashboardResponse(value: unknown): DashboardResponse {
       draft: normalizedCampaignDraft,
     },
     lead_counts: {
-      total: normalizedLeadTotal || normalizedLeadHot + normalizedLeadWarm + normalizedLeadReview + normalizedLeadNotQualified,
+      total:
+        normalizedLeadTotal ||
+        normalizedLeadHot + normalizedLeadWarm + normalizedLeadReview + normalizedLeadNotQualified,
       hot: normalizedLeadHot,
       warm: normalizedLeadWarm,
       review: normalizedLeadReview,
@@ -1022,13 +1092,17 @@ function normalizeLeadsResponse(value: unknown): LeadsResponse {
   const directRows = asArray(record.rows);
   const nestedLeads = asArray(nestedData.leads);
   const nestedDataArray = asArray(record.data);
-  const leads =
-    directLeads.length ? directLeads :
-    directItems.length ? directItems :
-    directResults.length ? directResults :
-    directRows.length ? directRows :
-    nestedLeads.length ? nestedLeads :
-    nestedDataArray;
+  const leads = directLeads.length
+    ? directLeads
+    : directItems.length
+      ? directItems
+      : directResults.length
+        ? directResults
+        : directRows.length
+          ? directRows
+          : nestedLeads.length
+            ? nestedLeads
+            : nestedDataArray;
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client ?? nestedData.client),
@@ -1061,10 +1135,12 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     status,
     count: normalizeCount(count),
   }));
-  const enrichmentQueueStatusEntries = Object.entries(enrichmentQueueStatusRecord).map(([status, count]) => ({
-    status,
-    count: normalizeCount(count),
-  }));
+  const enrichmentQueueStatusEntries = Object.entries(enrichmentQueueStatusRecord).map(
+    ([status, count]) => ({
+      status,
+      count: normalizeCount(count),
+    }),
+  );
   const usageSummary = asRecord(record.enrichment_usage_summary);
   const budgetSummary = asRecord(record.enrichment_budget_summary);
 
@@ -1072,43 +1148,71 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     ok: pickBoolean(record, ["ok"]) ?? true,
     client: normalizeClientSummary(record.client),
     agent: normalizeAgentRecord(record.agent),
-    activeMissions: asArray(record.active_missions).map((item, index) => normalizeMission(item, index)),
-    openRequests: asArray(record.open_requests).map((item, index) => normalizeRequestHistory(item, index)),
+    activeMissions: asArray(record.active_missions).map((item, index) =>
+      normalizeMission(item, index),
+    ),
+    openRequests: asArray(record.open_requests).map((item, index) =>
+      normalizeRequestHistory(item, index),
+    ),
     campaigns: asArray(record.campaigns).map((item, index) => normalizeCampaign(item, index)),
     leadPipelineCounts: pipelineEntries.sort((a, b) => a.stage.localeCompare(b.stage)),
     rawLeadsCount: normalizeCount(record.raw_leads_count),
     rawLeadStatusCounts: rawLeadStatusEntries.sort((a, b) => a.status.localeCompare(b.status)),
     enrichmentQueueCount: normalizeCount(record.enrichment_queue_count),
-    enrichmentQueueStatusCounts: enrichmentQueueStatusEntries.sort((a, b) => a.status.localeCompare(b.status)),
+    enrichmentQueueStatusCounts: enrichmentQueueStatusEntries.sort((a, b) =>
+      a.status.localeCompare(b.status),
+    ),
     enrichmentUsageSummary: {
-      apolloAttempted: normalizeCount(usageSummary.apollo_attempted ?? usageSummary.apolloAttempted),
-      hunterAttempted: normalizeCount(usageSummary.hunter_attempted ?? usageSummary.hunterAttempted),
+      apolloAttempted: normalizeCount(
+        usageSummary.apollo_attempted ?? usageSummary.apolloAttempted,
+      ),
+      hunterAttempted: normalizeCount(
+        usageSummary.hunter_attempted ?? usageSummary.hunterAttempted,
+      ),
       apolloUsed: normalizeCount(usageSummary.apollo_used ?? usageSummary.apolloUsed),
       hunterUsed: normalizeCount(usageSummary.hunter_used ?? usageSummary.hunterUsed),
     },
     enrichmentBudgetSummary: {
-      apolloMonthlyLimit: normalizeCount(budgetSummary.apollo_monthly_limit ?? budgetSummary.apolloMonthlyLimit),
+      apolloMonthlyLimit: normalizeCount(
+        budgetSummary.apollo_monthly_limit ?? budgetSummary.apolloMonthlyLimit,
+      ),
       apolloUsed: normalizeCount(budgetSummary.apollo_used ?? budgetSummary.apolloUsed),
-      apolloRemaining: normalizeCount(budgetSummary.apollo_remaining ?? budgetSummary.apolloRemaining),
-      hunterMonthlyLimit: normalizeCount(budgetSummary.hunter_monthly_limit ?? budgetSummary.hunterMonthlyLimit),
+      apolloRemaining: normalizeCount(
+        budgetSummary.apollo_remaining ?? budgetSummary.apolloRemaining,
+      ),
+      hunterMonthlyLimit: normalizeCount(
+        budgetSummary.hunter_monthly_limit ?? budgetSummary.hunterMonthlyLimit,
+      ),
       hunterUsed: normalizeCount(budgetSummary.hunter_used ?? budgetSummary.hunterUsed),
-      hunterRemaining: normalizeCount(budgetSummary.hunter_remaining ?? budgetSummary.hunterRemaining),
+      hunterRemaining: normalizeCount(
+        budgetSummary.hunter_remaining ?? budgetSummary.hunterRemaining,
+      ),
     },
-    outreachTemplates: asArray(record.outreach_templates).map((item, index) => normalizeOutreachTemplate(item, index)),
-    followupSequences: asArray(record.followup_sequences).map((item, index) => normalizeFollowupSequence(item, index)),
+    outreachTemplates: asArray(record.outreach_templates).map((item, index) =>
+      normalizeOutreachTemplate(item, index),
+    ),
+    followupSequences: asArray(record.followup_sequences).map((item, index) =>
+      normalizeFollowupSequence(item, index),
+    ),
     outreachQueueCount: normalizeCount(record.outreach_queue_count),
-    outreachQueueStatusCounts: Object.entries(asRecord(record.outreach_queue_by_status)).map(([status, count]) => ({
-      status,
-      count: normalizeCount(count),
-    })).sort((a, b) => a.status.localeCompare(b.status)),
-    outreachQueue: asArray(record.outreach_queue).map((item, index) => normalizeOutreachQueueItem(item, index)),
+    outreachQueueStatusCounts: Object.entries(asRecord(record.outreach_queue_by_status))
+      .map(([status, count]) => ({
+        status,
+        count: normalizeCount(count),
+      }))
+      .sort((a, b) => a.status.localeCompare(b.status)),
+    outreachQueue: asArray(record.outreach_queue).map((item, index) =>
+      normalizeOutreachQueueItem(item, index),
+    ),
     verifiedContactsCount: normalizeCount(record.verified_contacts_count),
     outreachPlannedCount: normalizeCount(record.outreach_planned_count),
     sendReadyCount: normalizeCount(record.send_ready_count),
     waitingForMailboxCount: normalizeCount(record.waiting_for_mailbox_count),
-    outreachBlockers: asArray(record.outreach_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
-    verifiedContactsWaitingForOutreach: asArray(record.verified_contacts_waiting_for_outreach).map((item, index) =>
-      normalizeVerifiedContactPlanning(item, index),
+    outreachBlockers: asArray(record.outreach_blockers).map((item, index) =>
+      normalizeOutreachBlocker(item, index),
+    ),
+    verifiedContactsWaitingForOutreach: asArray(record.verified_contacts_waiting_for_outreach).map(
+      (item, index) => normalizeVerifiedContactPlanning(item, index),
     ),
     mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "disconnected",
     mailboxConnected: pickBoolean(record, ["mailbox_connected", "mailboxConnected"]) ?? false,
@@ -1117,20 +1221,36 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
     mailboxFromName: pickString(record, ["mailbox_from_name", "mailboxFromName"]) || "",
     mailboxFromEmail: pickString(record, ["mailbox_from_email", "mailboxFromEmail"]) || "",
     mailboxProviderType: pickString(record, ["mailbox_provider_type", "mailboxProviderType"]) || "",
-    mailboxDailySendLimit: pickNumber(record, ["mailbox_daily_send_limit", "mailboxDailySendLimit"]),
-    mailboxMonthlySendLimit: pickNumber(record, ["mailbox_monthly_send_limit", "mailboxMonthlySendLimit"]),
+    mailboxDailySendLimit: pickNumber(record, [
+      "mailbox_daily_send_limit",
+      "mailboxDailySendLimit",
+    ]),
+    mailboxMonthlySendLimit: pickNumber(record, [
+      "mailbox_monthly_send_limit",
+      "mailboxMonthlySendLimit",
+    ]),
     mailboxSentToday: normalizeCount(record.mailbox_sent_today ?? record.mailboxSentToday),
-    mailboxSentThisMonth: normalizeCount(record.mailbox_sent_this_month ?? record.mailboxSentThisMonth),
+    mailboxSentThisMonth: normalizeCount(
+      record.mailbox_sent_this_month ?? record.mailboxSentThisMonth,
+    ),
     mailboxLastError: pickString(record, ["mailbox_last_error", "mailboxLastError"]) || "",
-    mailboxLastHealthCheckAt: normalizeTimestamp(record.mailbox_last_health_check_at ?? record.mailboxLastHealthCheckAt),
-    mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
-    mailboxConnectionCheck: normalizeMailboxConnectionCheck(record.mailbox_connection_check ?? record.mailboxConnectionCheck),
-    renderPreviewAvailableCount: normalizeCount(record.render_preview_available_count ?? record.renderPreviewAvailableCount),
+    mailboxLastHealthCheckAt: normalizeTimestamp(
+      record.mailbox_last_health_check_at ?? record.mailboxLastHealthCheckAt,
+    ),
+    mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) =>
+      normalizeOutreachBlocker(item, index),
+    ),
+    mailboxConnectionCheck: normalizeMailboxConnectionCheck(
+      record.mailbox_connection_check ?? record.mailboxConnectionCheck,
+    ),
+    renderPreviewAvailableCount: normalizeCount(
+      record.render_preview_available_count ?? record.renderPreviewAvailableCount,
+    ),
     mailboxes: asArray(record.mailboxes).map((item, index) => normalizeMailbox(item, index)),
     approvalsWaiting: normalizeCount(record.approvals_waiting),
     approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
-    pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map((item, index) =>
-      normalizeEnrichmentCreditApproval(item, index),
+    pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map(
+      (item, index) => normalizeEnrichmentCreditApproval(item, index),
     ),
     latestQualificationActions: asArray(record.latest_qualification_actions).map((item, index) =>
       normalizeQualificationAction(item, index),
@@ -1139,7 +1259,9 @@ function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
       normalizeEnrichmentAction(item, index),
     ),
     latestWeeklyReport: normalizeWeeklyReport(record.latest_weekly_report),
-    internalNotes: asArray(record.internal_notes).map((item, index) => normalizeInternalNote(item, index)),
+    internalNotes: asArray(record.internal_notes).map((item, index) =>
+      normalizeInternalNote(item, index),
+    ),
   };
 }
 
@@ -1166,12 +1288,15 @@ function normalizeRequestsResponse(value: unknown): RequestsResponse {
 
   const record = asRecord(value);
   const nestedData = asRecord(record.data);
-  const requests =
-    asArray(record.requests).length ? asArray(record.requests) :
-    asArray(record.items).length ? asArray(record.items) :
-    asArray(record.results).length ? asArray(record.results) :
-    asArray(nestedData.requests).length ? asArray(nestedData.requests) :
-    asArray(record.data);
+  const requests = asArray(record.requests).length
+    ? asArray(record.requests)
+    : asArray(record.items).length
+      ? asArray(record.items)
+      : asArray(record.results).length
+        ? asArray(record.results)
+        : asArray(nestedData.requests).length
+          ? asArray(nestedData.requests)
+          : asArray(record.data);
 
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
@@ -1231,7 +1356,13 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const record = asRecord(value);
   const normalizedStatus =
     normalizeLeadStatus(
-      pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]),
+      pickString(record, [
+        "status",
+        "lead_status",
+        "leadStatus",
+        "workflow_status",
+        "workflowStatus",
+      ]),
     ) ||
     normalizeLeadStatus(pickString(record, ["qualification"])) ||
     "new";
@@ -1261,12 +1392,15 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
     domain: pickString(record, ["domain"]) || "",
     linkedinUrl: pickString(record, ["linkedin_url", "linkedinUrl"]) || "",
     companyLinkedin: pickString(record, ["company_linkedin", "companyLinkedin"]) || "",
-    qualification: mapQualification(
-      pickString(record, ["qualification"]) || normalizedStatus,
-    ),
+    qualification: mapQualification(pickString(record, ["qualification"]) || normalizedStatus),
     status:
-      pickString(record, ["status", "lead_status", "leadStatus", "workflow_status", "workflowStatus"]) ||
-      normalizedStatus,
+      pickString(record, [
+        "status",
+        "lead_status",
+        "leadStatus",
+        "workflow_status",
+        "workflowStatus",
+      ]) || normalizedStatus,
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
@@ -1349,7 +1483,8 @@ function normalizeMission(value: unknown, index = 0): MissionRecord {
     status: pickString(record, ["status"]) || "Queued",
     priority: pickString(record, ["priority"]) || "normal",
     missionType: pickString(record, ["mission_type", "missionType"]) || "instruction",
-    assignedWorkerType: pickString(record, ["assigned_worker_type", "assignedWorkerType"]) || "Unassigned",
+    assignedWorkerType:
+      pickString(record, ["assigned_worker_type", "assignedWorkerType"]) || "Unassigned",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
@@ -1372,7 +1507,10 @@ function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
   };
 }
 
-function normalizeOutreachTemplateVariant(value: unknown, index = 0): OutreachTemplateVariantRecord {
+function normalizeOutreachTemplateVariant(
+  value: unknown,
+  index = 0,
+): OutreachTemplateVariantRecord {
   const record = asRecord(value);
   return {
     id: pickString(record, ["id", "_id"]) || `template-variant-${index}`,
@@ -1381,7 +1519,9 @@ function normalizeOutreachTemplateVariant(value: unknown, index = 0): OutreachTe
     approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
     subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
     bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
-    latestQualityReview: normalizeTemplateQualityReview(record.latest_quality_review ?? record.latestQualityReview),
+    latestQualityReview: normalizeTemplateQualityReview(
+      record.latest_quality_review ?? record.latestQualityReview,
+    ),
   };
 }
 
@@ -1398,7 +1538,9 @@ function normalizeOutreachTemplate(value: unknown, index = 0): OutreachTemplateR
     approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
     subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
     bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
-    variants: asArray(record.variants).map((item, variantIndex) => normalizeOutreachTemplateVariant(item, variantIndex)),
+    variants: asArray(record.variants).map((item, variantIndex) =>
+      normalizeOutreachTemplateVariant(item, variantIndex),
+    ),
   };
 }
 
@@ -1428,11 +1570,32 @@ function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRec
     sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
     leadCompanyName: pickString(record, ["lead_company_name", "leadCompanyName"]) || "",
     rawCompanyName: pickString(record, ["raw_company_name", "rawCompanyName"]) || "",
-    recipientEmail: pickString(record, ["recipient_email", "recipientEmail", "enriched_email", "enrichedEmail", "lead_email", "leadEmail"]) || "",
-    recipientName: pickString(record, ["recipient_name", "recipientName", "enriched_contact_name", "enrichedContactName", "lead_contact_name", "leadContactName"]) || "",
-    renderPreviewAvailable: pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
-    blockers: asArray(record.blockers).map((item, blockerIndex) => normalizeOutreachBlocker(item, blockerIndex)),
-    latestQualityReview: normalizeTemplateQualityReview(record.latest_quality_review ?? record.latestQualityReview),
+    recipientEmail:
+      pickString(record, [
+        "recipient_email",
+        "recipientEmail",
+        "enriched_email",
+        "enrichedEmail",
+        "lead_email",
+        "leadEmail",
+      ]) || "",
+    recipientName:
+      pickString(record, [
+        "recipient_name",
+        "recipientName",
+        "enriched_contact_name",
+        "enrichedContactName",
+        "lead_contact_name",
+        "leadContactName",
+      ]) || "",
+    renderPreviewAvailable:
+      pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
+    blockers: asArray(record.blockers).map((item, blockerIndex) =>
+      normalizeOutreachBlocker(item, blockerIndex),
+    ),
+    latestQualityReview: normalizeTemplateQualityReview(
+      record.latest_quality_review ?? record.latestQualityReview,
+    ),
     scheduledFor: normalizeTimestamp(record.scheduled_for ?? record.scheduledFor),
   };
 }
@@ -1456,7 +1619,9 @@ function normalizeTemplateQualityReview(value: unknown): TemplateQualityReviewRe
         detail: pickString(risk, ["detail"]) || undefined,
       };
     }),
-    recommendations: asArray(record.recommendations).map((item) => String(item || "")).filter(Boolean),
+    recommendations: asArray(record.recommendations)
+      .map((item) => String(item || ""))
+      .filter(Boolean),
     reviewedBy: pickString(record, ["reviewed_by", "reviewedBy"]) || "",
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
@@ -1498,7 +1663,9 @@ function normalizeReplyDraft(value: unknown, index = 0): ReplyDraftRecord {
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
     createdBy: asRecord(record.created_by ?? record.createdBy),
-    trainingContextUsed: asArray(record.training_context_used ?? record.trainingContextUsed).map((item) => asRecord(item)),
+    trainingContextUsed: asArray(record.training_context_used ?? record.trainingContextUsed).map(
+      (item) => asRecord(item),
+    ),
     metadata: asRecord(record.metadata),
   };
 }
@@ -1522,10 +1689,19 @@ function normalizeConversation(value: unknown, index = 0): ConversationRecord {
     lastMessageAt: normalizeTimestamp(record.last_message_at ?? record.lastMessageAt),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
-    latestQualityReview: normalizeTemplateQualityReview(record.latest_quality_review ?? record.latestQualityReview),
-    latestReplyDraft: normalizeNullableRecord(record.latest_reply_draft ?? record.latestReplyDraft, normalizeReplyDraft),
-    replyDrafts: asArray(record.reply_drafts ?? record.replyDrafts).map((item, draftIndex) => normalizeReplyDraft(item, draftIndex)),
-    messages: asArray(record.messages).map((item, messageIndex) => normalizeConversationMessage(item, messageIndex)),
+    latestQualityReview: normalizeTemplateQualityReview(
+      record.latest_quality_review ?? record.latestQualityReview,
+    ),
+    latestReplyDraft: normalizeNullableRecord(
+      record.latest_reply_draft ?? record.latestReplyDraft,
+      normalizeReplyDraft,
+    ),
+    replyDrafts: asArray(record.reply_drafts ?? record.replyDrafts).map((item, draftIndex) =>
+      normalizeReplyDraft(item, draftIndex),
+    ),
+    messages: asArray(record.messages).map((item, messageIndex) =>
+      normalizeConversationMessage(item, messageIndex),
+    ),
   };
 }
 
@@ -1567,7 +1743,8 @@ function normalizeMailbox(value: unknown, index = 0): MailboxRecord {
     fromName: pickString(record, ["from_name", "fromName"]) || "",
     fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
     providerType: pickString(record, ["provider_type", "providerType"]) || "other",
-    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    connectionStatus:
+      pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
     sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
     dailySendLimit: pickNumber(record, ["daily_send_limit", "dailySendLimit"]),
     monthlySendLimit: pickNumber(record, ["monthly_send_limit", "monthlySendLimit"]),
@@ -1587,11 +1764,13 @@ function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck
     configured: pickBoolean(record, ["configured"]) ?? false,
     configurationMode: pickString(record, ["configuration_mode", "configurationMode"]) || "",
     connected: pickBoolean(record, ["connected"]) ?? false,
-    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    connectionStatus:
+      pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
     apiKeyConfigured: pickBoolean(record, ["api_key_configured", "apiKeyConfigured"]) ?? undefined,
     oauthConfigured: pickBoolean(record, ["oauth_configured", "oauthConfigured"]) ?? undefined,
     encryptionReady: pickBoolean(record, ["encryption_ready", "encryptionReady"]) ?? undefined,
-    credentialsStored: pickBoolean(record, ["credentials_stored", "credentialsStored"]) ?? undefined,
+    credentialsStored:
+      pickBoolean(record, ["credentials_stored", "credentialsStored"]) ?? undefined,
     expectedMailbox: pickString(record, ["expected_mailbox", "expectedMailbox"]) || "",
     signedInMailbox: pickString(record, ["signed_in_mailbox", "signedInMailbox"]) || "",
     signedInUser: pickString(record, ["signed_in_user", "signedInUser"]) || "",
@@ -1606,14 +1785,24 @@ function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck
 function normalizeMicrosoftReplySyncStatus(value: unknown): MicrosoftReplySyncStatusRecord {
   const record = asRecord(value);
   const mailbox = asRecord(record.mailbox);
-  const connectionCheck = normalizeMailboxConnectionCheck(record.connection_check ?? record.connectionCheck);
+  const connectionCheck = normalizeMailboxConnectionCheck(
+    record.connection_check ?? record.connectionCheck,
+  );
 
   return {
     mailboxId: pickString(mailbox, ["id", "_id"]) || "",
-    mailboxName: pickString(mailbox, ["mailbox_name", "mailboxName"]) || "Microsoft reply sync mailbox",
-    mailboxEmail: pickString(mailbox, ["from_email", "fromEmail"]) || (connectionCheck?.expectedMailbox ?? ""),
-    providerType: pickString(record, ["provider_type", "providerType"]) || pickString(mailbox, ["provider_type", "providerType"]) || "microsoft",
-    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || connectionCheck?.connectionStatus || "not_connected",
+    mailboxName:
+      pickString(mailbox, ["mailbox_name", "mailboxName"]) || "Microsoft reply sync mailbox",
+    mailboxEmail:
+      pickString(mailbox, ["from_email", "fromEmail"]) || (connectionCheck?.expectedMailbox ?? ""),
+    providerType:
+      pickString(record, ["provider_type", "providerType"]) ||
+      pickString(mailbox, ["provider_type", "providerType"]) ||
+      "microsoft",
+    connectionStatus:
+      pickString(record, ["connection_status", "connectionStatus"]) ||
+      connectionCheck?.connectionStatus ||
+      "not_connected",
     connected: pickBoolean(connectionCheck, ["connected"]) ?? false,
     configured: pickBoolean(connectionCheck, ["oauthConfigured"]) ?? false,
     credentialsStored: pickBoolean(connectionCheck, ["credentialsStored"]) ?? false,
@@ -1633,7 +1822,9 @@ function normalizeMailboxOAuthStartResponse(value: unknown): MailboxOAuthStartRe
     authUrl: pickString(record, ["auth_url", "authUrl"]) || "",
     expiresAt: normalizeTimestamp(record.expires_at ?? record.expiresAt),
     redirectUri: pickString(record, ["redirect_uri", "redirectUri"]) || "",
-    scopes: asArray(record.scopes).map((item) => String(item || "")).filter(Boolean),
+    scopes: asArray(record.scopes)
+      .map((item) => String(item || ""))
+      .filter(Boolean),
     sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
     note: pickString(record, ["note", "message"]) || "",
   };
@@ -1655,7 +1846,9 @@ function normalizeOutreachRenderPreview(value: unknown): OutreachRenderPreview {
     companyName: pickString(record, ["company_name", "companyName"]) || "",
     subject: pickString(record, ["subject"]) || "",
     body: pickString(record, ["body"]) || "",
-    missingPlaceholders: asArray(record.missing_placeholders).map((item) => String(item || "")).filter(Boolean),
+    missingPlaceholders: asArray(record.missing_placeholders)
+      .map((item) => String(item || ""))
+      .filter(Boolean),
     template: {
       name: pickString(template, ["name"]) || "",
       type: pickString(template, ["type"]) || "",
@@ -1663,7 +1856,9 @@ function normalizeOutreachRenderPreview(value: unknown): OutreachRenderPreview {
     },
     followupSequence: {
       name: pickString(followupSequence, ["name"]) || "",
-      followupCount: normalizeCount(followupSequence.followup_count ?? followupSequence.followupCount),
+      followupCount: normalizeCount(
+        followupSequence.followup_count ?? followupSequence.followupCount,
+      ),
     },
     metadata: {
       queueItemId: pickString(metadata, ["queue_item_id", "queueItemId"]) || "",
@@ -1680,17 +1875,24 @@ function normalizeOutreachRenderPreviewResponse(value: unknown) {
   return {
     ok: pickBoolean(record, ["ok"]) ?? true,
     queueItemId: pickString(record, ["queue_item_id", "queueItemId"]) || "",
-    renderPreviewAvailable: pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
+    renderPreviewAvailable:
+      pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
     preview: normalizeOutreachRenderPreview(record.preview),
     readiness: {
       sendReady: pickBoolean(asRecord(record.readiness), ["send_ready", "sendReady"]) ?? false,
-      sendAllowed: pickBoolean(asRecord(record.readiness), ["send_allowed", "sendAllowed"]) ?? false,
-      blockers: asArray(asRecord(record.readiness).blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+      sendAllowed:
+        pickBoolean(asRecord(record.readiness), ["send_allowed", "sendAllowed"]) ?? false,
+      blockers: asArray(asRecord(record.readiness).blockers).map((item, index) =>
+        normalizeOutreachBlocker(item, index),
+      ),
     },
   };
 }
 
-function normalizeVerifiedContactPlanning(value: unknown, index = 0): VerifiedContactPlanningRecord {
+function normalizeVerifiedContactPlanning(
+  value: unknown,
+  index = 0,
+): VerifiedContactPlanningRecord {
   const record = asRecord(value);
   return {
     id: pickString(record, ["id", "_id"]) || `verified-contact-${index}`,
@@ -1700,7 +1902,13 @@ function normalizeVerifiedContactPlanning(value: unknown, index = 0): VerifiedCo
     contactName: pickString(record, ["contact_name", "contactName"]) || "",
     contactTitle: pickString(record, ["contact_title", "contactTitle"]) || "",
     email: pickString(record, ["email", "enriched_email", "enrichedEmail"]) || "",
-    emailStatus: pickString(record, ["email_status", "emailStatus", "enriched_email_status", "enrichedEmailStatus"]) || "",
+    emailStatus:
+      pickString(record, [
+        "email_status",
+        "emailStatus",
+        "enriched_email_status",
+        "enrichedEmailStatus",
+      ]) || "",
     providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
     planningStatus: pickString(record, ["planning_status", "planningStatus"]) || "blocked",
     outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
@@ -1709,16 +1917,22 @@ function normalizeVerifiedContactPlanning(value: unknown, index = 0): VerifiedCo
     mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "not_connected",
     variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
     sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
-    blockers: asArray(record.blockers).map((item, blockerIndex) => normalizeOutreachBlocker(item, blockerIndex)),
+    blockers: asArray(record.blockers).map((item, blockerIndex) =>
+      normalizeOutreachBlocker(item, blockerIndex),
+    ),
     verifiedAt: normalizeTimestamp(record.verified_at ?? record.verifiedAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
 }
 
-function normalizeEnrichmentCreditApproval(value: unknown, index = 0): EnrichmentCreditApprovalRecord {
+function normalizeEnrichmentCreditApproval(
+  value: unknown,
+  index = 0,
+): EnrichmentCreditApprovalRecord {
   const record = asRecord(value);
   return {
-    queueItemId: pickString(record, ["queue_item_id", "queueItemId", "id"]) || `queue-item-${index}`,
+    queueItemId:
+      pickString(record, ["queue_item_id", "queueItemId", "id"]) || `queue-item-${index}`,
     approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
     companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed raw lead",
     rawLeadId: pickString(record, ["raw_lead_id", "rawLeadId"]) || "",
@@ -1726,12 +1940,17 @@ function normalizeEnrichmentCreditApproval(value: unknown, index = 0): Enrichmen
     campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
     queueStatus: pickString(record, ["queue_status", "queueStatus", "status"]) || "",
-    creditApprovalStatus: pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
+    creditApprovalStatus:
+      pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
     providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
     apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
     hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
-    createdAt: normalizeTimestamp(record.approval_created_at ?? record.created_at ?? record.createdAt),
-    updatedAt: normalizeTimestamp(record.approval_updated_at ?? record.updated_at ?? record.updatedAt),
+    createdAt: normalizeTimestamp(
+      record.approval_created_at ?? record.created_at ?? record.createdAt,
+    ),
+    updatedAt: normalizeTimestamp(
+      record.approval_updated_at ?? record.updated_at ?? record.updatedAt,
+    ),
   };
 }
 
@@ -1771,18 +1990,23 @@ function normalizeEnrichmentAction(value: unknown, index = 0) {
     budgetCheckStatus: pickString(record, ["budget_check_status", "budgetCheckStatus"]) || "",
     apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
     hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
-    creditApprovalStatus: pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
+    creditApprovalStatus:
+      pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
     providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
     providerError: pickString(record, ["provider_error", "providerError"]) || "",
     enrichedContactName: pickString(record, ["enriched_contact_name", "enrichedContactName"]) || "",
-    enrichedContactTitle: pickString(record, ["enriched_contact_title", "enrichedContactTitle"]) || "",
+    enrichedContactTitle:
+      pickString(record, ["enriched_contact_title", "enrichedContactTitle"]) || "",
     enrichedEmail: pickString(record, ["enriched_email", "enrichedEmail"]) || "",
     enrichedEmailStatus: pickString(record, ["enriched_email_status", "enrichedEmailStatus"]) || "",
     enrichedPhone: pickString(record, ["enriched_phone", "enrichedPhone"]) || "",
     enrichedSource: pickString(record, ["enriched_source", "enrichedSource"]) || "",
     enrichmentNotes: pickString(record, ["enrichment_notes", "enrichmentNotes"]) || "",
-    modelRouteUsed: pickString(record, ["enrichment_model_route_used", "enrichmentModelRouteUsed"]) || "",
-    confidenceScore: normalizeCount(record.enrichment_confidence_score ?? record.enrichmentConfidenceScore),
+    modelRouteUsed:
+      pickString(record, ["enrichment_model_route_used", "enrichmentModelRouteUsed"]) || "",
+    confidenceScore: normalizeCount(
+      record.enrichment_confidence_score ?? record.enrichmentConfidenceScore,
+    ),
     requiresApproval: pickBoolean(record, ["requires_approval", "requiresApproval"]) ?? false,
     lastProcessedAt: normalizeTimestamp(record.last_processed_at ?? record.lastProcessedAt),
     updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
@@ -1792,7 +2016,11 @@ function normalizeEnrichmentAction(value: unknown, index = 0) {
 export function normalizeRequestHistory(value: unknown, index = 0): RequestHistoryRecord {
   const record = asRecord(value);
   const replies = normalizeRequestReplies(
-    record.replies ?? record.client_visible_replies ?? record.clientVisibleReplies ?? record.timeline ?? record.updates,
+    record.replies ??
+      record.client_visible_replies ??
+      record.clientVisibleReplies ??
+      record.timeline ??
+      record.updates,
   );
   const latestReplyRecord = replies.length ? replies[replies.length - 1] : null;
 
@@ -1823,7 +2051,10 @@ export function normalizeRequestHistory(value: unknown, index = 0): RequestHisto
       null,
     latestReplyAt:
       normalizeTimestamp(
-        record.latest_reply_at ?? record.latestReplyAt ?? record.last_reply_at ?? record.lastReplyAt,
+        record.latest_reply_at ??
+          record.latestReplyAt ??
+          record.last_reply_at ??
+          record.lastReplyAt,
       ) || latestReplyRecord?.createdAt,
   };
 }
@@ -1831,10 +2062,13 @@ export function normalizeRequestHistory(value: unknown, index = 0): RequestHisto
 export function normalizeRequestDetail(value: unknown, index = 0): RequestDetailRecord {
   const record = asRecord(value);
   const nested =
-    asRecord(record.request).id || asRecord(record.request)._id ? asRecord(record.request) :
-    asRecord(asRecord(record.data).request).id || asRecord(asRecord(record.data).request)._id ? asRecord(asRecord(record.data).request) :
-    asRecord(record.data).id || asRecord(record.data)._id ? asRecord(record.data) :
-    record;
+    asRecord(record.request).id || asRecord(record.request)._id
+      ? asRecord(record.request)
+      : asRecord(asRecord(record.data).request).id || asRecord(asRecord(record.data).request)._id
+        ? asRecord(asRecord(record.data).request)
+        : asRecord(record.data).id || asRecord(record.data)._id
+          ? asRecord(record.data)
+          : record;
   const base = normalizeRequestHistory(nested, index);
   const replies = normalizeRequestReplies(
     nested.replies ??
@@ -1859,11 +2093,31 @@ export function normalizeRequestReply(value: unknown, index = 0): RequestReplyRe
   const metadata = asRecord(record.metadata);
   const explicitType = pickString(record, ["type", "event_type", "eventType", "kind"]);
   const status = normalizeRequestVisibleStatus(
-    pickString(record, ["status", "client_visible_status", "clientVisibleStatus", "to_status", "toStatus"]) ||
-      pickString(metadata, ["status", "client_visible_status", "clientVisibleStatus", "to_status", "toStatus"]),
+    pickString(record, [
+      "status",
+      "client_visible_status",
+      "clientVisibleStatus",
+      "to_status",
+      "toStatus",
+    ]) ||
+      pickString(metadata, [
+        "status",
+        "client_visible_status",
+        "clientVisibleStatus",
+        "to_status",
+        "toStatus",
+      ]),
   );
   const message =
-    pickString(record, ["message", "body", "reply", "comment", "details", "description", "summary"]) ||
+    pickString(record, [
+      "message",
+      "body",
+      "reply",
+      "comment",
+      "details",
+      "description",
+      "summary",
+    ]) ||
     pickString(metadata, ["message", "body", "reply"]) ||
     (status ? `Status updated to ${formatRequestLabel(status)}.` : "Request updated.");
   const author = getRequestAuthor(record);
@@ -1893,27 +2147,57 @@ function normalizeLeadActivityResponse(value: unknown): LeadActivityRecord[] {
   }
 
   const record = asRecord(value);
-  const activity = asArray(record.activity ?? record.activities ?? record.history ?? record.comments);
+  const activity = asArray(
+    record.activity ?? record.activities ?? record.history ?? record.comments,
+  );
   return activity.map(normalizeLeadActivityRecord).filter(Boolean);
 }
 
 function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRecord {
   const record = asRecord(value);
   const metadata = asRecord(record.metadata);
-  const explicitType = pickString(record, ["type", "activity_type", "activityType", "event_type", "eventType", "kind"]);
+  const explicitType = pickString(record, [
+    "type",
+    "activity_type",
+    "activityType",
+    "event_type",
+    "eventType",
+    "kind",
+  ]);
   const description = pickString(record, ["description", "message", "summary"]);
   const comment =
     pickString(record, ["comment", "note", "body", "text", "message"]) ||
     (explicitType === "comment_added" ? description : undefined);
   const status = getActivityStatus(record);
   const type = normalizeActivityType(explicitType, Boolean(comment), Boolean(status));
-  const userRecord = asRecord(record.user ?? record.actor ?? record.created_by ?? record.createdBy ?? record.updated_by ?? record.updatedBy);
+  const userRecord = asRecord(
+    record.user ??
+      record.actor ??
+      record.created_by ??
+      record.createdBy ??
+      record.updated_by ??
+      record.updatedBy,
+  );
   const userName =
     pickString(userRecord, ["name", "full_name", "fullName"]) ||
-    pickString(record, ["user_name", "userName", "author_name", "authorName", "created_by_name", "updated_by_name"]);
+    pickString(record, [
+      "user_name",
+      "userName",
+      "author_name",
+      "authorName",
+      "created_by_name",
+      "updated_by_name",
+    ]);
   const userEmail =
     pickString(userRecord, ["email"]) ||
-    pickString(record, ["user_email", "userEmail", "author_email", "authorEmail", "created_by_email", "updated_by_email"]);
+    pickString(record, [
+      "user_email",
+      "userEmail",
+      "author_email",
+      "authorEmail",
+      "created_by_email",
+      "updated_by_email",
+    ]);
   const userRole =
     pickString(userRecord, ["role"]) ||
     pickString(record, ["user_role", "userRole", "author_role", "authorRole"]);
@@ -1925,7 +2209,9 @@ function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRec
     comment,
     message:
       description ||
-      (type === "status_change" && status ? `Status updated to ${formatLeadStatus(status)}.` : "") ||
+      (type === "status_change" && status
+        ? `Status updated to ${formatLeadStatus(status)}.`
+        : "") ||
       pickString(metadata, ["message"]) ||
       comment ||
       "Lead activity updated.",
@@ -1937,7 +2223,9 @@ function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRec
 }
 
 function getRequestAuthor(record: Record<string, unknown>) {
-  const userRecord = asRecord(record.user ?? record.actor ?? record.author ?? record.created_by ?? record.createdBy);
+  const userRecord = asRecord(
+    record.user ?? record.actor ?? record.author ?? record.created_by ?? record.createdBy,
+  );
   return {
     name:
       pickString(userRecord, ["name", "full_name", "fullName"]) ||
@@ -1978,7 +2266,11 @@ function normalizeRequestVisibleStatus(value?: string) {
   }
 }
 
-function normalizeRequestReplyType(value: string | undefined, hasStatus: boolean, message: string): RequestReplyRecord["type"] {
+function normalizeRequestReplyType(
+  value: string | undefined,
+  hasStatus: boolean,
+  message: string,
+): RequestReplyRecord["type"] {
   switch ((value || "").toLowerCase()) {
     case "message":
       return "message";
@@ -2001,32 +2293,68 @@ function isClientVisibleRequestReply(reply: RequestReplyRecord) {
 
 function isClientVisibleRequestReplyValue(value: unknown) {
   const record = asRecord(value);
-  const visibility = pickString(record, ["visibility", "reply_visibility", "replyVisibility", "audience"]);
-  const clientVisible = pickBoolean(record, ["client_visible", "clientVisible", "is_client_visible", "isClientVisible"]);
-  const internalOnly = pickBoolean(record, ["internal", "is_internal", "isInternal", "private", "is_private", "isPrivate"]);
+  const visibility = pickString(record, [
+    "visibility",
+    "reply_visibility",
+    "replyVisibility",
+    "audience",
+  ]);
+  const clientVisible = pickBoolean(record, [
+    "client_visible",
+    "clientVisible",
+    "is_client_visible",
+    "isClientVisible",
+  ]);
+  const internalOnly = pickBoolean(record, [
+    "internal",
+    "is_internal",
+    "isInternal",
+    "private",
+    "is_private",
+    "isPrivate",
+  ]);
 
   if (internalOnly === true) return false;
   if (clientVisible === false) return false;
-  if (visibility && ["internal", "private", "staff", "admin"].includes(visibility.toLowerCase())) return false;
+  if (visibility && ["internal", "private", "staff", "admin"].includes(visibility.toLowerCase()))
+    return false;
   return true;
 }
 
 function formatRequestLabel(value: string) {
-  return value
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || "Unknown";
+  return (
+    value
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || "Unknown"
+  );
 }
 
 function getActivityStatus(value: unknown) {
   const record = asRecord(value);
   const metadata = asRecord(record.metadata);
-  const nextStatus = pickString(record, ["status", "lead_status", "leadStatus", "to_status", "toStatus", "next_status", "nextStatus"]);
-  return nextStatus || pickString(metadata, ["to_status", "toStatus", "status"]) || pickString(asRecord(record.status_change), ["status", "to_status", "toStatus"]);
+  const nextStatus = pickString(record, [
+    "status",
+    "lead_status",
+    "leadStatus",
+    "to_status",
+    "toStatus",
+    "next_status",
+    "nextStatus",
+  ]);
+  return (
+    nextStatus ||
+    pickString(metadata, ["to_status", "toStatus", "status"]) ||
+    pickString(asRecord(record.status_change), ["status", "to_status", "toStatus"])
+  );
 }
 
-function normalizeActivityType(value: string | undefined, hasComment: boolean, hasStatus: boolean): LeadActivityRecord["type"] {
+function normalizeActivityType(
+  value: string | undefined,
+  hasComment: boolean,
+  hasStatus: boolean,
+): LeadActivityRecord["type"] {
   switch ((value || "").toLowerCase()) {
     case "comment":
     case "note":
