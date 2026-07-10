@@ -32,12 +32,19 @@ const BASE_NAV = [
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
+// Internal-only nav entries - never shown to client-side roles (client_owner/
+// manager/sales_user/viewer). AI Agent Status exposes provider/model/budget/
+// cap internals that must stay Intergrai-internal only.
+const INTERNAL_ONLY_NAV_PATHS = new Set(["/ai-agent-status"]);
+
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, client, logout, theme, toggleTheme } = useApp();
+  const { user, client, logout, theme, toggleTheme, isInternalAdmin } = useApp();
   const router = useRouterState();
   const path = router.location.pathname;
   const isIntergraiAdmin = user?.role === "intergrai_admin";
-  const navItems = BASE_NAV;
+  const navItems = isInternalAdmin
+    ? BASE_NAV
+    : BASE_NAV.filter((item) => !INTERNAL_ONLY_NAV_PATHS.has(item.to));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const currentPage = navItems.find(({ to }) => (to === "/" ? path === "/" : path.startsWith(to)));
 

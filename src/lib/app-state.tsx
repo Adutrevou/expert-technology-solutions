@@ -32,6 +32,11 @@ interface AppState {
   authError: string | null;
   isAuthenticated: boolean;
   user: AuthUser | null;
+  // True only for internal Intergrai roles (admin/system agent) - never for
+  // client-side roles (client_owner/manager/sales_user/viewer). Used to gate
+  // internal-only surfaces like AI Agent Status, which must never expose
+  // provider/model/budget/cap internals to client users.
+  isInternalAdmin: boolean;
   client: ClientWithTargeting;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -171,6 +176,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         authError,
         isAuthenticated: authStatus === "authenticated" && !!user,
         user,
+        isInternalAdmin: user?.role === "intergrai_admin" || user?.role === "system_agent",
         client: PORTAL_CLIENT,
         login,
         logout,
