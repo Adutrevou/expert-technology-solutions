@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Activity,
@@ -7,12 +8,14 @@ import {
   CheckCircle2,
   Gauge,
   RefreshCcw,
+  ShieldAlert,
   XCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useApp } from "@/lib/app-state";
 import { useAiHealthQuery } from "@/lib/ai-health-api-hooks";
 
 export const Route = createFileRoute("/ai-agent-status")({
@@ -20,8 +23,36 @@ export const Route = createFileRoute("/ai-agent-status")({
   component: AiAgentStatusPage,
 });
 
+// Internal-only page: this must never render provider/model/budget/cap
+// internals for client-side roles, and the guard here is what protects
+// against a client user opening the URL directly - the sidebar link being
+// hidden (app-shell.tsx) is not sufficient on its own.
 function AiAgentStatusPage() {
+  const { isInternalAdmin } = useApp();
+  const navigate = useNavigate();
+  // Hook is always called (rules of hooks) - the query itself refuses to
+  // fetch for non-admins (see useAiHealthQuery's own isInternalAdmin gate),
+  // so no internal data is ever requested or cached for a client user even
+  // if this component briefly renders before the redirect below fires.
   const healthQuery = useAiHealthQuery();
+
+  useEffect(() => {
+    if (!isInternalAdmin) {
+      navigate({ to: "/leads", replace: true });
+    }
+  }, [isInternalAdmin, navigate]);
+
+  if (!isInternalAdmin) {
+    return (
+      <Card className="max-w-[1400px] mx-auto p-10 text-center shadow-card">
+        <ShieldAlert className="h-10 w-10 mx-auto text-muted-foreground" />
+        <h1 className="mt-4 text-2xl font-semibold">Not authorized</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This page is only available to Intergrai admins. Redirecting you to Leads...
+        </p>
+      </Card>
+    );
+  }
 
   if (healthQuery.isLoading) {
     return <StatusLoadingState />;
