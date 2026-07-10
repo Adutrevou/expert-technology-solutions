@@ -1,17 +1,26 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit, Users, ClipboardList, MessageSquareReply, Menu } from "lucide-react";
+import { LayoutDashboard, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit, Users, ClipboardList, MessageSquareReply, Menu, GitBranch, Gauge } from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/lead-agent", label: "Expert Lead Agent", icon: Bot },
+  { to: "/ai-agent-status", label: "AI Agent Status", icon: Gauge },
   { to: "/leads", label: "Leads", icon: Users },
+  { to: "/sequences", label: "Sequences", icon: GitBranch },
   { to: "/requests", label: "Requests", icon: ClipboardList },
   { to: "/approvals", label: "Approvals", icon: CheckSquare },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
@@ -94,7 +103,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold text-white overflow-hidden" style={{ backgroundColor: client.logoUrl ? "transparent" : client.brandColor }}>
                   {client.logoUrl ? (
                     <img src={client.logoUrl} alt="" className="h-full w-full object-contain" />
-                  ) : client.initials}
+                  ) : (
+                    client.initials
+                  )}
+                </span>
+                <span className="hidden sm:inline truncate max-w-[180px] text-sm font-medium">
+                  {client.companyName}
                 </span>
                 <span className="truncate max-w-[150px] text-sm font-medium sm:max-w-[180px]">{client.companyName}</span>
               </div>

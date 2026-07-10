@@ -1,16 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, ChevronLeft, ChevronRight, Download, MessageSquare, RefreshCcw, Search } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  MessageSquare,
+  RefreshCcw,
+  Search,
+  UploadCloud,
+  Users2,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { LeadStatusBadge } from "@/components/status-badges";
+import { ImportContactsDialog } from "@/components/import-contacts-dialog";
 import {
   useAddLeadCommentMutation,
   useLeadActivityQuery,
@@ -28,6 +52,8 @@ import {
 } from "@/lib/leads-api";
 import { deriveNormalizedLeadStatusCounts, normalizeLeadStatus, type NormalizedLeadStatusCounts } from "@/lib/lead-status";
 import { useApp } from "@/lib/app-state";
+import { useSequencesQuery } from "@/lib/sequences-api-hooks";
+import { useEnrollContactMutation } from "@/lib/contacts-import-api-hooks";
 
 export const Route = createFileRoute("/leads")({
   head: () => ({ meta: [{ title: "Leads — Expert Technology Solutions" }] }),
@@ -73,6 +99,14 @@ function LeadsPage() {
   const [commentNotice, setCommentNotice] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [lastGoodLeadsData, setLastGoodLeadsData] = useState<typeof leadsQuery.data | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [enrollSequenceId, setEnrollSequenceId] = useState("");
+  const [enrollNotice, setEnrollNotice] = useState<string | null>(null);
+  const sequencesQuery = useSequencesQuery();
+  const enrollContactMutation = useEnrollContactMutation();
+  const activeSequences = (sequencesQuery.data ?? []).filter(
+    (sequence) => sequence.status === "active",
+  );
 
   useEffect(() => {
     if (hasLeadDataSignal(leadsQuery.data)) {
@@ -90,8 +124,14 @@ function LeadsPage() {
     }),
     [user],
   );
-  const industries = useMemo(() => Array.from(new Set(all.map((lead) => lead.industry))).sort(), [all]);
-  const campaigns = useMemo(() => Array.from(new Set(all.map((lead) => lead.campaignName))).sort(), [all]);
+  const industries = useMemo(
+    () => Array.from(new Set(all.map((lead) => lead.industry))).sort(),
+    [all],
+  );
+  const campaigns = useMemo(
+    () => Array.from(new Set(all.map((lead) => lead.campaignName))).sort(),
+    [all],
+  );
   const hasLeadData = all.length > 0;
   const isAdminViewer = user?.role === "intergrai_admin" || user?.role === "system_agent";
   const visibleIndustries = useMemo(() => industries.filter(Boolean), [industries]);
@@ -205,6 +245,8 @@ function LeadsPage() {
     setStatusNotice(null);
     setCommentNotice(null);
     setCommentError(null);
+    setEnrollNotice(null);
+    setEnrollSequenceId("");
   }, [selectedLead?.id, selectedLead?.status, selectedLead?.workflowStatus, selectedLead?.displayStatus]);
 
   const exportCSV = () => {
@@ -278,6 +320,21 @@ function LeadsPage() {
   const showHardFailure = !effectiveLeadsData && leadsQuery.isError;
   const showingLastGoodData = Boolean(lastGoodLeadsData) && Boolean(leadsQuery.isError || (leadsQuery.isFetching && !leadsQuery.isLoading));
 
+  const handleEnroll = async () => {
+    if (!selectedLead || !enrollSequenceId) return;
+    setEnrollNotice(null);
+    try {
+      await enrollContactMutation.mutateAsync({
+        leadId: selectedLead.id,
+        sequenceId: enrollSequenceId,
+        source: "existing_lead",
+      });
+      setEnrollNotice("Enrolled successfully. The sequence stays dry-run/queued only.");
+    } catch (error) {
+      setEnrollNotice((error as Error).message || "Could not enroll this contact.");
+    }
+  };
+
   try {
     void totalLeadCount;
     void loadedLeadCount;
@@ -310,11 +367,25 @@ function LeadsPage() {
           <Button onClick={() => leadsQuery.refetch()} variant="outline" className="gap-2">
             <RefreshCcw className={`h-4 w-4 ${leadsQuery.isFetching ? "animate-spin" : ""}`} /> {leadsQuery.isFetching ? "Refreshing…" : "Refresh"}
           </Button>
-          <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={filtered.length === 0}>
+          <Button
+            onClick={exportCSV}
+            variant="outline"
+            className="gap-2"
+            disabled={filtered.length === 0}
+          >
             <Download className="h-4 w-4" /> Export CSV
+          </Button>
+          <Button onClick={() => setImportDialogOpen(true)} className="gap-2">
+            <UploadCloud className="h-4 w-4" /> Upload contacts
           </Button>
         </div>
       </header>
+
+      <ImportContactsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImported={() => leadsQuery.refetch()}
+      />
 
       <Card className="p-4 shadow-card">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -339,13 +410,33 @@ function LeadsPage() {
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Search name, company, email..." className="pl-9" />
+            <Input
+              value={q}
+              onChange={(event) => {
+                setQ(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search name, company, email..."
+              className="pl-9"
+            />
           </div>
-          <Select value={industry} onValueChange={(value) => { setIndustry(value); setPage(1); }}>
-            <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Industry" /></SelectTrigger>
+          <Select
+            value={industry}
+            onValueChange={(value) => {
+              setIndustry(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Industry" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All industries</SelectItem>
-              {visibleIndustries.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              {visibleIndustries.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {item}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={pipelineStatus} onValueChange={(value) => { setPipelineStatus(value); setPage(1); }}>
@@ -357,11 +448,23 @@ function LeadsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={campaign} onValueChange={(value) => { setCampaign(value); setPage(1); }}>
-            <SelectTrigger className="w-full md:w-[220px]"><SelectValue placeholder="Campaign" /></SelectTrigger>
+          <Select
+            value={campaign}
+            onValueChange={(value) => {
+              setCampaign(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-full md:w-[220px]">
+              <SelectValue placeholder="Campaign" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All campaigns</SelectItem>
-              {visibleCampaigns.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              {visibleCampaigns.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {item}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -373,7 +476,8 @@ function LeadsPage() {
         <Card className="p-10 text-center shadow-card">
           <h2 className="text-xl font-semibold">Leads unavailable</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {(leadsQuery.error as Error | undefined)?.message || "We couldn’t load live leads from Intergrai right now."}
+            {(leadsQuery.error as Error | undefined)?.message ||
+              "We couldn’t load live leads from Intergrai right now."}
           </p>
           <Button onClick={() => leadsQuery.refetch()} variant="outline" className="mt-6">
             <RefreshCcw className="h-4 w-4 mr-2" /> Try again
@@ -452,7 +556,11 @@ function LeadsPage() {
                           setSelectedLeadId(lead.id);
                         }
                       }}
-                      className={lead.id === selectedLead?.id ? "cursor-pointer bg-primary/5 ring-1 ring-primary/30" : "cursor-pointer transition-smooth hover:bg-muted/30"}
+                      className={
+                        lead.id === selectedLead?.id
+                          ? "cursor-pointer bg-primary/5 ring-1 ring-primary/30"
+                          : "cursor-pointer transition-smooth hover:bg-muted/30"
+                      }
                     >
                       <TableCell className="font-medium">{displayValue(lead.company)}</TableCell>
                       <TableCell className="text-muted-foreground">{displayValue(lead.displayContactName || lead.name || lead.title)}</TableCell>
@@ -467,12 +575,24 @@ function LeadsPage() {
               </Table>
             </div>
             <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">
-              <span className="text-muted-foreground text-xs">Page {page} of {totalPages}</span>
+              <span className="text-muted-foreground text-xs">
+                Page {page} of {totalPages}
+              </span>
               <div className="flex gap-1">
-                <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page === totalPages || all.length === 0}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page === totalPages || all.length === 0}
+                >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -485,7 +605,9 @@ function LeadsPage() {
             activityError={(activityQuery.error as Error | undefined)?.message || null}
             activityLoading={activityQuery.isLoading || activityQuery.isFetching}
             commentDraft={commentDraft}
-            commentError={commentError || (addCommentMutation.error as Error | undefined)?.message || null}
+            commentError={
+              commentError || (addCommentMutation.error as Error | undefined)?.message || null
+            }
             commentNotice={commentNotice}
             currentStatus={currentStatus}
             currentWorkflowStatus={currentWorkflowStatus}
@@ -501,6 +623,12 @@ function LeadsPage() {
             commentLoading={addCommentMutation.isPending}
             isAdminViewer={isAdminViewer}
             userLine={`${leadActor.name} · ${leadActor.email} · ${leadActor.role}`}
+            activeSequences={activeSequences}
+            enrollSequenceId={enrollSequenceId}
+            onEnrollSequenceChange={setEnrollSequenceId}
+            onEnrollSubmit={handleEnroll}
+            enrollLoading={enrollContactMutation.isPending}
+            enrollNotice={enrollNotice}
           />
         </div>
       )}
@@ -681,6 +809,12 @@ function LeadDetailPanel({
   statusOptions,
   userLine,
   isAdminViewer,
+  activeSequences,
+  enrollSequenceId,
+  onEnrollSequenceChange,
+  onEnrollSubmit,
+  enrollLoading,
+  enrollNotice,
 }: {
   lead: LeadRecord | null;
   activity: LeadActivityRecord[];
@@ -703,6 +837,12 @@ function LeadDetailPanel({
   statusOptions: Array<{ value: LeadWorkflowStatus; label: string }>;
   userLine: string;
   isAdminViewer: boolean;
+  activeSequences: Array<{ id: string; name: string }>;
+  enrollSequenceId: string;
+  onEnrollSequenceChange: (value: string) => void;
+  onEnrollSubmit: () => void;
+  enrollLoading: boolean;
+  enrollNotice: string | null;
 }) {
   if (!lead) {
     return (
@@ -772,7 +912,9 @@ function LeadDetailPanel({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Current status</p>
-              <p className="text-xs text-muted-foreground">Updates are logged against the signed-in user.</p>
+              <p className="text-xs text-muted-foreground">
+                Updates are logged against the signed-in user.
+              </p>
             </div>
             <LeadStatusBadge status={currentStatus} />
           </div>
@@ -786,7 +928,9 @@ function LeadDetailPanel({
               </SelectTrigger>
               <SelectContent>
                 {statusOptions.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -795,13 +939,57 @@ function LeadDetailPanel({
             </Button>
           </div>
           {statusNotice ? <InlineNotice message={statusNotice} /> : null}
-          {statusError ? <InlineAlert title="Status update failed" description={statusError} /> : null}
+          {statusError ? (
+            <InlineAlert title="Status update failed" description={statusError} />
+          ) : null}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Users2 className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Enroll in sequence</p>
+              <p className="text-xs text-muted-foreground">
+                Sequences stay dry-run/queued only until live sending is separately approved.
+              </p>
+            </div>
+          </div>
+          {activeSequences.length === 0 ? (
+            <p className="text-xs text-muted-foreground rounded-lg border border-dashed border-border px-3 py-2">
+              No active sequences yet. Create one from the Sequences page.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Select value={enrollSequenceId} onValueChange={onEnrollSequenceChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a sequence" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeSequences.map((sequence) => (
+                    <SelectItem key={sequence.id} value={sequence.id}>
+                      {sequence.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={onEnrollSubmit}
+                disabled={!enrollSequenceId || enrollLoading}
+                className="sm:min-w-36"
+              >
+                {enrollLoading ? "Enrolling..." : "Enroll"}
+              </Button>
+            </div>
+          )}
+          {enrollNotice ? <InlineNotice message={enrollNotice} /> : null}
         </section>
 
         <section className="space-y-3">
           <div>
             <p className="text-sm font-medium">Add comment</p>
-            <p className="text-xs text-muted-foreground">Notes can be empty in history, but new comments require text.</p>
+            <p className="text-xs text-muted-foreground">
+              Notes can be empty in history, but new comments require text.
+            </p>
           </div>
           <Textarea
             value={commentDraft}
@@ -816,7 +1004,9 @@ function LeadDetailPanel({
             </Button>
           </div>
           {commentNotice ? <InlineNotice message={commentNotice} /> : null}
-          {commentError ? <InlineAlert title="Comment not saved" description={commentError} /> : null}
+          {commentError ? (
+            <InlineAlert title="Comment not saved" description={commentError} />
+          ) : null}
         </section>
 
         <section className="space-y-3">
@@ -824,7 +1014,9 @@ function LeadDetailPanel({
             <p className="text-sm font-medium">Activity history</p>
             <p className="text-xs text-muted-foreground">Status changes and notes for this lead.</p>
           </div>
-          {activityError ? <InlineAlert title="Activity unavailable" description={activityError} /> : null}
+          {activityError ? (
+            <InlineAlert title="Activity unavailable" description={activityError} />
+          ) : null}
           {activityLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, index) => (
@@ -944,7 +1136,8 @@ function formatFoundByDetails(lead: LeadRecord) {
 
 function activityLabel(item: LeadActivityRecord) {
   if (item.type === "comment") return "Comment added";
-  if (item.type === "status_change") return item.status ? `Status changed to ${formatStatusLabel(item.status)}` : "Status updated";
+  if (item.type === "status_change")
+    return item.status ? `Status changed to ${formatStatusLabel(item.status)}` : "Status updated";
   return "Activity recorded";
 }
 

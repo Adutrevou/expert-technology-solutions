@@ -946,7 +946,10 @@ export interface RequestDetailRecord extends RequestHistoryRecord {
   replies: RequestReplyRecord[];
 }
 
-async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+// Exported (additive only - purely adding visibility, no behavior change) so
+// the sequences/contacts-import/ai-health API modules can reuse the exact
+// same fetch/auth/error-handling path instead of duplicating it.
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = buildApiUrl(path);
   const isMultipartBody = isFormDataBody(init.body);
   let response: Response;
