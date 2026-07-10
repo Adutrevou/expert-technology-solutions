@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SequencesRouteImport } from './routes/sequences'
 import { Route as ResponsesRulesRouteImport } from './routes/responses-rules'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RequestsRouteImport } from './routes/requests'
@@ -26,10 +27,12 @@ import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
 import { Route as ConversationsRouteImport } from './routes/conversations'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AiAgentStatusRouteImport } from './routes/ai-agent-status'
 import { Route as AgentTrainingRouteImport } from './routes/agent-training'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLeadsSplatRouteImport } from './routes/api/leads.$'
 import { Route as ApiGmailMessagesRouteImport } from './routes/api/gmail.messages'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
 
 const UpdatesRoute = UpdatesRouteImport.update({
   id: '/updates',
@@ -44,6 +47,11 @@ const TemplatesRoute = TemplatesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SequencesRoute = SequencesRouteImport.update({
+  id: '/sequences',
+  path: '/sequences',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResponsesRulesRoute = ResponsesRulesRouteImport.update({
@@ -116,6 +124,11 @@ const ApprovalsRoute = ApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiAgentStatusRoute = AiAgentStatusRouteImport.update({
+  id: '/ai-agent-status',
+  path: '/ai-agent-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentTrainingRoute = AgentTrainingRouteImport.update({
   id: '/agent-training',
   path: '/agent-training',
@@ -136,10 +149,16 @@ const ApiGmailMessagesRoute = ApiGmailMessagesRouteImport.update({
   path: '/api/gmail/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
@@ -154,15 +173,18 @@ export interface FileRoutesByFullPath {
   '/requests': typeof RequestsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/responses-rules': typeof ResponsesRulesRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
@@ -177,9 +199,11 @@ export interface FileRoutesByTo {
   '/requests': typeof RequestsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/responses-rules': typeof ResponsesRulesRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
@@ -187,6 +211,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
   '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
   '/conversations': typeof ConversationsRoute
@@ -201,9 +226,11 @@ export interface FileRoutesById {
   '/requests': typeof RequestsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/responses-rules': typeof ResponsesRulesRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
@@ -212,6 +239,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent-training'
+    | '/ai-agent-status'
     | '/approvals'
     | '/campaigns'
     | '/conversations'
@@ -226,15 +254,18 @@ export interface FileRouteTypes {
     | '/requests'
     | '/reset-password'
     | '/responses-rules'
+    | '/sequences'
     | '/settings'
     | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/agent-training'
+    | '/ai-agent-status'
     | '/approvals'
     | '/campaigns'
     | '/conversations'
@@ -249,15 +280,18 @@ export interface FileRouteTypes {
     | '/requests'
     | '/reset-password'
     | '/responses-rules'
+    | '/sequences'
     | '/settings'
     | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   id:
     | '__root__'
     | '/'
     | '/agent-training'
+    | '/ai-agent-status'
     | '/approvals'
     | '/campaigns'
     | '/conversations'
@@ -272,9 +306,11 @@ export interface FileRouteTypes {
     | '/requests'
     | '/reset-password'
     | '/responses-rules'
+    | '/sequences'
     | '/settings'
     | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesById: FileRoutesById
@@ -282,6 +318,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentTrainingRoute: typeof AgentTrainingRoute
+  AiAgentStatusRoute: typeof AiAgentStatusRoute
   ApprovalsRoute: typeof ApprovalsRoute
   CampaignsRoute: typeof CampaignsRoute
   ConversationsRoute: typeof ConversationsRoute
@@ -296,9 +333,11 @@ export interface RootRouteChildren {
   RequestsRoute: typeof RequestsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResponsesRulesRoute: typeof ResponsesRulesRoute
+  SequencesRoute: typeof SequencesRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   UpdatesRoute: typeof UpdatesRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiGmailMessagesRoute: typeof ApiGmailMessagesRoute
   ApiLeadsSplatRoute: typeof ApiLeadsSplatRoute
 }
@@ -324,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sequences': {
+      id: '/sequences'
+      path: '/sequences'
+      fullPath: '/sequences'
+      preLoaderRoute: typeof SequencesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/responses-rules': {
@@ -424,6 +470,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApprovalsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-agent-status': {
+      id: '/ai-agent-status'
+      path: '/ai-agent-status'
+      fullPath: '/ai-agent-status'
+      preLoaderRoute: typeof AiAgentStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent-training': {
       id: '/agent-training'
       path: '/agent-training'
@@ -452,12 +505,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGmailMessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentTrainingRoute: AgentTrainingRoute,
+  AiAgentStatusRoute: AiAgentStatusRoute,
   ApprovalsRoute: ApprovalsRoute,
   CampaignsRoute: CampaignsRoute,
   ConversationsRoute: ConversationsRoute,
@@ -472,9 +533,11 @@ const rootRouteChildren: RootRouteChildren = {
   RequestsRoute: RequestsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResponsesRulesRoute: ResponsesRulesRoute,
+  SequencesRoute: SequencesRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   UpdatesRoute: UpdatesRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiGmailMessagesRoute: ApiGmailMessagesRoute,
   ApiLeadsSplatRoute: ApiLeadsSplatRoute,
 }
