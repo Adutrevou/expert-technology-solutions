@@ -1,24 +1,9 @@
-// Default to the public Intergrai API directly so the client preview does not
-// rely on internal same-origin routes.
-const ENV_BASE_URL = (import.meta.env.VITE_LEADS_API_BASE_URL || "").replace(/\/+$/, "");
-export const LEADS_API_BASE_URL = ENV_BASE_URL || "https://api.intergrai.co.za";
+// Leads requests must go directly to the upstream API for the static build.
+const ENV_BASE_URL = String(import.meta.env.VITE_LEADS_API_BASE_URL || "").trim();
+export const LEADS_API_BASE_URL = resolveApiBaseUrl(ENV_BASE_URL);
 export const INTERGRAI_CLIENT_SLUG = "expert-technology-solutions";
 const IS_DEV = Boolean(import.meta.env?.DEV);
-export const REQUEST_CATEGORIES = [
-  "new_campaign",
-  "campaign_change",
-  "lead_question",
-  "outreach_draft",
-  "support_issue",
-] as const;
-export const CLIENT_VISIBLE_REQUEST_STATUSES = [
-  "submitted",
-  "under_review",
-  "in_progress",
-  "waiting_on_you",
-  "completed",
-  "rejected",
-] as const;
+const AUTH_TOKEN_STORAGE_KEY = "ets-auth-token";
 
 export interface ApiClientSummary {
   id: string;
@@ -71,11 +56,484 @@ export interface ReportsResponse {
   reports: unknown[];
 }
 
+export interface RequestsResponse {
+  ok: boolean;
+  client: ApiClientSummary;
+  count: number;
+  requests: unknown[];
+}
+
+export interface MissionRecord {
+  id: string;
+  title: string;
+  instruction: string;
+  status: string;
+  priority: string;
+  missionType: string;
+  assignedWorkerType: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  entityType: string;
+  entityId: string;
+  approvalType: string;
+  title: string;
+  status: string;
+  decisionStatus: string;
+  decisionNote: string;
+  decidedByName: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EnrichmentCreditApprovalRecord {
+  queueItemId: string;
+  approvalId: string;
+  companyName: string;
+  rawLeadId: string;
+  rawLeadStatus: string;
+  campaignId: string;
+  campaignName: string;
+  queueStatus: string;
+  creditApprovalStatus: string;
+  providerStatus: string;
+  apolloPlanned: boolean;
+  hunterPlanned: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EnrichmentBudgetSummary {
+  apolloMonthlyLimit: number;
+  apolloUsed: number;
+  apolloRemaining: number;
+  hunterMonthlyLimit: number;
+  hunterUsed: number;
+  hunterRemaining: number;
+}
+
+export interface WeeklyReportRecord {
+  id: string;
+  title: string;
+  status: string;
+  summary: string;
+  periodStart?: string;
+  periodEnd?: string;
+  payload: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface OutreachTemplateVariantRecord {
+  id: string;
+  variantLabel: string;
+  status: string;
+  approvalStatus: string;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  latestQualityReview: TemplateQualityReviewRecord | null;
+}
+
+export interface OutreachTemplateRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  name: string;
+  channel: string;
+  templateType: string;
+  status: string;
+  approvalStatus: string;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  variants: OutreachTemplateVariantRecord[];
+}
+
+export interface FollowupSequenceRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  name: string;
+  status: string;
+  approvalStatus: string;
+  followupCount: number;
+}
+
+export interface OutreachQueueRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  status: string;
+  approvalStatus: string;
+  mailboxStatus: string;
+  variantLabel: string;
+  sequenceName: string;
+  leadCompanyName: string;
+  rawCompanyName: string;
+  recipientEmail: string;
+  recipientName: string;
+  renderPreviewAvailable: boolean;
+  blockers: OutreachBlockerRecord[];
+  latestQualityReview: TemplateQualityReviewRecord | null;
+  scheduledFor?: string;
+}
+
+export interface TemplateQualityReviewRecord {
+  id: string;
+  score: number;
+  status: string;
+  humanSoundingScore: number;
+  specificityScore: number;
+  salesClarityScore: number;
+  ctaScore: number;
+  riskFlags: Array<{ code: string; detail?: string }>;
+  recommendations: string[];
+  reviewedBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ConversationMessageRecord {
+  id: string;
+  conversationId: string;
+  outreachQueueId: string;
+  direction: string;
+  provider: string;
+  providerMessageId: string;
+  subject: string;
+  bodyText: string;
+  fromEmail: string;
+  toEmail: string;
+  status: string;
+  sentAt?: string;
+  receivedAt?: string;
+  createdAt?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ReplyDraftRecord {
+  id: string;
+  conversationId: string;
+  inboundMessageId: string;
+  draftSubject: string;
+  draftBody: string;
+  status: string;
+  modelRouteUsed: string;
+  approvalNote: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy: Record<string, unknown>;
+  trainingContextUsed: Array<Record<string, unknown>>;
+  metadata: Record<string, unknown>;
+}
+
+export interface ConversationRecord {
+  id: string;
+  outreachQueueId: string;
+  campaignId: string;
+  campaignName: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  status: string;
+  replyStatus: string;
+  latestSubject: string;
+  latestSnippet: string;
+  messageCount: number;
+  previewOnly: boolean;
+  lastMessageAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  latestQualityReview: TemplateQualityReviewRecord | null;
+  latestReplyDraft: ReplyDraftRecord | null;
+  replyDrafts: ReplyDraftRecord[];
+  messages: ConversationMessageRecord[];
+}
+
+export interface AgentTrainingEntryRecord {
+  id: string;
+  category: string;
+  title: string;
+  content: string;
+  visibility: string;
+  status: string;
+  source: string;
+  appliesTo: string;
+  campaignId: string;
+  campaignName: string;
+  createdByName: string;
+  createdByEmail: string;
+  createdAt?: string;
+  updatedAt?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface OutreachBlockerRecord {
+  code: string;
+  count?: number;
+  message?: string;
+}
+
+export interface MailboxRecord {
+  id: string;
+  mailboxName: string;
+  fromName: string;
+  fromEmail: string;
+  providerType: string;
+  connectionStatus: string;
+  sendingEnabled: boolean;
+  dailySendLimit?: number | null;
+  monthlySendLimit?: number | null;
+  sentToday: number;
+  sentThisMonth: number;
+  lastHealthCheckAt?: string;
+  lastError: string;
+}
+
+export interface MailboxConnectionCheck {
+  providerType: string;
+  configured: boolean;
+  configurationMode: string;
+  connected: boolean;
+  connectionStatus: string;
+  apiKeyConfigured?: boolean;
+  oauthConfigured?: boolean;
+  encryptionReady?: boolean;
+  credentialsStored?: boolean;
+  expectedMailbox?: string;
+  signedInMailbox?: string;
+  signedInUser?: string;
+  senderStatus?: string;
+  senderVerified?: boolean;
+  defaultFromDomain?: string;
+  checkedAt?: string;
+  blockers: OutreachBlockerRecord[];
+}
+
+export interface MailboxOAuthStartResponse {
+  mailboxId: string;
+  mailboxName: string;
+  providerType: string;
+  connectionStatus: string;
+  authUrl: string;
+  expiresAt?: string;
+  redirectUri: string;
+  scopes: string[];
+  sendingEnabled: boolean;
+  note: string;
+}
+
+export interface MicrosoftReplySyncStatusRecord {
+  mailboxId: string;
+  mailboxName: string;
+  mailboxEmail: string;
+  providerType: string;
+  connectionStatus: string;
+  connected: boolean;
+  configured: boolean;
+  credentialsStored: boolean;
+  signedInMailbox: string;
+  signedInUser: string;
+  blockers: OutreachBlockerRecord[];
+}
+
+export interface OutreachRenderPreview {
+  dryRun: boolean;
+  renderable: boolean;
+  fromName: string;
+  fromEmail: string;
+  recipientName: string;
+  recipientEmail: string;
+  companyName: string;
+  subject: string;
+  body: string;
+  missingPlaceholders: string[];
+  template: {
+    name: string;
+    type: string;
+    variantLabel: string;
+  };
+  followupSequence: {
+    name: string;
+    followupCount: number;
+  };
+  metadata: {
+    queueItemId: string;
+    queueStatus: string;
+    approvalStatus: string;
+    mailboxStatus: string;
+    providerType: string;
+  };
+}
+
+export interface VerifiedContactPlanningRecord {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  companyName: string;
+  contactName: string;
+  contactTitle: string;
+  email: string;
+  emailStatus: string;
+  providerStatus: string;
+  planningStatus: string;
+  outreachQueueId: string;
+  outreachQueueStatus: string;
+  approvalStatus: string;
+  mailboxStatus: string;
+  variantLabel: string;
+  sequenceName: string;
+  blockers: OutreachBlockerRecord[];
+  verifiedAt?: string;
+  updatedAt?: string;
+}
+
+export interface LeadAgentSummary {
+  ok: boolean;
+  client: ApiClientSummary;
+  agent: {
+    id: string;
+    name: string;
+    status: string;
+    roleScope: string;
+    lastHeartbeatAt?: string;
+  } | null;
+  activeMissions: MissionRecord[];
+  openRequests: RequestHistoryRecord[];
+  campaigns: CampaignRecord[];
+  leadPipelineCounts: Array<{ stage: string; count: number }>;
+  rawLeadsCount: number;
+  rawLeadStatusCounts: Array<{ status: string; count: number }>;
+  enrichmentQueueCount: number;
+  enrichmentQueueStatusCounts: Array<{ status: string; count: number }>;
+  enrichmentUsageSummary: {
+    apolloAttempted: number;
+    hunterAttempted: number;
+    apolloUsed: number;
+    hunterUsed: number;
+  };
+  enrichmentBudgetSummary: EnrichmentBudgetSummary;
+  outreachTemplates: OutreachTemplateRecord[];
+  followupSequences: FollowupSequenceRecord[];
+  outreachQueueCount: number;
+  outreachQueueStatusCounts: Array<{ status: string; count: number }>;
+  outreachQueue: OutreachQueueRecord[];
+  verifiedContactsCount: number;
+  outreachPlannedCount: number;
+  sendReadyCount: number;
+  waitingForMailboxCount: number;
+  outreachBlockers: OutreachBlockerRecord[];
+  verifiedContactsWaitingForOutreach: VerifiedContactPlanningRecord[];
+  mailboxStatus: string;
+  mailboxConnected: boolean;
+  sendingEnabled: boolean;
+  sendReady: boolean;
+  mailboxFromName: string;
+  mailboxFromEmail: string;
+  mailboxProviderType: string;
+  mailboxDailySendLimit?: number | null;
+  mailboxMonthlySendLimit?: number | null;
+  mailboxSentToday: number;
+  mailboxSentThisMonth: number;
+  mailboxLastError: string;
+  mailboxLastHealthCheckAt?: string;
+  mailboxReadinessBlockers: OutreachBlockerRecord[];
+  mailboxConnectionCheck: MailboxConnectionCheck | null;
+  renderPreviewAvailableCount: number;
+  mailboxes: MailboxRecord[];
+  approvalsWaiting: number;
+  approvals: ApprovalRecord[];
+  pendingEnrichmentCreditApprovals: EnrichmentCreditApprovalRecord[];
+  latestQualificationActions: Array<{
+    id: string;
+    companyName: string;
+    status: string;
+    qualificationScore: number;
+    qualificationNotes: string;
+    modelRouteUsed: string;
+    confidenceScore: number;
+    escalationRequired: boolean;
+    updatedAt?: string;
+  }>;
+  latestEnrichmentActions: Array<{
+    id: string;
+    rawLeadId: string;
+    status: string;
+    eligibilityStatus: string;
+    budgetCheckStatus: string;
+    apolloPlanned: boolean;
+    hunterPlanned: boolean;
+    creditApprovalStatus: string;
+    providerStatus: string;
+    providerError: string;
+    enrichedContactName: string;
+    enrichedContactTitle: string;
+    enrichedEmail: string;
+    enrichedEmailStatus: string;
+    enrichedPhone: string;
+    enrichedSource: string;
+    enrichmentNotes: string;
+    modelRouteUsed: string;
+    confidenceScore: number;
+    requiresApproval: boolean;
+    lastProcessedAt?: string;
+    updatedAt?: string;
+  }>;
+  latestWeeklyReport: WeeklyReportRecord | null;
+  internalNotes: Array<{
+    id: string;
+    note: string;
+    createdByName: string;
+    createdByRole: string;
+    createdAt?: string;
+  }>;
+}
+
 export type LeadQualification = "review" | "warm" | "hot" | "not_qualified";
+export type LeadWorkflowStatus =
+  | "new"
+  | "reviewed"
+  | "contacted"
+  | "interested"
+  | "not_interested"
+  | "follow_up"
+  | "meeting_booked"
+  | "converted"
+  | "rejected";
 export type CampaignLifecycleStatus = "active" | "paused" | "completed" | "draft";
 export type CampaignApprovalStatus = "pending" | "approved" | "rejected" | "none";
-export type RequestCategory = (typeof REQUEST_CATEGORIES)[number];
-export type ClientVisibleRequestStatus = (typeof CLIENT_VISIBLE_REQUEST_STATUSES)[number];
+export type RequestCategory =
+  | "new_campaign"
+  | "campaign_change"
+  | "lead_question"
+  | "outreach_draft"
+  | "support_issue";
+export type RequestVisibleStatus =
+  | "submitted"
+  | "under_review"
+  | "in_progress"
+  | "waiting_on_you"
+  | "completed"
+  | "rejected";
+
+export interface LeadUserSummary {
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface LeadActivityRecord {
+  id: string;
+  type: "status_change" | "comment" | "activity";
+  status?: string;
+  comment?: string;
+  message: string;
+  createdAt?: string;
+  userName?: string;
+  userEmail?: string;
+  userRole?: string;
+}
 
 export interface LeadRecord {
   id: string;
@@ -85,7 +543,13 @@ export interface LeadRecord {
   industry: string;
   location: string;
   email: string;
+  phone: string;
+  website: string;
+  domain: string;
+  linkedinUrl: string;
+  companyLinkedin: string;
   qualification: LeadQualification;
+  status: string;
   campaignName: string;
   createdAt?: string;
 }
@@ -118,69 +582,45 @@ export interface ReportRecord {
   createdAt?: string;
 }
 
-export interface AgentRequestRecord {
+export interface RequestReplyRecord {
   id: string;
-  category: RequestCategory;
-  title: string;
-  message: string;
-  status: ClientVisibleRequestStatus;
-  createdAt?: string;
-  updatedAt?: string;
-  createdByName?: string;
-  createdByEmail?: string;
-  createdByRole?: string;
-  latestReply?: string;
-  relatedLeadId?: string;
-  relatedCampaignId?: string;
-  replies: AgentRequestReplyRecord[];
-}
-
-export interface AgentRequestReplyRecord {
-  id: string;
+  type: "message" | "reply" | "status_update" | "activity";
   message: string;
   createdAt?: string;
   authorName?: string;
+  authorEmail?: string;
   authorRole?: string;
+  status?: string;
 }
 
-export interface RequestsResponse {
-  ok: boolean;
-  client: ApiClientSummary;
-  count: number;
-  requests: unknown[];
-}
-
-export interface RequestDetailResponse {
-  ok: boolean;
-  client: ApiClientSummary;
-  request: unknown;
-}
-
-export interface CreateRequestInput {
-  category: RequestCategory;
-  title?: string;
+export interface RequestHistoryRecord {
+  id: string;
+  category: string;
+  title: string;
   message: string;
-  related_lead_id?: string | null;
-  related_campaign_id?: string | null;
-  created_by_name: string;
-  created_by_email: string;
-  created_by_role: string;
+  clientVisibleStatus: string;
+  createdAt?: string;
+  createdByName?: string;
+  createdByEmail?: string;
+  createdByRole?: string;
+  latestReply: string | null;
+  latestReplyAt?: string;
 }
 
-async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${LEADS_API_BASE_URL}${path}`;
+export interface RequestDetailRecord extends RequestHistoryRecord {
+  replies: RequestReplyRecord[];
+}
+
+// Exported (additive only - purely adding visibility, no behavior change)
+// so the new sequences/contacts-import/ai-health API modules can reuse the
+// exact same fetch/auth/error-handling path instead of duplicating it.
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const url = buildApiUrl(path);
   let response: Response;
-  const headers = new Headers(init?.headers);
-  headers.set("Accept", "application/json");
-
-  if (init?.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
   try {
     response = await fetch(url, {
       ...init,
-      headers,
+      headers: buildHeaders(init.headers, init.body !== undefined),
     });
   } catch (e: any) {
     const msg = `Leads API network error at ${url}: ${e?.message ?? String(e)}`;
@@ -190,56 +630,333 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let detail = "";
-    try { detail = (await response.text()).slice(0, 500); } catch { /* ignore */ }
-    const msg = `Leads API ${response.status} at ${url}${detail ? ` — ${detail}` : ""}`;
+    try {
+      const raw = await response.text();
+      detail = extractApiErrorMessage(raw) || raw.slice(0, 500);
+    } catch {
+      /* ignore */
+    }
+    const msg = detail || `Leads API request failed (${response.status}).`;
     if (IS_DEV) console.error(msg);
     throw new Error(msg);
   }
 
-  return response.json() as Promise<T>;
+  let text = "";
+  try {
+    text = await response.text();
+  } catch (e: any) {
+    const msg = `Leads API unreadable response at ${url}: ${e?.message ?? String(e)}`;
+    if (IS_DEV) console.error(msg, e);
+    throw new Error(msg);
+  }
+
+  try {
+    return (text ? JSON.parse(text) : {}) as T;
+  } catch (e: any) {
+    const snippet = text.slice(0, 500);
+    const msg = `Leads API invalid JSON at ${url}${snippet ? ` — ${snippet}` : ""}`;
+    if (IS_DEV) console.error(msg, e);
+    throw new Error(msg);
+  }
 }
 
 async function apiGet<T>(path: string): Promise<T> {
   return apiRequest<T>(path);
 }
 
-async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  return apiRequest<T>(path, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
 export function getDashboard() {
-  return apiGet<DashboardResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(
+    normalizeDashboardResponse,
+  );
 }
 
 export function getLeads() {
-  return apiGet<LeadsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/leads`).then(normalizeLeadsResponse);
 }
 
 export function getCampaigns() {
-  return apiGet<CampaignsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/campaigns`).then(
+    normalizeCampaignsResponse,
+  );
 }
 
 export function getReports() {
-  return apiGet<ReportsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reports`).then(
+    normalizeReportsResponse,
+  );
 }
 
 export function getRequests() {
-  return apiGet<RequestsResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`);
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`).then(
+    normalizeRequestsResponse,
+  );
 }
 
 export function getRequestDetail(requestId: string) {
-  return apiGet<RequestDetailResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests/${requestId}`);
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/requests/${encodeURIComponent(requestId)}`,
+  ).then(normalizeRequestDetail);
 }
 
-export function createRequest(input: CreateRequestInput) {
-  return apiPost<RequestDetailResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`, input);
+export function getLeadAgentSummary() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/lead-agent`).then(
+    normalizeLeadAgentSummary,
+  );
+}
+
+export function getOutreachRenderPreview(queueItemId: string) {
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/outreach-queue/${encodeURIComponent(queueItemId)}/render-preview`,
+  ).then(normalizeOutreachRenderPreviewResponse);
+}
+
+export function getConversations() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/conversations`).then((value) => {
+    const record = asRecord(value);
+    return asArray(record.conversations).map((item, index) => normalizeConversation(item, index));
+  });
+}
+
+export function getConversationDetail(conversationId: string) {
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}`,
+  ).then((value) => normalizeConversation(asRecord(asRecord(value).conversation)));
+}
+
+export function createReplyDraft(conversationId: string) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/conversations/${encodeURIComponent(conversationId)}/reply-drafts`,
+    {
+      method: "POST",
+    },
+  ).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+}
+
+export function updateReplyDraft(
+  draftId: string,
+  input: { status: string; approval_note?: string },
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/reply-drafts/${encodeURIComponent(draftId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  ).then((value) => normalizeReplyDraft(asRecord(asRecord(value).reply_draft)));
+}
+
+export function getAgentTraining() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/agent-training`).then((value) => {
+    const record = asRecord(value);
+    return asArray(record.entries).map((item, index) => normalizeAgentTrainingEntry(item, index));
+  });
+}
+
+export function createAgentTrainingEntry(input: {
+  category: string;
+  title?: string;
+  content: string;
+  visibility?: string;
+  status?: string;
+  applies_to?: string;
+}) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/agent-training`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
+}
+
+export function updateAgentTrainingEntry(
+  entryId: string,
+  input: {
+    title?: string;
+    content?: string;
+    status?: string;
+    visibility?: string;
+    applies_to?: string;
+  },
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/agent-training/${encodeURIComponent(entryId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  ).then((value) => normalizeAgentTrainingEntry(asRecord(asRecord(value).entry)));
+}
+
+export function startMailboxOAuth(mailboxId: string) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/mailboxes/${encodeURIComponent(mailboxId)}/oauth/google/start`,
+    {
+      method: "POST",
+    },
+  ).then(normalizeMailboxOAuthStartResponse);
+}
+
+export function startMicrosoftReplySyncOAuth() {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-sync/microsoft/start`, {
+    method: "POST",
+  }).then(normalizeMailboxOAuthStartResponse);
+}
+
+export function getMicrosoftReplySyncStatus() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/reply-sync/microsoft/status`).then(
+    normalizeMicrosoftReplySyncStatus,
+  );
+}
+
+export function getEnrichmentApprovals() {
+  return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals`).then((value) => {
+    const record = asRecord(value);
+    return asArray(record.enrichment_approvals).map((item, index) =>
+      normalizeEnrichmentCreditApproval(item, index),
+    );
+  });
+}
+
+export function createMission(input: {
+  title: string;
+  instruction: string;
+  assigned_worker_type?: string;
+  campaign_id?: string;
+}) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/missions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((value) => normalizeMission(asRecord(asRecord(value).mission)));
+}
+
+export function decideApproval(
+  approvalId: string,
+  input: { decision: "approved" | "rejected"; decision_note?: string },
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/approvals/${encodeURIComponent(approvalId)}/decision`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ).then((value) => normalizeApproval(asRecord(asRecord(value).approval)));
+}
+
+export function decideEnrichmentCreditApproval(
+  queueItemId: string,
+  input: { decision: "approved" | "rejected"; decision_note?: string },
+) {
+  const action = input.decision === "approved" ? "approve" : "decline";
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/enrichment-approvals/${encodeURIComponent(queueItemId)}/${action}`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ).then((value) =>
+    normalizeEnrichmentCreditApproval(asRecord(asRecord(value).enrichment_queue_item)),
+  );
+}
+
+export function createRequest(input: {
+  category: string;
+  title: string;
+  message: string;
+  created_by_name: string;
+  created_by_email: string;
+  created_by_role: string;
+}) {
+  return apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/requests`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then(normalizeRequestDetail);
+}
+
+export function updateLeadStatus(
+  leadId: string,
+  status: LeadWorkflowStatus,
+  user: LeadUserSummary,
+) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status,
+        updated_by_name: user.name,
+        updated_by_email: user.email,
+      }),
+    },
+  ).then((value) => normalizeLeadStatus(getActivityStatus(value)) || status);
+}
+
+export function addLeadComment(leadId: string, comment: string, user: LeadUserSummary) {
+  return apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        comment,
+        created_by_name: user.name,
+        created_by_email: user.email,
+        visibility: "client",
+      }),
+    },
+  ).then(normalizeLeadActivityRecord);
+}
+
+export function getLeadActivity(leadId: string) {
+  return apiGet<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/leads/${encodeURIComponent(leadId)}/activity`,
+  ).then(normalizeLeadActivityResponse);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeNullableRecord<T>(value: unknown, normalizer: (value: unknown) => T): T | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  return normalizer(value);
+}
+
+function resolveApiBaseUrl(value: string): string {
+  const trimmed = value.replace(/\/+$/, "");
+  if (!trimmed) return "https://api.intergrai.co.za";
+  if (trimmed.startsWith("/")) return "https://api.intergrai.co.za";
+
+  try {
+    return new URL(trimmed).toString().replace(/\/+$/, "");
+  } catch {
+    try {
+      return new URL(`https://${trimmed}`).toString().replace(/\/+$/, "");
+    } catch {
+      return "https://api.intergrai.co.za";
+    }
+  }
+}
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${LEADS_API_BASE_URL}${normalizedPath}`;
+}
+
+function buildHeaders(headers: HeadersInit | undefined, hasBody: boolean): Headers {
+  const next = new Headers(headers);
+  if (!next.has("Accept")) next.set("Accept", "application/json");
+  if (hasBody && !next.has("Content-Type")) next.set("Content-Type", "application/json");
+
+  const authToken = getStoredAuthToken();
+  if (authToken && !next.has("Authorization")) {
+    next.set("Authorization", `Bearer ${authToken}`);
+  }
+
+  return next;
 }
 
 function pickString(record: Record<string, unknown>, keys: string[]): string | undefined {
@@ -254,8 +971,339 @@ function pickNumber(record: Record<string, unknown>, keys: string[]): number | u
   for (const key of keys) {
     const value = record[key];
     if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
   }
   return undefined;
+}
+
+function pickBoolean(record: Record<string, unknown>, keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") return value;
+  }
+  return undefined;
+}
+
+function normalizeCount(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function normalizeTimestamp(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return Number.isNaN(Date.parse(trimmed)) ? undefined : trimmed;
+}
+
+function normalizeLeadStatus(value: unknown): LeadWorkflowStatus | undefined {
+  if (typeof value !== "string") return undefined;
+
+  switch (value.trim().toLowerCase()) {
+    case "new":
+    case "reviewed":
+    case "contacted":
+    case "interested":
+    case "not_interested":
+    case "follow_up":
+    case "meeting_booked":
+    case "converted":
+    case "rejected":
+      return value.trim().toLowerCase() as LeadWorkflowStatus;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeClientSummary(value: unknown): ApiClientSummary {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || INTERGRAI_CLIENT_SLUG,
+    slug: pickString(record, ["slug"]) || INTERGRAI_CLIENT_SLUG,
+    name:
+      pickString(record, ["name", "client_name", "clientName"]) || "Expert Technology Solutions",
+    domain: pickString(record, ["domain", "website", "url"]),
+    status: pickString(record, ["status"]) || "unknown",
+    client_agent_name: pickString(record, ["client_agent_name", "clientAgentName"]),
+    created_at: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeDashboardResponse(value: unknown): DashboardResponse {
+  const record = asRecord(value);
+  const campaignCounts = asRecord(record.campaign_counts);
+  const leadCounts = asRecord(record.lead_counts);
+  const normalizedCampaignActive = normalizeCount(campaignCounts.active);
+  const normalizedCampaignDraft = normalizeCount(campaignCounts.draft);
+  const normalizedCampaignTotal = normalizeCount(campaignCounts.total);
+  const normalizedLeadHot = normalizeCount(leadCounts.hot);
+  const normalizedLeadWarm = normalizeCount(leadCounts.warm);
+  const normalizedLeadReview = normalizeCount(leadCounts.review);
+  const normalizedLeadNotQualified = normalizeCount(
+    leadCounts.not_qualified ?? leadCounts.notQualified,
+  );
+  const normalizedLeadTotal = normalizeCount(leadCounts.total);
+
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    campaign_counts: {
+      total: normalizedCampaignTotal || normalizedCampaignActive + normalizedCampaignDraft,
+      active: normalizedCampaignActive,
+      draft: normalizedCampaignDraft,
+    },
+    lead_counts: {
+      total:
+        normalizedLeadTotal ||
+        normalizedLeadHot + normalizedLeadWarm + normalizedLeadReview + normalizedLeadNotQualified,
+      hot: normalizedLeadHot,
+      warm: normalizedLeadWarm,
+      review: normalizedLeadReview,
+      not_qualified: normalizedLeadNotQualified,
+    },
+    recent_leads: asArray(record.recent_leads),
+    pending_approvals: asArray(record.pending_approvals),
+    recent_reports: asArray(record.recent_reports),
+  };
+}
+
+function normalizeLeadsResponse(value: unknown): LeadsResponse {
+  if (Array.isArray(value)) {
+    return {
+      ok: true,
+      client: normalizeClientSummary({}),
+      count: value.length,
+      leads: value,
+    };
+  }
+
+  const record = asRecord(value);
+  const nestedData = asRecord(record.data);
+  const directLeads = asArray(record.leads);
+  const directItems = asArray(record.items);
+  const directResults = asArray(record.results);
+  const directRows = asArray(record.rows);
+  const nestedLeads = asArray(nestedData.leads);
+  const nestedDataArray = asArray(record.data);
+  const leads = directLeads.length
+    ? directLeads
+    : directItems.length
+      ? directItems
+      : directResults.length
+        ? directResults
+        : directRows.length
+          ? directRows
+          : nestedLeads.length
+            ? nestedLeads
+            : nestedDataArray;
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client ?? nestedData.client),
+    count: normalizeCount(record.count) || leads.length,
+    leads,
+  };
+}
+
+function normalizeCampaignsResponse(value: unknown): CampaignsResponse {
+  const record = asRecord(value);
+  const campaigns = asArray(record.campaigns);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    count: normalizeCount(record.count) || campaigns.length,
+    campaigns,
+  };
+}
+
+function normalizeLeadAgentSummary(value: unknown): LeadAgentSummary {
+  const record = asRecord(value);
+  const pipelineRecord = asRecord(record.lead_pipeline_counts);
+  const rawLeadStatusRecord = asRecord(record.raw_leads_by_status);
+  const enrichmentQueueStatusRecord = asRecord(record.enrichment_queue_by_status);
+  const pipelineEntries = Object.entries(pipelineRecord).map(([stage, count]) => ({
+    stage,
+    count: normalizeCount(count),
+  }));
+  const rawLeadStatusEntries = Object.entries(rawLeadStatusRecord).map(([status, count]) => ({
+    status,
+    count: normalizeCount(count),
+  }));
+  const enrichmentQueueStatusEntries = Object.entries(enrichmentQueueStatusRecord).map(
+    ([status, count]) => ({
+      status,
+      count: normalizeCount(count),
+    }),
+  );
+  const usageSummary = asRecord(record.enrichment_usage_summary);
+  const budgetSummary = asRecord(record.enrichment_budget_summary);
+
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    agent: normalizeAgentRecord(record.agent),
+    activeMissions: asArray(record.active_missions).map((item, index) =>
+      normalizeMission(item, index),
+    ),
+    openRequests: asArray(record.open_requests).map((item, index) =>
+      normalizeRequestHistory(item, index),
+    ),
+    campaigns: asArray(record.campaigns).map((item, index) => normalizeCampaign(item, index)),
+    leadPipelineCounts: pipelineEntries.sort((a, b) => a.stage.localeCompare(b.stage)),
+    rawLeadsCount: normalizeCount(record.raw_leads_count),
+    rawLeadStatusCounts: rawLeadStatusEntries.sort((a, b) => a.status.localeCompare(b.status)),
+    enrichmentQueueCount: normalizeCount(record.enrichment_queue_count),
+    enrichmentQueueStatusCounts: enrichmentQueueStatusEntries.sort((a, b) =>
+      a.status.localeCompare(b.status),
+    ),
+    enrichmentUsageSummary: {
+      apolloAttempted: normalizeCount(
+        usageSummary.apollo_attempted ?? usageSummary.apolloAttempted,
+      ),
+      hunterAttempted: normalizeCount(
+        usageSummary.hunter_attempted ?? usageSummary.hunterAttempted,
+      ),
+      apolloUsed: normalizeCount(usageSummary.apollo_used ?? usageSummary.apolloUsed),
+      hunterUsed: normalizeCount(usageSummary.hunter_used ?? usageSummary.hunterUsed),
+    },
+    enrichmentBudgetSummary: {
+      apolloMonthlyLimit: normalizeCount(
+        budgetSummary.apollo_monthly_limit ?? budgetSummary.apolloMonthlyLimit,
+      ),
+      apolloUsed: normalizeCount(budgetSummary.apollo_used ?? budgetSummary.apolloUsed),
+      apolloRemaining: normalizeCount(
+        budgetSummary.apollo_remaining ?? budgetSummary.apolloRemaining,
+      ),
+      hunterMonthlyLimit: normalizeCount(
+        budgetSummary.hunter_monthly_limit ?? budgetSummary.hunterMonthlyLimit,
+      ),
+      hunterUsed: normalizeCount(budgetSummary.hunter_used ?? budgetSummary.hunterUsed),
+      hunterRemaining: normalizeCount(
+        budgetSummary.hunter_remaining ?? budgetSummary.hunterRemaining,
+      ),
+    },
+    outreachTemplates: asArray(record.outreach_templates).map((item, index) =>
+      normalizeOutreachTemplate(item, index),
+    ),
+    followupSequences: asArray(record.followup_sequences).map((item, index) =>
+      normalizeFollowupSequence(item, index),
+    ),
+    outreachQueueCount: normalizeCount(record.outreach_queue_count),
+    outreachQueueStatusCounts: Object.entries(asRecord(record.outreach_queue_by_status))
+      .map(([status, count]) => ({
+        status,
+        count: normalizeCount(count),
+      }))
+      .sort((a, b) => a.status.localeCompare(b.status)),
+    outreachQueue: asArray(record.outreach_queue).map((item, index) =>
+      normalizeOutreachQueueItem(item, index),
+    ),
+    verifiedContactsCount: normalizeCount(record.verified_contacts_count),
+    outreachPlannedCount: normalizeCount(record.outreach_planned_count),
+    sendReadyCount: normalizeCount(record.send_ready_count),
+    waitingForMailboxCount: normalizeCount(record.waiting_for_mailbox_count),
+    outreachBlockers: asArray(record.outreach_blockers).map((item, index) =>
+      normalizeOutreachBlocker(item, index),
+    ),
+    verifiedContactsWaitingForOutreach: asArray(record.verified_contacts_waiting_for_outreach).map(
+      (item, index) => normalizeVerifiedContactPlanning(item, index),
+    ),
+    mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "disconnected",
+    mailboxConnected: pickBoolean(record, ["mailbox_connected", "mailboxConnected"]) ?? false,
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    sendReady: pickBoolean(record, ["send_ready", "sendReady"]) ?? false,
+    mailboxFromName: pickString(record, ["mailbox_from_name", "mailboxFromName"]) || "",
+    mailboxFromEmail: pickString(record, ["mailbox_from_email", "mailboxFromEmail"]) || "",
+    mailboxProviderType: pickString(record, ["mailbox_provider_type", "mailboxProviderType"]) || "",
+    mailboxDailySendLimit: pickNumber(record, [
+      "mailbox_daily_send_limit",
+      "mailboxDailySendLimit",
+    ]),
+    mailboxMonthlySendLimit: pickNumber(record, [
+      "mailbox_monthly_send_limit",
+      "mailboxMonthlySendLimit",
+    ]),
+    mailboxSentToday: normalizeCount(record.mailbox_sent_today ?? record.mailboxSentToday),
+    mailboxSentThisMonth: normalizeCount(
+      record.mailbox_sent_this_month ?? record.mailboxSentThisMonth,
+    ),
+    mailboxLastError: pickString(record, ["mailbox_last_error", "mailboxLastError"]) || "",
+    mailboxLastHealthCheckAt: normalizeTimestamp(
+      record.mailbox_last_health_check_at ?? record.mailboxLastHealthCheckAt,
+    ),
+    mailboxReadinessBlockers: asArray(record.mailbox_readiness_blockers).map((item, index) =>
+      normalizeOutreachBlocker(item, index),
+    ),
+    mailboxConnectionCheck: normalizeMailboxConnectionCheck(
+      record.mailbox_connection_check ?? record.mailboxConnectionCheck,
+    ),
+    renderPreviewAvailableCount: normalizeCount(
+      record.render_preview_available_count ?? record.renderPreviewAvailableCount,
+    ),
+    mailboxes: asArray(record.mailboxes).map((item, index) => normalizeMailbox(item, index)),
+    approvalsWaiting: normalizeCount(record.approvals_waiting),
+    approvals: asArray(record.approvals).map((item, index) => normalizeApproval(item, index)),
+    pendingEnrichmentCreditApprovals: asArray(record.pending_enrichment_credit_approvals).map(
+      (item, index) => normalizeEnrichmentCreditApproval(item, index),
+    ),
+    latestQualificationActions: asArray(record.latest_qualification_actions).map((item, index) =>
+      normalizeQualificationAction(item, index),
+    ),
+    latestEnrichmentActions: asArray(record.latest_enrichment_actions).map((item, index) =>
+      normalizeEnrichmentAction(item, index),
+    ),
+    latestWeeklyReport: normalizeWeeklyReport(record.latest_weekly_report),
+    internalNotes: asArray(record.internal_notes).map((item, index) =>
+      normalizeInternalNote(item, index),
+    ),
+  };
+}
+
+function normalizeReportsResponse(value: unknown): ReportsResponse {
+  const record = asRecord(value);
+  const reports = asArray(record.reports);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client),
+    count: normalizeCount(record.count) || reports.length,
+    reports,
+  };
+}
+
+function normalizeRequestsResponse(value: unknown): RequestsResponse {
+  if (Array.isArray(value)) {
+    return {
+      ok: true,
+      client: normalizeClientSummary({}),
+      count: value.length,
+      requests: value,
+    };
+  }
+
+  const record = asRecord(value);
+  const nestedData = asRecord(record.data);
+  const requests = asArray(record.requests).length
+    ? asArray(record.requests)
+    : asArray(record.items).length
+      ? asArray(record.items)
+      : asArray(record.results).length
+        ? asArray(record.results)
+        : asArray(nestedData.requests).length
+          ? asArray(nestedData.requests)
+          : asArray(record.data);
+
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    client: normalizeClientSummary(record.client ?? nestedData.client),
+    count: normalizeCount(record.count) || requests.length,
+    requests,
+  };
 }
 
 function mapQualification(value?: string): LeadQualification {
@@ -304,35 +1352,20 @@ function mapApprovalStatus(value?: string): CampaignApprovalStatus {
   }
 }
 
-function mapRequestCategory(value?: string): RequestCategory {
-  switch ((value || "").toLowerCase()) {
-    case "new_campaign":
-    case "campaign_change":
-    case "lead_question":
-    case "outreach_draft":
-    case "support_issue":
-      return value!.toLowerCase() as RequestCategory;
-    default:
-      return "lead_question";
-  }
-}
-
-function mapRequestStatus(value?: string): ClientVisibleRequestStatus {
-  switch ((value || "").toLowerCase()) {
-    case "submitted":
-    case "under_review":
-    case "in_progress":
-    case "waiting_on_you":
-    case "completed":
-    case "rejected":
-      return value!.toLowerCase() as ClientVisibleRequestStatus;
-    default:
-      return "submitted";
-  }
-}
-
 export function normalizeLead(value: unknown, index = 0): LeadRecord {
   const record = asRecord(value);
+  const normalizedStatus =
+    normalizeLeadStatus(
+      pickString(record, [
+        "status",
+        "lead_status",
+        "leadStatus",
+        "workflow_status",
+        "workflowStatus",
+      ]),
+    ) ||
+    normalizeLeadStatus(pickString(record, ["qualification"])) ||
+    "new";
   const firstName = pickString(record, ["first_name", "firstName"]);
   const lastName = pickString(record, ["last_name", "lastName"]);
   const name =
@@ -349,16 +1382,27 @@ export function normalizeLead(value: unknown, index = 0): LeadRecord {
   return {
     id: pickString(record, ["id", "_id"]) || `lead-${index}`,
     name,
-    company: pickString(record, ["company", "company_name", "companyName"]) || "Unknown company",
-    title: pickString(record, ["title", "job_title", "jobTitle", "role"]) || "Unknown title",
-    industry: pickString(record, ["industry", "target_niche", "targetNiche"]) || "Unknown industry",
-    location: location || "Unknown location",
+    company: pickString(record, ["company", "company_name", "companyName"]) || "",
+    title: pickString(record, ["title", "job_title", "jobTitle", "role"]) || "",
+    industry: pickString(record, ["industry", "target_niche", "targetNiche"]) || "",
+    location: location || "",
     email: pickString(record, ["email"]) || "",
-    qualification: mapQualification(
-      pickString(record, ["qualification", "status", "lead_status", "leadStatus"]),
-    ),
+    phone: pickString(record, ["phone", "phone_number", "phoneNumber", "mobile"]) || "",
+    website: pickString(record, ["website", "url"]) || "",
+    domain: pickString(record, ["domain"]) || "",
+    linkedinUrl: pickString(record, ["linkedin_url", "linkedinUrl"]) || "",
+    companyLinkedin: pickString(record, ["company_linkedin", "companyLinkedin"]) || "",
+    qualification: mapQualification(pickString(record, ["qualification"]) || normalizedStatus),
+    status:
+      pickString(record, [
+        "status",
+        "lead_status",
+        "leadStatus",
+        "workflow_status",
+        "workflowStatus",
+      ]) || normalizedStatus,
     campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
-    createdAt: pickString(record, ["created_at", "createdAt"]),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
 }
 
@@ -373,8 +1417,8 @@ export function normalizeCampaign(value: unknown, index = 0): CampaignRecord {
     targetLocation: pickString(record, ["target_location", "targetLocation"]) || "Not specified",
     objective: pickString(record, ["objective", "goal"]) || "No objective provided yet.",
     leadCount: pickNumber(record, ["lead_count", "leadCount"]),
-    createdAt: pickString(record, ["created_at", "createdAt"]),
-    updatedAt: pickString(record, ["updated_at", "updatedAt"]),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
   };
 }
 
@@ -389,85 +1433,6 @@ export function normalizePendingApproval(value: unknown, index = 0): PendingAppr
   };
 }
 
-export function normalizeRequestReply(value: unknown, index = 0): AgentRequestReplyRecord {
-  const record = asRecord(value);
-  return {
-    id: pickString(record, ["id", "_id"]) || `reply-${index}`,
-    message:
-      pickString(record, ["message", "body", "content", "reply_text", "replyText"]) ||
-      "No reply message available.",
-    createdAt: pickString(record, ["created_at", "createdAt"]),
-    authorName: pickString(record, ["author_name", "authorName", "created_by_name", "createdByName"]),
-    authorRole: pickString(record, ["author_role", "authorRole", "created_by_role", "createdByRole"]),
-  };
-}
-
-function collectReplyCandidates(record: Record<string, unknown>) {
-  const candidateKeys = [
-    "replies",
-    "reply_history",
-    "client_visible_replies",
-    "client_visible_updates",
-    "updates",
-    "messages",
-    "public_updates",
-    "timeline",
-    "acknowledgements",
-  ] as const;
-
-  const items: unknown[] = [];
-  for (const key of candidateKeys) {
-    const value = record[key];
-    if (Array.isArray(value)) items.push(...value);
-  }
-
-  const latestReply = record.latest_reply;
-  if (Array.isArray(latestReply)) items.push(...latestReply);
-  else if (latestReply) items.push(latestReply);
-
-  const acknowledgement =
-    record.acknowledgement || record.acknowledgment || record.auto_acknowledgement || record.auto_acknowledgment;
-  if (Array.isArray(acknowledgement)) items.push(...acknowledgement);
-  else if (acknowledgement) items.push(acknowledgement);
-
-  return items;
-}
-
-export function normalizeRequest(value: unknown, index = 0): AgentRequestRecord {
-  const record = asRecord(value);
-  const replies = collectReplyCandidates(record)
-    .map((reply, replyIndex) => normalizeRequestReply(reply, replyIndex))
-    .filter((reply, replyIndex, collection) => {
-      const key = `${reply.id}:${reply.message}:${reply.createdAt || ""}`;
-      return collection.findIndex((candidate) => `${candidate.id}:${candidate.message}:${candidate.createdAt || ""}` === key) === replyIndex;
-    });
-  const latestReplyRecord = replies[0];
-  const category = mapRequestCategory(pickString(record, ["category", "request_type", "requestType"]));
-  const message =
-    pickString(record, ["message", "details", "description", "body", "content"]) ||
-    "No request details provided.";
-
-  return {
-    id: pickString(record, ["id", "_id", "request_id", "requestId"]) || `request-${index}`,
-    category,
-    title:
-      pickString(record, ["title", "subject", "request_title", "requestTitle"]) ||
-      message.slice(0, 72).trim() ||
-      category.replace(/_/g, " "),
-    message,
-    status: mapRequestStatus(pickString(record, ["client_visible_status", "status", "clientStatus"])),
-    createdAt: pickString(record, ["created_at", "createdAt"]),
-    updatedAt: pickString(record, ["updated_at", "updatedAt"]),
-    createdByName: pickString(record, ["created_by_name", "createdByName"]),
-    createdByEmail: pickString(record, ["created_by_email", "createdByEmail"]),
-    createdByRole: pickString(record, ["created_by_role", "createdByRole"]),
-    latestReply: latestReplyRecord?.message || pickString(record, ["latest_reply_text", "latestReplyText"]),
-    relatedLeadId: pickString(record, ["related_lead_id", "relatedLeadId", "lead_id", "leadId"]),
-    relatedCampaignId: pickString(record, ["related_campaign_id", "relatedCampaignId", "campaign_id", "campaignId"]),
-    replies,
-  };
-}
-
 export function normalizeReport(value: unknown, index = 0): ReportRecord {
   const record = asRecord(value);
   return {
@@ -476,6 +1441,963 @@ export function normalizeReport(value: unknown, index = 0): ReportRecord {
     summary:
       pickString(record, ["summary", "description"]) ||
       "A live report is available for this client.",
-    createdAt: pickString(record, ["created_at", "createdAt"]),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
   };
+}
+
+function normalizeWeeklyReport(value: unknown, index = 0): WeeklyReportRecord | null {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    id: pickString(record, ["id", "_id"]) || `weekly-report-${index}`,
+    title: pickString(record, ["title"]) || "Weekly report",
+    status: pickString(record, ["status"]) || "draft",
+    summary: pickString(record, ["summary"]) || "No summary available.",
+    periodStart: normalizeTimestamp(record.period_start ?? record.periodStart),
+    periodEnd: normalizeTimestamp(record.period_end ?? record.periodEnd),
+    payload: asRecord(record.report_payload ?? record.payload),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeAgentRecord(value: unknown) {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    id: pickString(record, ["id", "_id"]) || "agent",
+    name: pickString(record, ["name"]) || "Expert Lead Agent",
+    status: pickString(record, ["status"]) || "unknown",
+    roleScope: pickString(record, ["role_scope", "roleScope"]) || "client_operator",
+    lastHeartbeatAt: normalizeTimestamp(record.last_heartbeat_at ?? record.lastHeartbeatAt),
+  };
+}
+
+function normalizeMission(value: unknown, index = 0): MissionRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `mission-${index}`,
+    title: pickString(record, ["title"]) || "Untitled mission",
+    instruction: pickString(record, ["instruction", "message"]) || "",
+    status: pickString(record, ["status"]) || "Queued",
+    priority: pickString(record, ["priority"]) || "normal",
+    missionType: pickString(record, ["mission_type", "missionType"]) || "instruction",
+    assignedWorkerType:
+      pickString(record, ["assigned_worker_type", "assignedWorkerType"]) || "Unassigned",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeApproval(value: unknown, index = 0): ApprovalRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `approval-${index}`,
+    entityType: pickString(record, ["entity_type", "entityType"]) || "general",
+    entityId: pickString(record, ["entity_id", "entityId"]) || "",
+    approvalType: pickString(record, ["approval_type", "approvalType"]) || "general",
+    title: pickString(record, ["title"]) || "Approval item",
+    status: pickString(record, ["status"]) || "pending",
+    decisionStatus: pickString(record, ["decision_status", "decisionStatus"]) || "pending",
+    decisionNote: pickString(record, ["decision_note", "decisionNote"]) || "",
+    decidedByName: pickString(record, ["decided_by_name", "decidedByName"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeOutreachTemplateVariant(
+  value: unknown,
+  index = 0,
+): OutreachTemplateVariantRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `template-variant-${index}`,
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    status: pickString(record, ["status"]) || "draft",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
+    bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
+    latestQualityReview: normalizeTemplateQualityReview(
+      record.latest_quality_review ?? record.latestQualityReview,
+    ),
+  };
+}
+
+function normalizeOutreachTemplate(value: unknown, index = 0): OutreachTemplateRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `template-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    name: pickString(record, ["name"]) || "Untitled template",
+    channel: pickString(record, ["channel"]) || "email",
+    templateType: pickString(record, ["template_type", "templateType"]) || "first_contact",
+    status: pickString(record, ["status"]) || "draft",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    subjectTemplate: pickString(record, ["subject_template", "subjectTemplate"]) || "",
+    bodyTemplate: pickString(record, ["body_template", "bodyTemplate"]) || "",
+    variants: asArray(record.variants).map((item, variantIndex) =>
+      normalizeOutreachTemplateVariant(item, variantIndex),
+    ),
+  };
+}
+
+function normalizeFollowupSequence(value: unknown, index = 0): FollowupSequenceRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `followup-sequence-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    name: pickString(record, ["name"]) || "Untitled follow-up sequence",
+    status: pickString(record, ["status"]) || "draft",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    followupCount: normalizeCount(record.followup_count ?? record.followupCount),
+  };
+}
+
+function normalizeOutreachQueueItem(value: unknown, index = 0): OutreachQueueRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `outreach-queue-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    status: pickString(record, ["status"]) || "planned",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "waiting_for_mailbox",
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
+    leadCompanyName: pickString(record, ["lead_company_name", "leadCompanyName"]) || "",
+    rawCompanyName: pickString(record, ["raw_company_name", "rawCompanyName"]) || "",
+    recipientEmail:
+      pickString(record, [
+        "recipient_email",
+        "recipientEmail",
+        "enriched_email",
+        "enrichedEmail",
+        "lead_email",
+        "leadEmail",
+      ]) || "",
+    recipientName:
+      pickString(record, [
+        "recipient_name",
+        "recipientName",
+        "enriched_contact_name",
+        "enrichedContactName",
+        "lead_contact_name",
+        "leadContactName",
+      ]) || "",
+    renderPreviewAvailable:
+      pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
+    blockers: asArray(record.blockers).map((item, blockerIndex) =>
+      normalizeOutreachBlocker(item, blockerIndex),
+    ),
+    latestQualityReview: normalizeTemplateQualityReview(
+      record.latest_quality_review ?? record.latestQualityReview,
+    ),
+    scheduledFor: normalizeTimestamp(record.scheduled_for ?? record.scheduledFor),
+  };
+}
+
+function normalizeTemplateQualityReview(value: unknown): TemplateQualityReviewRecord | null {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    id: pickString(record, ["id", "_id"]) || "",
+    score: normalizeCount(record.score),
+    status: pickString(record, ["status"]) || "needs_review",
+    humanSoundingScore: normalizeCount(record.human_sounding_score ?? record.humanSoundingScore),
+    specificityScore: normalizeCount(record.specificity_score ?? record.specificityScore),
+    salesClarityScore: normalizeCount(record.sales_clarity_score ?? record.salesClarityScore),
+    ctaScore: normalizeCount(record.cta_score ?? record.ctaScore),
+    riskFlags: asArray(record.risk_flags ?? record.riskFlags).map((item) => {
+      const risk = asRecord(item);
+      return {
+        code: pickString(risk, ["code"]) || "unknown",
+        detail: pickString(risk, ["detail"]) || undefined,
+      };
+    }),
+    recommendations: asArray(record.recommendations)
+      .map((item) => String(item || ""))
+      .filter(Boolean),
+    reviewedBy: pickString(record, ["reviewed_by", "reviewedBy"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeConversationMessage(value: unknown, index = 0): ConversationMessageRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `conversation-message-${index}`,
+    conversationId: pickString(record, ["conversation_id", "conversationId"]) || "",
+    outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
+    direction: pickString(record, ["direction"]) || "outbound",
+    provider: pickString(record, ["provider"]) || "other",
+    providerMessageId: pickString(record, ["provider_message_id", "providerMessageId"]) || "",
+    subject: pickString(record, ["subject"]) || "",
+    bodyText: pickString(record, ["body_text", "bodyText"]) || "",
+    fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
+    toEmail: pickString(record, ["to_email", "toEmail"]) || "",
+    status: pickString(record, ["status"]) || "prepared",
+    sentAt: normalizeTimestamp(record.sent_at ?? record.sentAt),
+    receivedAt: normalizeTimestamp(record.received_at ?? record.receivedAt),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    metadata: asRecord(record.metadata),
+  };
+}
+
+function normalizeReplyDraft(value: unknown, index = 0): ReplyDraftRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `reply-draft-${index}`,
+    conversationId: pickString(record, ["conversation_id", "conversationId"]) || "",
+    inboundMessageId: pickString(record, ["inbound_message_id", "inboundMessageId"]) || "",
+    draftSubject: pickString(record, ["draft_subject", "draftSubject"]) || "",
+    draftBody: pickString(record, ["draft_body", "draftBody"]) || "",
+    status: pickString(record, ["status"]) || "drafted",
+    modelRouteUsed: pickString(record, ["model_route_used", "modelRouteUsed"]) || "",
+    approvalNote: pickString(record, ["approval_note", "approvalNote"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+    createdBy: asRecord(record.created_by ?? record.createdBy),
+    trainingContextUsed: asArray(record.training_context_used ?? record.trainingContextUsed).map(
+      (item) => asRecord(item),
+    ),
+    metadata: asRecord(record.metadata),
+  };
+}
+
+function normalizeConversation(value: unknown, index = 0): ConversationRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `conversation-${index}`,
+    outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
+    companyName: pickString(record, ["company_name", "companyName"]) || "",
+    contactName: pickString(record, ["contact_name", "contactName"]) || "",
+    contactEmail: pickString(record, ["contact_email", "contactEmail"]) || "",
+    status: pickString(record, ["status"]) || "prepared",
+    replyStatus: pickString(record, ["reply_status", "replyStatus"]) || "",
+    latestSubject: pickString(record, ["latest_subject", "latestSubject"]) || "",
+    latestSnippet: pickString(record, ["latest_snippet", "latestSnippet"]) || "",
+    messageCount: normalizeCount(record.message_count ?? record.messageCount),
+    previewOnly: pickBoolean(record, ["preview_only", "previewOnly"]) ?? false,
+    lastMessageAt: normalizeTimestamp(record.last_message_at ?? record.lastMessageAt),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+    latestQualityReview: normalizeTemplateQualityReview(
+      record.latest_quality_review ?? record.latestQualityReview,
+    ),
+    latestReplyDraft: normalizeNullableRecord(
+      record.latest_reply_draft ?? record.latestReplyDraft,
+      normalizeReplyDraft,
+    ),
+    replyDrafts: asArray(record.reply_drafts ?? record.replyDrafts).map((item, draftIndex) =>
+      normalizeReplyDraft(item, draftIndex),
+    ),
+    messages: asArray(record.messages).map((item, messageIndex) =>
+      normalizeConversationMessage(item, messageIndex),
+    ),
+  };
+}
+
+function normalizeAgentTrainingEntry(value: unknown, index = 0): AgentTrainingEntryRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `training-entry-${index}`,
+    category: pickString(record, ["category"]) || "client_preference",
+    title: pickString(record, ["title"]) || "Training entry",
+    content: pickString(record, ["content"]) || "",
+    visibility: pickString(record, ["visibility"]) || "client_visible",
+    status: pickString(record, ["status"]) || "active",
+    source: pickString(record, ["source"]) || "manual",
+    appliesTo: pickString(record, ["applies_to", "appliesTo"]) || "all",
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
+    createdByName: pickString(record, ["created_by_name", "createdByName"]) || "",
+    createdByEmail: pickString(record, ["created_by_email", "createdByEmail"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+    metadata: asRecord(record.metadata),
+  };
+}
+
+function normalizeOutreachBlocker(value: unknown, index = 0): OutreachBlockerRecord {
+  const record = asRecord(value);
+  return {
+    code: pickString(record, ["code"]) || `blocker-${index}`,
+    count: pickNumber(record, ["count"]),
+    message: pickString(record, ["message"]) || "",
+  };
+}
+
+function normalizeMailbox(value: unknown, index = 0): MailboxRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `mailbox-${index}`,
+    mailboxName: pickString(record, ["mailbox_name", "mailboxName"]) || "Untitled mailbox",
+    fromName: pickString(record, ["from_name", "fromName"]) || "",
+    fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
+    providerType: pickString(record, ["provider_type", "providerType"]) || "other",
+    connectionStatus:
+      pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    dailySendLimit: pickNumber(record, ["daily_send_limit", "dailySendLimit"]),
+    monthlySendLimit: pickNumber(record, ["monthly_send_limit", "monthlySendLimit"]),
+    sentToday: normalizeCount(record.sent_today ?? record.sentToday),
+    sentThisMonth: normalizeCount(record.sent_this_month ?? record.sentThisMonth),
+    lastHealthCheckAt: normalizeTimestamp(record.last_health_check_at ?? record.lastHealthCheckAt),
+    lastError: pickString(record, ["last_error", "lastError"]) || "",
+  };
+}
+
+function normalizeMailboxConnectionCheck(value: unknown): MailboxConnectionCheck | null {
+  const record = asRecord(value);
+  if (!Object.keys(record).length) return null;
+
+  return {
+    providerType: pickString(record, ["provider_type", "providerType"]) || "",
+    configured: pickBoolean(record, ["configured"]) ?? false,
+    configurationMode: pickString(record, ["configuration_mode", "configurationMode"]) || "",
+    connected: pickBoolean(record, ["connected"]) ?? false,
+    connectionStatus:
+      pickString(record, ["connection_status", "connectionStatus"]) || "not_connected",
+    apiKeyConfigured: pickBoolean(record, ["api_key_configured", "apiKeyConfigured"]) ?? undefined,
+    oauthConfigured: pickBoolean(record, ["oauth_configured", "oauthConfigured"]) ?? undefined,
+    encryptionReady: pickBoolean(record, ["encryption_ready", "encryptionReady"]) ?? undefined,
+    credentialsStored:
+      pickBoolean(record, ["credentials_stored", "credentialsStored"]) ?? undefined,
+    expectedMailbox: pickString(record, ["expected_mailbox", "expectedMailbox"]) || "",
+    signedInMailbox: pickString(record, ["signed_in_mailbox", "signedInMailbox"]) || "",
+    signedInUser: pickString(record, ["signed_in_user", "signedInUser"]) || "",
+    senderStatus: pickString(record, ["sender_status", "senderStatus"]) || "",
+    senderVerified: pickBoolean(record, ["sender_verified", "senderVerified"]) ?? undefined,
+    defaultFromDomain: pickString(record, ["default_from_domain", "defaultFromDomain"]) || "",
+    checkedAt: normalizeTimestamp(record.checked_at ?? record.checkedAt),
+    blockers: asArray(record.blockers).map((item, index) => normalizeOutreachBlocker(item, index)),
+  };
+}
+
+function normalizeMicrosoftReplySyncStatus(value: unknown): MicrosoftReplySyncStatusRecord {
+  const record = asRecord(value);
+  const mailbox = asRecord(record.mailbox);
+  const connectionCheck = normalizeMailboxConnectionCheck(
+    record.connection_check ?? record.connectionCheck,
+  );
+
+  return {
+    mailboxId: pickString(mailbox, ["id", "_id"]) || "",
+    mailboxName:
+      pickString(mailbox, ["mailbox_name", "mailboxName"]) || "Microsoft reply sync mailbox",
+    mailboxEmail:
+      pickString(mailbox, ["from_email", "fromEmail"]) || (connectionCheck?.expectedMailbox ?? ""),
+    providerType:
+      pickString(record, ["provider_type", "providerType"]) ||
+      pickString(mailbox, ["provider_type", "providerType"]) ||
+      "microsoft",
+    connectionStatus:
+      pickString(record, ["connection_status", "connectionStatus"]) ||
+      connectionCheck?.connectionStatus ||
+      "not_connected",
+    connected: pickBoolean(connectionCheck, ["connected"]) ?? false,
+    configured: pickBoolean(connectionCheck, ["oauthConfigured"]) ?? false,
+    credentialsStored: pickBoolean(connectionCheck, ["credentialsStored"]) ?? false,
+    signedInMailbox: connectionCheck?.signedInMailbox || "",
+    signedInUser: connectionCheck?.signedInUser || "",
+    blockers: connectionCheck?.blockers || [],
+  };
+}
+
+function normalizeMailboxOAuthStartResponse(value: unknown): MailboxOAuthStartResponse {
+  const record = asRecord(value);
+  return {
+    mailboxId: pickString(record, ["mailbox_id", "mailboxId"]) || "",
+    mailboxName: pickString(record, ["mailbox_name", "mailboxName"]) || "Untitled mailbox",
+    providerType: pickString(record, ["provider_type", "providerType"]) || "google_workspace",
+    connectionStatus: pickString(record, ["connection_status", "connectionStatus"]) || "pending",
+    authUrl: pickString(record, ["auth_url", "authUrl"]) || "",
+    expiresAt: normalizeTimestamp(record.expires_at ?? record.expiresAt),
+    redirectUri: pickString(record, ["redirect_uri", "redirectUri"]) || "",
+    scopes: asArray(record.scopes)
+      .map((item) => String(item || ""))
+      .filter(Boolean),
+    sendingEnabled: pickBoolean(record, ["sending_enabled", "sendingEnabled"]) ?? false,
+    note: pickString(record, ["note", "message"]) || "",
+  };
+}
+
+function normalizeOutreachRenderPreview(value: unknown): OutreachRenderPreview {
+  const record = asRecord(value);
+  const template = asRecord(record.template);
+  const followupSequence = asRecord(record.followup_sequence ?? record.followupSequence);
+  const metadata = asRecord(record.metadata);
+
+  return {
+    dryRun: pickBoolean(record, ["dry_run", "dryRun"]) ?? true,
+    renderable: pickBoolean(record, ["renderable"]) ?? false,
+    fromName: pickString(record, ["from_name", "fromName"]) || "",
+    fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
+    recipientName: pickString(record, ["recipient_name", "recipientName"]) || "",
+    recipientEmail: pickString(record, ["recipient_email", "recipientEmail"]) || "",
+    companyName: pickString(record, ["company_name", "companyName"]) || "",
+    subject: pickString(record, ["subject"]) || "",
+    body: pickString(record, ["body"]) || "",
+    missingPlaceholders: asArray(record.missing_placeholders)
+      .map((item) => String(item || ""))
+      .filter(Boolean),
+    template: {
+      name: pickString(template, ["name"]) || "",
+      type: pickString(template, ["type"]) || "",
+      variantLabel: pickString(template, ["variant_label", "variantLabel"]) || "",
+    },
+    followupSequence: {
+      name: pickString(followupSequence, ["name"]) || "",
+      followupCount: normalizeCount(
+        followupSequence.followup_count ?? followupSequence.followupCount,
+      ),
+    },
+    metadata: {
+      queueItemId: pickString(metadata, ["queue_item_id", "queueItemId"]) || "",
+      queueStatus: pickString(metadata, ["queue_status", "queueStatus"]) || "",
+      approvalStatus: pickString(metadata, ["approval_status", "approvalStatus"]) || "",
+      mailboxStatus: pickString(metadata, ["mailbox_status", "mailboxStatus"]) || "",
+      providerType: pickString(metadata, ["provider_type", "providerType"]) || "",
+    },
+  };
+}
+
+function normalizeOutreachRenderPreviewResponse(value: unknown) {
+  const record = asRecord(value);
+  return {
+    ok: pickBoolean(record, ["ok"]) ?? true,
+    queueItemId: pickString(record, ["queue_item_id", "queueItemId"]) || "",
+    renderPreviewAvailable:
+      pickBoolean(record, ["render_preview_available", "renderPreviewAvailable"]) ?? false,
+    preview: normalizeOutreachRenderPreview(record.preview),
+    readiness: {
+      sendReady: pickBoolean(asRecord(record.readiness), ["send_ready", "sendReady"]) ?? false,
+      sendAllowed:
+        pickBoolean(asRecord(record.readiness), ["send_allowed", "sendAllowed"]) ?? false,
+      blockers: asArray(asRecord(record.readiness).blockers).map((item, index) =>
+        normalizeOutreachBlocker(item, index),
+      ),
+    },
+  };
+}
+
+function normalizeVerifiedContactPlanning(
+  value: unknown,
+  index = 0,
+): VerifiedContactPlanningRecord {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `verified-contact-${index}`,
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "Unassigned",
+    companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed company",
+    contactName: pickString(record, ["contact_name", "contactName"]) || "",
+    contactTitle: pickString(record, ["contact_title", "contactTitle"]) || "",
+    email: pickString(record, ["email", "enriched_email", "enrichedEmail"]) || "",
+    emailStatus:
+      pickString(record, [
+        "email_status",
+        "emailStatus",
+        "enriched_email_status",
+        "enrichedEmailStatus",
+      ]) || "",
+    providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
+    planningStatus: pickString(record, ["planning_status", "planningStatus"]) || "blocked",
+    outreachQueueId: pickString(record, ["outreach_queue_id", "outreachQueueId"]) || "",
+    outreachQueueStatus: pickString(record, ["outreach_queue_status", "outreachQueueStatus"]) || "",
+    approvalStatus: pickString(record, ["approval_status", "approvalStatus"]) || "pending",
+    mailboxStatus: pickString(record, ["mailbox_status", "mailboxStatus"]) || "not_connected",
+    variantLabel: pickString(record, ["variant_label", "variantLabel"]) || "",
+    sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
+    blockers: asArray(record.blockers).map((item, blockerIndex) =>
+      normalizeOutreachBlocker(item, blockerIndex),
+    ),
+    verifiedAt: normalizeTimestamp(record.verified_at ?? record.verifiedAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeEnrichmentCreditApproval(
+  value: unknown,
+  index = 0,
+): EnrichmentCreditApprovalRecord {
+  const record = asRecord(value);
+  return {
+    queueItemId:
+      pickString(record, ["queue_item_id", "queueItemId", "id"]) || `queue-item-${index}`,
+    approvalId: pickString(record, ["approval_id", "approvalId"]) || "",
+    companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed raw lead",
+    rawLeadId: pickString(record, ["raw_lead_id", "rawLeadId"]) || "",
+    rawLeadStatus: pickString(record, ["raw_lead_status", "rawLeadStatus"]) || "",
+    campaignId: pickString(record, ["campaign_id", "campaignId"]) || "",
+    campaignName: pickString(record, ["campaign_name", "campaignName"]) || "",
+    queueStatus: pickString(record, ["queue_status", "queueStatus", "status"]) || "",
+    creditApprovalStatus:
+      pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
+    providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
+    apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
+    hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
+    createdAt: normalizeTimestamp(
+      record.approval_created_at ?? record.created_at ?? record.createdAt,
+    ),
+    updatedAt: normalizeTimestamp(
+      record.approval_updated_at ?? record.updated_at ?? record.updatedAt,
+    ),
+  };
+}
+
+function normalizeInternalNote(value: unknown, index = 0) {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `internal-note-${index}`,
+    note: pickString(record, ["note", "message"]) || "",
+    createdByName: pickString(record, ["created_by_name", "createdByName"]) || "",
+    createdByRole: pickString(record, ["created_by_role", "createdByRole"]) || "",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
+  };
+}
+
+function normalizeQualificationAction(value: unknown, index = 0) {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `qualification-action-${index}`,
+    companyName: pickString(record, ["company_name", "companyName"]) || "Unnamed raw lead",
+    status: pickString(record, ["status"]) || "unknown",
+    qualificationScore: normalizeCount(record.qualification_score ?? record.qualificationScore),
+    qualificationNotes: pickString(record, ["qualification_notes", "qualificationNotes"]) || "",
+    modelRouteUsed: pickString(record, ["model_route_used", "modelRouteUsed"]) || "",
+    confidenceScore: normalizeCount(record.confidence_score ?? record.confidenceScore),
+    escalationRequired: pickBoolean(record, ["escalation_required", "escalationRequired"]) ?? false,
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+function normalizeEnrichmentAction(value: unknown, index = 0) {
+  const record = asRecord(value);
+  return {
+    id: pickString(record, ["id", "_id"]) || `enrichment-action-${index}`,
+    rawLeadId: pickString(record, ["raw_lead_id", "rawLeadId"]) || "",
+    status: pickString(record, ["status"]) || "unknown",
+    eligibilityStatus: pickString(record, ["eligibility_status", "eligibilityStatus"]) || "",
+    budgetCheckStatus: pickString(record, ["budget_check_status", "budgetCheckStatus"]) || "",
+    apolloPlanned: pickBoolean(record, ["apollo_planned", "apolloPlanned"]) ?? false,
+    hunterPlanned: pickBoolean(record, ["hunter_planned", "hunterPlanned"]) ?? false,
+    creditApprovalStatus:
+      pickString(record, ["credit_approval_status", "creditApprovalStatus"]) || "",
+    providerStatus: pickString(record, ["provider_status", "providerStatus"]) || "",
+    providerError: pickString(record, ["provider_error", "providerError"]) || "",
+    enrichedContactName: pickString(record, ["enriched_contact_name", "enrichedContactName"]) || "",
+    enrichedContactTitle:
+      pickString(record, ["enriched_contact_title", "enrichedContactTitle"]) || "",
+    enrichedEmail: pickString(record, ["enriched_email", "enrichedEmail"]) || "",
+    enrichedEmailStatus: pickString(record, ["enriched_email_status", "enrichedEmailStatus"]) || "",
+    enrichedPhone: pickString(record, ["enriched_phone", "enrichedPhone"]) || "",
+    enrichedSource: pickString(record, ["enriched_source", "enrichedSource"]) || "",
+    enrichmentNotes: pickString(record, ["enrichment_notes", "enrichmentNotes"]) || "",
+    modelRouteUsed:
+      pickString(record, ["enrichment_model_route_used", "enrichmentModelRouteUsed"]) || "",
+    confidenceScore: normalizeCount(
+      record.enrichment_confidence_score ?? record.enrichmentConfidenceScore,
+    ),
+    requiresApproval: pickBoolean(record, ["requires_approval", "requiresApproval"]) ?? false,
+    lastProcessedAt: normalizeTimestamp(record.last_processed_at ?? record.lastProcessedAt),
+    updatedAt: normalizeTimestamp(record.updated_at ?? record.updatedAt),
+  };
+}
+
+export function normalizeRequestHistory(value: unknown, index = 0): RequestHistoryRecord {
+  const record = asRecord(value);
+  const replies = normalizeRequestReplies(
+    record.replies ??
+      record.client_visible_replies ??
+      record.clientVisibleReplies ??
+      record.timeline ??
+      record.updates,
+  );
+  const latestReplyRecord = replies.length ? replies[replies.length - 1] : null;
+
+  return {
+    id: pickString(record, ["id", "_id", "request_id", "requestId"]) || `request-${index}`,
+    category: normalizeRequestCategory(
+      pickString(record, ["category", "request_category", "requestCategory", "type"]),
+    ),
+    title: pickString(record, ["title", "subject", "name"]) || "Untitled request",
+    message: pickString(record, ["message", "details", "body", "description"]) || "",
+    clientVisibleStatus: normalizeRequestVisibleStatus(
+      pickString(record, ["client_visible_status", "clientVisibleStatus", "status"]),
+    ),
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
+    createdByName: getRequestAuthor(record).name,
+    createdByEmail: getRequestAuthor(record).email,
+    createdByRole: getRequestAuthor(record).role,
+    latestReply:
+      pickString(record, [
+        "latest_client_visible_reply",
+        "latestClientVisibleReply",
+        "latest_reply",
+        "latestReply",
+        "reply_preview",
+        "replyPreview",
+      ]) ||
+      latestReplyRecord?.message ||
+      null,
+    latestReplyAt:
+      normalizeTimestamp(
+        record.latest_reply_at ??
+          record.latestReplyAt ??
+          record.last_reply_at ??
+          record.lastReplyAt,
+      ) || latestReplyRecord?.createdAt,
+  };
+}
+
+export function normalizeRequestDetail(value: unknown, index = 0): RequestDetailRecord {
+  const record = asRecord(value);
+  const nested =
+    asRecord(record.request).id || asRecord(record.request)._id
+      ? asRecord(record.request)
+      : asRecord(asRecord(record.data).request).id || asRecord(asRecord(record.data).request)._id
+        ? asRecord(asRecord(record.data).request)
+        : asRecord(record.data).id || asRecord(record.data)._id
+          ? asRecord(record.data)
+          : record;
+  const base = normalizeRequestHistory(nested, index);
+  const replies = normalizeRequestReplies(
+    nested.replies ??
+      nested.client_visible_replies ??
+      nested.clientVisibleReplies ??
+      nested.timeline ??
+      nested.updates ??
+      record.replies ??
+      record.client_visible_replies ??
+      record.clientVisibleReplies ??
+      asRecord(record.data).replies,
+  );
+
+  return {
+    ...base,
+    replies,
+  };
+}
+
+export function normalizeRequestReply(value: unknown, index = 0): RequestReplyRecord {
+  const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
+  const explicitType = pickString(record, ["type", "event_type", "eventType", "kind"]);
+  const status = normalizeRequestVisibleStatus(
+    pickString(record, [
+      "status",
+      "client_visible_status",
+      "clientVisibleStatus",
+      "to_status",
+      "toStatus",
+    ]) ||
+      pickString(metadata, [
+        "status",
+        "client_visible_status",
+        "clientVisibleStatus",
+        "to_status",
+        "toStatus",
+      ]),
+  );
+  const message =
+    pickString(record, [
+      "message",
+      "body",
+      "reply",
+      "comment",
+      "details",
+      "description",
+      "summary",
+    ]) ||
+    pickString(metadata, ["message", "body", "reply"]) ||
+    (status ? `Status updated to ${formatRequestLabel(status)}.` : "Request updated.");
+  const author = getRequestAuthor(record);
+
+  return {
+    id: pickString(record, ["id", "_id", "reply_id", "replyId"]) || `request-reply-${index}`,
+    type: normalizeRequestReplyType(explicitType, Boolean(status), message),
+    message,
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
+    authorName: author.name,
+    authorEmail: author.email,
+    authorRole: author.role,
+    status,
+  };
+}
+
+export function normalizeRequestReplies(value: unknown): RequestReplyRecord[] {
+  return asArray(value)
+    .filter(isClientVisibleRequestReplyValue)
+    .map((item, index) => normalizeRequestReply(item, index))
+    .filter((reply) => isClientVisibleRequestReply(reply));
+}
+
+function normalizeLeadActivityResponse(value: unknown): LeadActivityRecord[] {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLeadActivityRecord).filter(Boolean);
+  }
+
+  const record = asRecord(value);
+  const activity = asArray(
+    record.activity ?? record.activities ?? record.history ?? record.comments,
+  );
+  return activity.map(normalizeLeadActivityRecord).filter(Boolean);
+}
+
+function normalizeLeadActivityRecord(value: unknown, index = 0): LeadActivityRecord {
+  const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
+  const explicitType = pickString(record, [
+    "type",
+    "activity_type",
+    "activityType",
+    "event_type",
+    "eventType",
+    "kind",
+  ]);
+  const description = pickString(record, ["description", "message", "summary"]);
+  const comment =
+    pickString(record, ["comment", "note", "body", "text", "message"]) ||
+    (explicitType === "comment_added" ? description : undefined);
+  const status = getActivityStatus(record);
+  const type = normalizeActivityType(explicitType, Boolean(comment), Boolean(status));
+  const userRecord = asRecord(
+    record.user ??
+      record.actor ??
+      record.created_by ??
+      record.createdBy ??
+      record.updated_by ??
+      record.updatedBy,
+  );
+  const userName =
+    pickString(userRecord, ["name", "full_name", "fullName"]) ||
+    pickString(record, [
+      "user_name",
+      "userName",
+      "author_name",
+      "authorName",
+      "created_by_name",
+      "updated_by_name",
+    ]);
+  const userEmail =
+    pickString(userRecord, ["email"]) ||
+    pickString(record, [
+      "user_email",
+      "userEmail",
+      "author_email",
+      "authorEmail",
+      "created_by_email",
+      "updated_by_email",
+    ]);
+  const userRole =
+    pickString(userRecord, ["role"]) ||
+    pickString(record, ["user_role", "userRole", "author_role", "authorRole"]);
+
+  return {
+    id: pickString(record, ["id", "_id"]) || `activity-${index}`,
+    type,
+    status,
+    comment,
+    message:
+      description ||
+      (type === "status_change" && status
+        ? `Status updated to ${formatLeadStatus(status)}.`
+        : "") ||
+      pickString(metadata, ["message"]) ||
+      comment ||
+      "Lead activity updated.",
+    createdAt: normalizeTimestamp(record.created_at ?? record.createdAt ?? record.timestamp),
+    userName,
+    userEmail,
+    userRole,
+  };
+}
+
+function getRequestAuthor(record: Record<string, unknown>) {
+  const userRecord = asRecord(
+    record.user ?? record.actor ?? record.author ?? record.created_by ?? record.createdBy,
+  );
+  return {
+    name:
+      pickString(userRecord, ["name", "full_name", "fullName"]) ||
+      pickString(record, ["created_by_name", "createdByName", "author_name", "authorName"]),
+    email:
+      pickString(userRecord, ["email"]) ||
+      pickString(record, ["created_by_email", "createdByEmail", "author_email", "authorEmail"]),
+    role:
+      pickString(userRecord, ["role"]) ||
+      pickString(record, ["created_by_role", "createdByRole", "author_role", "authorRole"]),
+  };
+}
+
+function normalizeRequestCategory(value?: string) {
+  switch ((value || "").trim().toLowerCase()) {
+    case "new_campaign":
+    case "campaign_change":
+    case "lead_question":
+    case "outreach_draft":
+    case "support_issue":
+      return value!.trim().toLowerCase();
+    default:
+      return (value || "support_issue").trim() || "support_issue";
+  }
+}
+
+function normalizeRequestVisibleStatus(value?: string) {
+  switch ((value || "").trim().toLowerCase()) {
+    case "submitted":
+    case "under_review":
+    case "in_progress":
+    case "waiting_on_you":
+    case "completed":
+    case "rejected":
+      return value!.trim().toLowerCase();
+    default:
+      return (value || "submitted").trim() || "submitted";
+  }
+}
+
+function normalizeRequestReplyType(
+  value: string | undefined,
+  hasStatus: boolean,
+  message: string,
+): RequestReplyRecord["type"] {
+  switch ((value || "").toLowerCase()) {
+    case "message":
+      return "message";
+    case "reply":
+    case "comment":
+      return "reply";
+    case "status":
+    case "status_update":
+    case "status_changed":
+      return "status_update";
+    default:
+      if (hasStatus) return "status_update";
+      return message ? "reply" : "activity";
+  }
+}
+
+function isClientVisibleRequestReply(reply: RequestReplyRecord) {
+  return Boolean(reply.message || reply.status);
+}
+
+function isClientVisibleRequestReplyValue(value: unknown) {
+  const record = asRecord(value);
+  const visibility = pickString(record, [
+    "visibility",
+    "reply_visibility",
+    "replyVisibility",
+    "audience",
+  ]);
+  const clientVisible = pickBoolean(record, [
+    "client_visible",
+    "clientVisible",
+    "is_client_visible",
+    "isClientVisible",
+  ]);
+  const internalOnly = pickBoolean(record, [
+    "internal",
+    "is_internal",
+    "isInternal",
+    "private",
+    "is_private",
+    "isPrivate",
+  ]);
+
+  if (internalOnly === true) return false;
+  if (clientVisible === false) return false;
+  if (visibility && ["internal", "private", "staff", "admin"].includes(visibility.toLowerCase()))
+    return false;
+  return true;
+}
+
+function formatRequestLabel(value: string) {
+  return (
+    value
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || "Unknown"
+  );
+}
+
+function getActivityStatus(value: unknown) {
+  const record = asRecord(value);
+  const metadata = asRecord(record.metadata);
+  const nextStatus = pickString(record, [
+    "status",
+    "lead_status",
+    "leadStatus",
+    "to_status",
+    "toStatus",
+    "next_status",
+    "nextStatus",
+  ]);
+  return (
+    nextStatus ||
+    pickString(metadata, ["to_status", "toStatus", "status"]) ||
+    pickString(asRecord(record.status_change), ["status", "to_status", "toStatus"])
+  );
+}
+
+function normalizeActivityType(
+  value: string | undefined,
+  hasComment: boolean,
+  hasStatus: boolean,
+): LeadActivityRecord["type"] {
+  switch ((value || "").toLowerCase()) {
+    case "comment":
+    case "note":
+    case "comment_added":
+      return "comment";
+    case "status":
+    case "status_change":
+    case "lead_status_updated":
+    case "status_changed":
+      return "status_change";
+    default:
+      if (hasComment && !hasStatus) return "comment";
+      if (hasStatus) return "status_change";
+      return "activity";
+  }
+}
+
+function formatLeadStatus(status: string) {
+  return status
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getStoredAuthToken() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function extractApiErrorMessage(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  try {
+    const payload = JSON.parse(trimmed);
+    const record = asRecord(payload);
+    return (
+      pickString(record, ["error", "message"]) ||
+      pickString(asRecord(record.errors), ["error", "message"]) ||
+      trimmed.slice(0, 500)
+    );
+  } catch {
+    return trimmed.slice(0, 500);
+  }
 }

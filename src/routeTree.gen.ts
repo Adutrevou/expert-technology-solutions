@@ -10,27 +10,50 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
+import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SequencesRouteImport } from './routes/sequences'
+import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as MeetingsRouteImport } from './routes/meetings'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
+import { Route as LeadAgentRouteImport } from './routes/lead-agent'
 import { Route as EmailScriptsRouteImport } from './routes/email-scripts'
+import { Route as ConversationsRouteImport } from './routes/conversations'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
-import { Route as AgentRouteImport } from './routes/agent'
+import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AiAgentStatusRouteImport } from './routes/ai-agent-status'
+import { Route as AgentTrainingRouteImport } from './routes/agent-training'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLeadsSplatRouteImport } from './routes/api/leads.$'
 import { Route as ApiGmailMessagesRouteImport } from './routes/api/gmail.messages'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
 
 const UpdatesRoute = UpdatesRouteImport.update({
   id: '/updates',
   path: '/updates',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SequencesRoute = SequencesRouteImport.update({
+  id: '/sequences',
+  path: '/sequences',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestsRoute = RequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -58,9 +81,19 @@ const LeadsRoute = LeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LeadAgentRoute = LeadAgentRouteImport.update({
+  id: '/lead-agent',
+  path: '/lead-agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmailScriptsRoute = EmailScriptsRouteImport.update({
   id: '/email-scripts',
   path: '/email-scripts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConversationsRoute = ConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CampaignsRoute = CampaignsRouteImport.update({
@@ -68,9 +101,19 @@ const CampaignsRoute = CampaignsRouteImport.update({
   path: '/campaigns',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgentRoute = AgentRouteImport.update({
-  id: '/agent',
-  path: '/agent',
+const ApprovalsRoute = ApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiAgentStatusRoute = AiAgentStatusRouteImport.update({
+  id: '/ai-agent-status',
+  path: '/ai-agent-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentTrainingRoute = AgentTrainingRouteImport.update({
+  id: '/agent-training',
+  path: '/agent-training',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -88,50 +131,79 @@ const ApiGmailMessagesRoute = ApiGmailMessagesRouteImport.update({
   path: '/api/gmail/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/agent': typeof AgentRoute
+  '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
+  '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
+  '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
+  '/requests': typeof RequestsRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/agent': typeof AgentRoute
+  '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
+  '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
+  '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
+  '/requests': typeof RequestsRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/agent': typeof AgentRoute
+  '/agent-training': typeof AgentTrainingRoute
+  '/ai-agent-status': typeof AiAgentStatusRoute
+  '/approvals': typeof ApprovalsRoute
   '/campaigns': typeof CampaignsRoute
+  '/conversations': typeof ConversationsRoute
   '/email-scripts': typeof EmailScriptsRoute
+  '/lead-agent': typeof LeadAgentRoute
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
+  '/requests': typeof RequestsRoute
+  '/sequences': typeof SequencesRoute
   '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
   '/updates': typeof UpdatesRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/gmail/messages': typeof ApiGmailMessagesRoute
   '/api/leads/$': typeof ApiLeadsSplatRoute
 }
@@ -139,62 +211,94 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/agent'
+    | '/agent-training'
+    | '/ai-agent-status'
+    | '/approvals'
     | '/campaigns'
+    | '/conversations'
     | '/email-scripts'
+    | '/lead-agent'
     | '/leads'
     | '/login'
     | '/meetings'
     | '/progress'
     | '/reports'
+    | '/requests'
+    | '/sequences'
     | '/settings'
+    | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/agent'
+    | '/agent-training'
+    | '/ai-agent-status'
+    | '/approvals'
     | '/campaigns'
+    | '/conversations'
     | '/email-scripts'
+    | '/lead-agent'
     | '/leads'
     | '/login'
     | '/meetings'
     | '/progress'
     | '/reports'
+    | '/requests'
+    | '/sequences'
     | '/settings'
+    | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   id:
     | '__root__'
     | '/'
-    | '/agent'
+    | '/agent-training'
+    | '/ai-agent-status'
+    | '/approvals'
     | '/campaigns'
+    | '/conversations'
     | '/email-scripts'
+    | '/lead-agent'
     | '/leads'
     | '/login'
     | '/meetings'
     | '/progress'
     | '/reports'
+    | '/requests'
+    | '/sequences'
     | '/settings'
+    | '/templates'
     | '/updates'
+    | '/api/auth/$'
     | '/api/gmail/messages'
     | '/api/leads/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AgentRoute: typeof AgentRoute
+  AgentTrainingRoute: typeof AgentTrainingRoute
+  AiAgentStatusRoute: typeof AiAgentStatusRoute
+  ApprovalsRoute: typeof ApprovalsRoute
   CampaignsRoute: typeof CampaignsRoute
+  ConversationsRoute: typeof ConversationsRoute
   EmailScriptsRoute: typeof EmailScriptsRoute
+  LeadAgentRoute: typeof LeadAgentRoute
   LeadsRoute: typeof LeadsRoute
   LoginRoute: typeof LoginRoute
   MeetingsRoute: typeof MeetingsRoute
   ProgressRoute: typeof ProgressRoute
   ReportsRoute: typeof ReportsRoute
+  RequestsRoute: typeof RequestsRoute
+  SequencesRoute: typeof SequencesRoute
   SettingsRoute: typeof SettingsRoute
+  TemplatesRoute: typeof TemplatesRoute
   UpdatesRoute: typeof UpdatesRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiGmailMessagesRoute: typeof ApiGmailMessagesRoute
   ApiLeadsSplatRoute: typeof ApiLeadsSplatRoute
 }
@@ -208,11 +312,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UpdatesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sequences': {
+      id: '/sequences'
+      path: '/sequences'
+      fullPath: '/sequences'
+      preLoaderRoute: typeof SequencesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requests': {
+      id: '/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof RequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -250,11 +375,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lead-agent': {
+      id: '/lead-agent'
+      path: '/lead-agent'
+      fullPath: '/lead-agent'
+      preLoaderRoute: typeof LeadAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/email-scripts': {
       id: '/email-scripts'
       path: '/email-scripts'
       fullPath: '/email-scripts'
       preLoaderRoute: typeof EmailScriptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conversations': {
+      id: '/conversations'
+      path: '/conversations'
+      fullPath: '/conversations'
+      preLoaderRoute: typeof ConversationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/campaigns': {
@@ -264,11 +403,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CampaignsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agent': {
-      id: '/agent'
-      path: '/agent'
-      fullPath: '/agent'
-      preLoaderRoute: typeof AgentRouteImport
+    '/approvals': {
+      id: '/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof ApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-agent-status': {
+      id: '/ai-agent-status'
+      path: '/ai-agent-status'
+      fullPath: '/ai-agent-status'
+      preLoaderRoute: typeof AiAgentStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent-training': {
+      id: '/agent-training'
+      path: '/agent-training'
+      fullPath: '/agent-training'
+      preLoaderRoute: typeof AgentTrainingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -292,21 +445,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGmailMessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AgentRoute: AgentRoute,
+  AgentTrainingRoute: AgentTrainingRoute,
+  AiAgentStatusRoute: AiAgentStatusRoute,
+  ApprovalsRoute: ApprovalsRoute,
   CampaignsRoute: CampaignsRoute,
+  ConversationsRoute: ConversationsRoute,
   EmailScriptsRoute: EmailScriptsRoute,
+  LeadAgentRoute: LeadAgentRoute,
   LeadsRoute: LeadsRoute,
   LoginRoute: LoginRoute,
   MeetingsRoute: MeetingsRoute,
   ProgressRoute: ProgressRoute,
   ReportsRoute: ReportsRoute,
+  RequestsRoute: RequestsRoute,
+  SequencesRoute: SequencesRoute,
   SettingsRoute: SettingsRoute,
+  TemplatesRoute: TemplatesRoute,
   UpdatesRoute: UpdatesRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiGmailMessagesRoute: ApiGmailMessagesRoute,
   ApiLeadsSplatRoute: ApiLeadsSplatRoute,
 }
