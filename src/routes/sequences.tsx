@@ -281,12 +281,16 @@ function CreateSequenceDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Campaign</Label>
-            <Select value={campaignId} onValueChange={setCampaignId}>
+            <Label>Campaign (optional)</Label>
+            <Select
+              value={campaignId || "__none__"}
+              onValueChange={(value) => setCampaignId(value === "__none__" ? "" : value)}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Choose a campaign" />
+                <SelectValue placeholder="No campaign" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">No campaign - build manually</SelectItem>
                 {campaigns.map((campaign) => (
                   <SelectItem key={campaign.id} value={campaign.id}>
                     {campaign.name}
@@ -295,8 +299,8 @@ function CreateSequenceDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              The campaign's outreach email becomes Step 1. It also controls which leads, templates,
-              and approved images this sequence can use.
+              Without a campaign, add every step manually. If linked, the campaign's outreach email
+              becomes Step 1 and manual steps move forward.
             </p>
           </div>
           <div className="space-y-2">
@@ -332,10 +336,7 @@ function CreateSequenceDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={!name.trim() || !campaignId || createMutation.isPending}
-          >
+          <Button onClick={handleCreate} disabled={!name.trim() || createMutation.isPending}>
             {createMutation.isPending ? "Creating..." : "Create sequence"}
           </Button>
         </DialogFooter>
@@ -741,17 +742,18 @@ function StepsBuilder({
           Each step is sent on its selected weekday. Add the subject, body, signature, and optional
           approved campaign image here.
         </p>
-        <Button size="sm" onClick={openAdd} className="gap-1.5" disabled={!campaignId}>
+        <Button size="sm" onClick={openAdd} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" /> Add step
         </Button>
       </div>
 
       {!campaignId ? (
         <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Choose a campaign first</AlertTitle>
+          <Plus className="h-4 w-4" />
+          <AlertTitle>Manual sequence</AlertTitle>
           <AlertDescription>
-            Assign this sequence to a campaign in Overview before adding steps.
+            You can add and edit steps without a campaign. Campaign images become available after
+            linking one in Overview.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -932,6 +934,7 @@ function StepsBuilder({
               <Select
                 value={imageAssetId || "__none__"}
                 onValueChange={(value) => setImageAssetId(value === "__none__" ? "" : value)}
+                disabled={!campaignId}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="No image" />
@@ -951,8 +954,14 @@ function StepsBuilder({
               <Input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
+                disabled={!campaignId}
                 onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
               />
+              {!campaignId ? (
+                <p className="text-xs text-muted-foreground">
+                  Link a campaign before uploading an image.
+                </p>
+              ) : null}
             </div>
             {imageFile ? (
               <div className="space-y-2 md:col-span-2">
