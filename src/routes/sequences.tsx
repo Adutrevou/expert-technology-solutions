@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   Archive,
@@ -50,6 +51,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useApp } from "@/lib/app-state";
+import { readSignatureHtmlFile } from "@/lib/signature-html";
 import {
   useCampaignsQuery,
   useLeadAgentSummaryQuery,
@@ -902,6 +904,28 @@ function StepsBuilder({
                 className="min-h-24"
                 placeholder="Kind regards,\nExpert Technology Solutions"
               />
+              <Input
+                type="file"
+                accept=".html,.htm,text/html"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (!file) return;
+                  void readSignatureHtmlFile(file)
+                    .then((html) => {
+                      setSignature(html);
+                      toast.success("HTML signature loaded. Review it before saving the step.");
+                    })
+                    .catch((error) =>
+                      toast.error(
+                        error instanceof Error ? error.message : "Unable to read that HTML file.",
+                      ),
+                    );
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste a signature or upload an .html/.htm document up to 256KB.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Approved campaign image</Label>

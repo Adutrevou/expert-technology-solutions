@@ -26,6 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
+import { readSignatureHtmlFile } from "@/lib/signature-html";
 import type {
   ApprovalRecord,
   FollowupSequenceRecord,
@@ -296,6 +297,16 @@ function TemplatesPage() {
         [field]: value,
       },
     }));
+  }
+
+  async function loadSignatureDocument(file: File | null, onLoaded: (html: string) => void) {
+    if (!file) return;
+    try {
+      onLoaded(await readSignatureHtmlFile(file));
+      toast.success("HTML signature loaded. Review it before saving.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to read that HTML file.");
+    }
   }
 
   function updateAssetDraft(
@@ -915,7 +926,7 @@ function TemplatesPage() {
                             </div>
                             <div>
                               <p className="text-sm font-medium">Signature</p>
-                              <Input
+                              <Textarea
                                 className="mt-2"
                                 value={current.signature}
                                 onChange={(event) =>
@@ -923,6 +934,21 @@ function TemplatesPage() {
                                 }
                                 placeholder="Optional signature"
                               />
+                              <Input
+                                className="mt-2"
+                                type="file"
+                                accept=".html,.htm,text/html"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0] ?? null;
+                                  event.currentTarget.value = "";
+                                  void loadSignatureDocument(file, (html) =>
+                                    updateDraft(variant.id, "signature", html),
+                                  );
+                                }}
+                              />
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Upload an .html/.htm signature up to 256KB.
+                              </p>
                             </div>
                           </div>
 
@@ -1576,6 +1602,21 @@ function TemplatesPage() {
                 }
                 placeholder="Kind regards,\nExpert Technology Solutions"
               />
+              <Input
+                className="mt-2"
+                type="file"
+                accept=".html,.htm,text/html"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.currentTarget.value = "";
+                  void loadSignatureDocument(file, (html) =>
+                    setTemplateCreateForm((current) => ({ ...current, signature: html })),
+                  );
+                }}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Upload an .html/.htm signature up to 256KB.
+              </p>
             </div>
             <div>
               <p className="text-sm font-medium">Optional image</p>
