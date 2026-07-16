@@ -20,6 +20,7 @@ import {
   type EnrollmentSource,
   type EnrollmentStatus,
   type SendingMode,
+  type SequenceRecord,
   type SequenceStatus,
 } from "@/lib/sequences-api";
 
@@ -94,7 +95,7 @@ export function useUpdateSequenceMutation() {
   });
 }
 
-function useSequenceStatusMutation(fn: (sequenceId: string) => Promise<unknown>) {
+function useSequenceStatusMutation(fn: (sequenceId: string) => Promise<SequenceRecord>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sequenceId: string) => fn(sequenceId),
@@ -102,6 +103,12 @@ function useSequenceStatusMutation(fn: (sequenceId: string) => Promise<unknown>)
       void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY });
       void queryClient.invalidateQueries({
         queryKey: ["intergrai", "sequence-detail", sequenceId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["intergrai", "sequence-enrollments", sequenceId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["intergrai", "sequence-metrics", sequenceId],
       });
     },
   });

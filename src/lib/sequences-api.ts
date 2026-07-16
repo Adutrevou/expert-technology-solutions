@@ -41,6 +41,9 @@ export interface SequenceRecord {
   stop_on_disqualified: boolean;
   campaign_id: string | null;
   campaign_name?: string | null;
+  campaign_contact_count?: number;
+  enrolled_count?: number;
+  already_enrolled_count?: number;
   last_run_at: string | null;
   created_at: string;
   updated_at: string;
@@ -52,6 +55,8 @@ export interface SequenceStepRecord {
   step_number: number;
   delay_days: number;
   send_weekday: number | null;
+  send_week_of_month: number | null;
+  send_month: number | null;
   subject_template: string | null;
   body_template: string;
   signature: string | null;
@@ -216,6 +221,8 @@ export async function createSequenceStep(
   input: {
     step_number: number;
     send_weekday: number;
+    send_week_of_month: number;
+    send_month?: number | null;
     subject_template?: string | null;
     body_template: string;
     signature?: string | null;
@@ -240,6 +247,8 @@ export async function updateSequenceStep(
     Pick<
       SequenceStepRecord,
       | "send_weekday"
+      | "send_week_of_month"
+      | "send_month"
       | "subject_template"
       | "body_template"
       | "signature"

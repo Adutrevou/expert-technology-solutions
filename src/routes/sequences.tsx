@@ -111,6 +111,23 @@ const WEEKDAYS = [
   { value: 7, label: "Sunday" },
 ] as const;
 
+const WEEKS_OF_MONTH = [1, 2, 3, 4] as const;
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
 function SequencesPage() {
   const sequencesQuery = useSequencesQuery();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -408,6 +425,21 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
     await runOnceMutation.mutateAsync({ sequenceId });
   };
 
+  const handleActivate = async () => {
+    try {
+      const activated = await resumeMutation.mutateAsync(sequenceId);
+      if (activated.campaign_id) {
+        toast.success(
+          `Sequence activated: ${activated.enrolled_count ?? 0} new campaign contact${activated.enrolled_count === 1 ? "" : "s"} enrolled, ${activated.already_enrolled_count ?? 0} already enrolled.`,
+        );
+      } else {
+        toast.success("Manual sequence activated. Add contacts through enrollment when ready.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to activate this sequence.");
+    }
+  };
+
   return (
     <Card className="shadow-card">
       <div className="border-b border-border p-5">
@@ -434,7 +466,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
               size="sm"
               variant="outline"
               className="gap-1.5"
-              onClick={() => resumeMutation.mutate(sequenceId)}
+              onClick={() => void handleActivate()}
               disabled={resumeMutation.isPending}
             >
               <Play className="h-3.5 w-3.5" /> Activate
@@ -503,7 +535,8 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Changing the campaign replaces Step 1 with that campaign's outreach email and
-                changes which approved image assets are available.
+                changes which approved image assets are available. Activating the sequence finds
+                eligible contacts assigned to this campaign and enrolls them at Step 1.
               </p>
             </div>
 
@@ -639,6 +672,8 @@ function StepsBuilder({
   const [editingStep, setEditingStep] = useState<SequenceStepRecord | null>(null);
   const [stepNumber, setStepNumber] = useState("");
   const [sendWeekday, setSendWeekday] = useState("1");
+  const [sendWeekOfMonth, setSendWeekOfMonth] = useState("1");
+  const [sendMonth, setSendMonth] = useState("__every__");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [signature, setSignature] = useState("");
@@ -656,6 +691,8 @@ function StepsBuilder({
     if (!dialogOpen) return;
     setStepNumber(String(editingStep?.step_number ?? nextStepNumber));
     setSendWeekday(String(editingStep?.send_weekday ?? 1));
+    setSendWeekOfMonth(String(editingStep?.send_week_of_month ?? 1));
+    setSendMonth(editingStep?.send_month ? String(editingStep.send_month) : "__every__");
     setSubject(editingStep?.subject_template ?? "");
     setBody(editingStep?.body_template ?? "");
     setSignature(editingStep?.signature ?? "");
@@ -700,6 +737,8 @@ function StepsBuilder({
 
     const content = {
       send_weekday: Number(sendWeekday),
+      send_week_of_month: Number(sendWeekOfMonth),
+      send_month: sendMonth === "__every__" ? null : Number(sendMonth),
       subject_template: subject.trim() || null,
       body_template: body.trim(),
       signature: signature.trim() || null,
@@ -740,8 +779,8 @@ function StepsBuilder({
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-4">
         <p className="text-sm text-muted-foreground">
-          Each step is sent on its selected weekday. Add the subject, body, signature, and optional
-          approved campaign image here.
+          Each step uses a month, week-of-month, and weekday calendar target. Add the subject, body,
+          signature, and optional approved campaign image here.
         </p>
         <Button size="sm" onClick={openAdd} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" /> Add step
@@ -776,7 +815,7 @@ function StepsBuilder({
                         Step {step.step_number}
                       </Badge>
                       <span className="text-xs font-medium text-primary">
-                        {weekdayLabel(step.send_weekday)}
+                        {scheduleLabel(step)}
                       </span>
                       {step.image_asset_id ? <Badge variant="secondary">Image</Badge> : null}
                       {step.signature ? <Badge variant="secondary">Signature</Badge> : null}
@@ -856,7 +895,7 @@ function StepsBuilder({
               Use {"{{first_name}}"}, {"{{company_name}}"}, {"{{contact_name}}"} as placeholders.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Step number</Label>
               <Input
@@ -868,7 +907,38 @@ function StepsBuilder({
               />
             </div>
             <div className="space-y-2">
-              <Label>Send on</Label>
+              <Label>Month</Label>
+              <Select value={sendMonth} onValueChange={setSendMonth}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__every__">Every month</SelectItem>
+                  {MONTHS.map((month, index) => (
+                    <SelectItem key={month} value={String(index + 1)}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Week of month</Label>
+              <Select value={sendWeekOfMonth} onValueChange={setSendWeekOfMonth}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKS_OF_MONTH.map((week) => (
+                    <SelectItem key={week} value={String(week)}>
+                      Week {week}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Day of week</Label>
               <Select value={sendWeekday} onValueChange={setSendWeekday}>
                 <SelectTrigger>
                   <SelectValue />
@@ -882,7 +952,7 @@ function StepsBuilder({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-4">
               <Label>Subject</Label>
               <Input
                 value={subject}
@@ -890,7 +960,7 @@ function StepsBuilder({
                 placeholder="Optional subject line"
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-4">
               <Label>Body</Label>
               <Textarea
                 value={body}
@@ -899,7 +969,7 @@ function StepsBuilder({
                 placeholder="Hi {{first_name}}, ..."
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-4">
               <Label>Email signature</Label>
               <Textarea
                 value={signature}
@@ -965,7 +1035,7 @@ function StepsBuilder({
               ) : null}
             </div>
             {imageFile ? (
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 md:col-span-4">
                 <Label>Image alt text</Label>
                 <Input
                   value={imageAltText}
@@ -991,6 +1061,7 @@ function StepsBuilder({
               disabled={
                 !body.trim() ||
                 !sendWeekday ||
+                !sendWeekOfMonth ||
                 (Boolean(imageFile) && !imageAltText.trim()) ||
                 saving
               }
@@ -1007,6 +1078,12 @@ function StepsBuilder({
 function weekdayLabel(value: number | null) {
   if (!value) return "Weekday not set";
   return WEEKDAYS.find((weekday) => weekday.value === value)?.label || "Weekday not set";
+}
+
+function scheduleLabel(step: SequenceStepRecord) {
+  const month = step.send_month ? MONTHS[step.send_month - 1] : "Every month";
+  const week = step.send_week_of_month ? `week ${step.send_week_of_month}` : "any week";
+  return `${month}, ${week}, ${weekdayLabel(step.send_weekday)}`;
 }
 
 function MetricsPanel({
