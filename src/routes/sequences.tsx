@@ -76,6 +76,7 @@ import {
   useUpdateSequenceStepMutation,
 } from "@/lib/sequences-api-hooks";
 import type {
+  EnrollmentRecord,
   SendingMode,
   SequenceRecord,
   SequenceStatus,
@@ -1103,15 +1104,7 @@ function EnrollmentsTable({
   isLoading,
   onDisqualify,
 }: {
-  enrollments: Array<{
-    id: string;
-    company_name?: string;
-    contact_name?: string;
-    email?: string;
-    current_step: number;
-    status: string;
-    next_due_at: string | null;
-  }>;
+  enrollments: EnrollmentRecord[];
   isLoading: boolean;
   onDisqualify: (enrollmentId: string) => void;
 }) {
@@ -1124,55 +1117,152 @@ function EnrollmentsTable({
       </div>
     );
   }
+  const completedEnrollments = enrollments.filter(
+    (enrollment) => enrollment.status === "completed",
+  );
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Contact</TableHead>
-          <TableHead>Step</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Next due</TableHead>
-          <TableHead className="text-right">Action</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {enrollments.map((enrollment) => (
-          <TableRow key={enrollment.id}>
-            <TableCell>
-              <p className="font-medium">
-                {enrollment.contact_name || enrollment.company_name || "Unknown"}
-              </p>
-              <p className="text-xs text-muted-foreground">{enrollment.email || "—"}</p>
-            </TableCell>
-            <TableCell>{enrollment.current_step}</TableCell>
-            <TableCell>
-              <Badge variant="outline" className="text-[10px] uppercase">
-                {enrollment.status}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
-              {enrollment.next_due_at
-                ? formatDistanceToNow(new Date(enrollment.next_due_at), { addSuffix: true })
-                : "—"}
-            </TableCell>
-            <TableCell className="text-right">
-              {!["disqualified", "completed", "replied", "bounced", "unsubscribed"].includes(
-                enrollment.status,
-              ) ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive gap-1.5"
-                  onClick={() => onDisqualify(enrollment.id)}
-                >
-                  <Ban className="h-3.5 w-3.5" /> Disqualify
-                </Button>
-              ) : null}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-success/30 bg-success/5 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">Human takeover</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Contacts who completed the full sequence, ready for personal follow-up.
+            </p>
+          </div>
+          <Badge variant="outline" className="border-success/40 bg-success/10 text-success">
+            {completedEnrollments.length} ready
+          </Badge>
+        </div>
+        {completedEnrollments.length ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {completedEnrollments.map((enrollment) => (
+              <div key={enrollment.id} className="rounded-xl border bg-background p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">
+                      {enrollment.contact_name || "Contact name unavailable"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {[enrollment.title, enrollment.company_name].filter(Boolean).join(" at ") ||
+                        "Company details unavailable"}
+                    </p>
+                  </div>
+                  <Badge className="bg-success/15 text-success hover:bg-success/15">
+                    Ready for takeover
+                  </Badge>
+                </div>
+                <div className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+                  <ContactLink label="Email" value={enrollment.email} hrefPrefix="mailto:" />
+                  <ContactLink label="Phone" value={enrollment.phone} hrefPrefix="tel:" />
+                  <ContactLink label="Website" value={enrollment.website} external />
+                  <ContactLink label="LinkedIn" value={enrollment.linkedin_url} external />
+                  <DetailLine label="Industry" value={enrollment.industry} />
+                  <DetailLine label="Location" value={enrollment.location} />
+                  <DetailLine label="Source" value={enrollment.lead_source || enrollment.source} />
+                  <DetailLine label="Qualification" value={enrollment.qualification} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">
+            No contacts have completed this sequence yet.
+          </p>
+        )}
+      </section>
+
+      <div>
+        <h3 className="mb-3 font-semibold">All enrollments</h3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Contact</TableHead>
+              <TableHead>Step</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Next due</TableHead>
+              <TableHead className="text-right">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {enrollments.map((enrollment) => (
+              <TableRow key={enrollment.id}>
+                <TableCell>
+                  <p className="font-medium">
+                    {enrollment.contact_name || enrollment.company_name || "Unknown"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{enrollment.email || "—"}</p>
+                </TableCell>
+                <TableCell>{enrollment.current_step}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-[10px] uppercase">
+                    {enrollment.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {enrollment.next_due_at
+                    ? formatDistanceToNow(new Date(enrollment.next_due_at), { addSuffix: true })
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  {!["disqualified", "completed", "replied", "bounced", "unsubscribed"].includes(
+                    enrollment.status,
+                  ) ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive gap-1.5"
+                      onClick={() => onDisqualify(enrollment.id)}
+                    >
+                      <Ban className="h-3.5 w-3.5" /> Disqualify
+                    </Button>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function ContactLink({
+  label,
+  value,
+  hrefPrefix = "",
+  external = false,
+}: {
+  label: string;
+  value?: string;
+  hrefPrefix?: string;
+  external?: boolean;
+}) {
+  if (!value) return <DetailLine label={label} />;
+  const href =
+    external && !/^https?:\/\//i.test(value) ? `https://${value}` : `${hrefPrefix}${value}`;
+  return (
+    <p className="truncate">
+      <span className="text-muted-foreground">{label}: </span>
+      <a
+        href={href}
+        target={external ? "_blank" : undefined}
+        rel={external ? "noreferrer" : undefined}
+        className="font-medium text-primary hover:underline"
+      >
+        {value}
+      </a>
+    </p>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value?: string }) {
+  return (
+    <p className="truncate">
+      <span className="text-muted-foreground">{label}: </span>
+      <span>{value || "Not sourced"}</span>
+    </p>
   );
 }
 

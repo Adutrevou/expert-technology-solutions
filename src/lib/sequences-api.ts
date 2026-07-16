@@ -68,6 +68,17 @@ export interface EnrollmentRecord {
   company_name?: string;
   contact_name?: string;
   email?: string;
+  phone?: string;
+  website?: string;
+  industry?: string;
+  location?: string;
+  title?: string;
+  domain?: string;
+  linkedin_url?: string;
+  lead_source?: string;
+  qualification?: string;
+  lead_score?: number | null;
+  metadata?: Record<string, unknown>;
   current_step: number;
   status: EnrollmentStatus;
   last_sent_at: string | null;
