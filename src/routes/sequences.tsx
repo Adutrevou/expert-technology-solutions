@@ -293,8 +293,8 @@ function CreateSequenceDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              The campaign controls which leads, templates, and approved images this sequence can
-              use.
+              The campaign's outreach email becomes Step 1. It also controls which leads, templates,
+              and approved images this sequence can use.
             </p>
           </div>
           <div className="space-y-2">
@@ -498,7 +498,8 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Changing the campaign changes which approved image assets are available to steps.
+                Changing the campaign replaces Step 1 with that campaign's outreach email and
+                changes which approved image assets are available.
               </p>
             </div>
 
