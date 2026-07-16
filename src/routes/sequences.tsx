@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -9,6 +10,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  FlaskConical,
+  Mail,
   Pause,
   Pencil,
   Play,
@@ -16,7 +19,9 @@ import {
   RefreshCcw,
   ShieldAlert,
   Trash2,
+  UserPlus,
   Users2,
+  X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useApp } from "@/lib/app-state";
+import { getLeads, type LeadRecord } from "@/lib/leads-api";
 import { readSignatureHtmlFile } from "@/lib/signature-html";
 import {
   useCampaignsQuery,
@@ -132,6 +138,7 @@ function SequencesPage() {
   const sequencesQuery = useSequencesQuery();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
 
   const sequences = useMemo(() => sequencesQuery.data ?? [], [sequencesQuery.data]);
 
@@ -177,6 +184,9 @@ function SequencesPage() {
         <div className="flex gap-2">
           <Button onClick={() => sequencesQuery.refetch()} variant="outline" className="gap-2">
             <RefreshCcw className="h-4 w-4" /> Refresh
+          </Button>
+          <Button onClick={() => setTestOpen(true)} variant="outline" className="gap-2">
+            <FlaskConical className="h-4 w-4" /> Test sequence
           </Button>
           <Button onClick={() => setCreateOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> New sequence
@@ -235,6 +245,12 @@ function SequencesPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={(id) => setSelectedId(id)}
+      />
+      <TestSequenceDialog
+        open={testOpen}
+        onOpenChange={setTestOpen}
+        sequences={sequences}
+        initialSequenceId={selectedId}
       />
     </div>
   );
@@ -360,6 +376,397 @@ function CreateSequenceDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type PreviewRecipient = {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+};
+
+function TestSequenceDialog({
+  open,
+  onOpenChange,
+  sequences,
+  initialSequenceId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sequences: SequenceRecord[];
+  initialSequenceId: string | null;
+}) {
+  const campaignsQuery = useCampaignsQuery();
+  const [campaignId, setCampaignId] = useState("");
+  const [sequenceId, setSequenceId] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientCompany, setRecipientCompany] = useState("Expert Technology Solutions");
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [recipients, setRecipients] = useState<PreviewRecipient[]>([]);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const deferredSearch = useDeferredValue(recipientSearch.trim());
+  const sequenceQuery = useSequenceQuery(sequenceId || undefined);
+  const campaigns = campaignsQuery.data?.campaigns ?? [];
+  const campaignSequences = sequences.filter((sequence) => sequence.campaign_id === campaignId);
+
+  const contactsQuery = useQuery({
+    queryKey: ["intergrai", "sequence-preview-contacts", campaignId, deferredSearch],
+    queryFn: () =>
+      getLeads({
+        campaign_id: campaignId,
+        search: deferredSearch,
+        limit: 8,
+      }),
+    enabled: open && Boolean(campaignId) && deferredSearch.length >= 2,
+    staleTime: 15_000,
+  });
+  const suggestions = (contactsQuery.data?.leads ?? []) as LeadRecord[];
+
+  useEffect(() => {
+    if (!open) return;
+    const initialSequence = sequences.find((sequence) => sequence.id === initialSequenceId);
+    const firstLinkedSequence = initialSequence?.campaign_id
+      ? initialSequence
+      : sequences.find((sequence) => sequence.campaign_id);
+    setSequenceId(firstLinkedSequence?.id ?? "");
+    setCampaignId(firstLinkedSequence?.campaign_id ?? "");
+    setRecipients([]);
+    setRecipientName("");
+    setRecipientCompany("Expert Technology Solutions");
+    setRecipientSearch("");
+    setPreviewVisible(false);
+  }, [initialSequenceId, open, sequences]);
+
+  const addRecipient = (recipient: Omit<PreviewRecipient, "id"> & { id?: string }) => {
+    const email = recipient.email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      toast.error("Enter a valid recipient email address.");
+      return;
+    }
+    if (recipients.some((item) => item.email.toLowerCase() === email)) {
+      toast.error("That recipient is already in this test.");
+      return;
+    }
+    setRecipients((current) => [
+      ...current,
+      {
+        id: recipient.id || `manual-${email}`,
+        name: recipient.name.trim() || email.split("@")[0],
+        company: recipient.company.trim() || "Expert Technology Solutions",
+        email,
+      },
+    ]);
+    setRecipientName("");
+    setRecipientSearch("");
+    setPreviewVisible(false);
+  };
+
+  const selectCampaign = (value: string) => {
+    setCampaignId(value);
+    const firstSequence = sequences.find((sequence) => sequence.campaign_id === value);
+    setSequenceId(firstSequence?.id ?? "");
+    setRecipients([]);
+    setPreviewVisible(false);
+  };
+
+  const steps = sequenceQuery.data?.steps ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-primary" /> Test a sequence
+          </DialogTitle>
+          <DialogDescription>
+            Preview real campaign sequence content for one or several recipients. This test never
+            creates enrollments, queue records, or emails.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Campaign</Label>
+            <Select value={campaignId} onValueChange={selectCampaign}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select an Expert campaign" />
+              </SelectTrigger>
+              <SelectContent>
+                {campaigns.map((campaign) => (
+                  <SelectItem key={campaign.id} value={campaign.id}>
+                    {campaign.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Sequence</Label>
+            <Select
+              value={sequenceId}
+              onValueChange={(value) => {
+                setSequenceId(value);
+                setPreviewVisible(false);
+              }}
+              disabled={!campaignId || campaignSequences.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a linked sequence" />
+              </SelectTrigger>
+              <SelectContent>
+                {campaignSequences.map((sequence) => (
+                  <SelectItem key={sequence.id} value={sequence.id}>
+                    {sequence.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <section className="rounded-2xl border bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">Test recipients</h3>
+              <p className="text-xs text-muted-foreground">
+                Start typing a campaign contact or add a manual test address.
+              </p>
+            </div>
+            <Badge variant="outline">sequence_preview / test_only</Badge>
+          </div>
+
+          {recipients.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {recipients.map((recipient) => (
+                <span
+                  key={recipient.id}
+                  className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-sm"
+                >
+                  <Mail className="h-3.5 w-3.5 text-primary" />
+                  <span className="font-medium">{recipient.name}</span>
+                  <span className="text-muted-foreground">{recipient.email}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${recipient.email}`}
+                    onClick={() => {
+                      setRecipients((current) =>
+                        current.filter((item) => item.id !== recipient.id),
+                      );
+                      setPreviewVisible(false);
+                    }}
+                    className="rounded-full p-0.5 hover:bg-muted"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.2fr_auto]">
+            <div className="space-y-2">
+              <Label htmlFor="test-recipient-name">Name</Label>
+              <Input
+                id="test-recipient-name"
+                value={recipientName}
+                onChange={(event) => setRecipientName(event.target.value)}
+                placeholder="Client name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="test-recipient-company">Company</Label>
+              <Input
+                id="test-recipient-company"
+                value={recipientCompany}
+                onChange={(event) => setRecipientCompany(event.target.value)}
+                placeholder="Expert Technology Solutions"
+              />
+            </div>
+            <div className="relative space-y-2">
+              <Label htmlFor="test-recipient-email">Email or campaign contact</Label>
+              <Input
+                id="test-recipient-email"
+                value={recipientSearch}
+                onChange={(event) => setRecipientSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && recipientSearch.trim()) {
+                    event.preventDefault();
+                    addRecipient({
+                      name: recipientName,
+                      company: recipientCompany,
+                      email: recipientSearch,
+                    });
+                  }
+                }}
+                placeholder="client@example.com"
+                autoComplete="off"
+              />
+              {deferredSearch.length >= 2 && suggestions.length ? (
+                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg">
+                  {suggestions.map((lead) => (
+                    <button
+                      type="button"
+                      key={lead.id}
+                      onClick={() =>
+                        addRecipient({
+                          id: lead.id,
+                          name: lead.displayContactName || lead.name,
+                          company: lead.company,
+                          email: lead.email,
+                        })
+                      }
+                      className="flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left hover:bg-muted"
+                    >
+                      <span>
+                        <span className="block text-sm font-medium">
+                          {lead.displayContactName || lead.name || "Unnamed contact"}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">{lead.company}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">{lead.email}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() =>
+                  addRecipient({
+                    name: recipientName,
+                    company: recipientCompany,
+                    email: recipientSearch,
+                  })
+                }
+                disabled={!recipientSearch.trim()}
+              >
+                <UserPlus className="h-4 w-4" /> Add
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {previewVisible ? (
+          <SequencePreviewCards
+            recipients={recipients}
+            steps={steps}
+            campaignName={campaigns.find((campaign) => campaign.id === campaignId)?.name || ""}
+            sequenceName={sequenceQuery.data?.sequence.name || ""}
+          />
+        ) : null}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button
+            className="gap-2"
+            onClick={() => setPreviewVisible(true)}
+            disabled={!sequenceId || !recipients.length || sequenceQuery.isLoading || !steps.length}
+          >
+            <FlaskConical className="h-4 w-4" /> Generate test preview
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SequencePreviewCards({
+  recipients,
+  steps,
+  campaignName,
+  sequenceName,
+}: {
+  recipients: PreviewRecipient[];
+  steps: SequenceStepRecord[];
+  campaignName: string;
+  sequenceName: string;
+}) {
+  return (
+    <section className="space-y-4 rounded-2xl border border-primary/25 bg-primary/5 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{sequenceName}</h3>
+          <p className="text-sm text-muted-foreground">
+            {campaignName} | {recipients.length} test recipient{recipients.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <Badge className="bg-primary/15 text-primary hover:bg-primary/15">
+          sequence_preview / test_only
+        </Badge>
+      </div>
+      {recipients.map((recipient) => (
+        <div key={recipient.id} className="space-y-3 rounded-xl border bg-background p-4">
+          <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+            <DetailLine label="Name" value={recipient.name} />
+            <DetailLine label="Company" value={recipient.company} />
+            <DetailLine label="Email" value={recipient.email} />
+            <DetailLine label="Campaign" value={campaignName} />
+            <DetailLine label="Status" value="sequence_preview / test_only" />
+          </div>
+          <div className="space-y-3">
+            {[...steps]
+              .filter((step) => step.status === "active")
+              .sort((a, b) => a.step_number - b.step_number)
+              .map((step) => {
+                const variables = {
+                  first_name: recipient.name.split(" ")[0],
+                  contact_name: recipient.name,
+                  company_name: recipient.company,
+                  company: recipient.company,
+                  email: recipient.email,
+                };
+                return (
+                  <article key={step.id} className="rounded-xl border bg-muted/10 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">Step {step.step_number}</Badge>
+                        <span className="text-xs font-medium text-primary">
+                          {scheduleLabel(step)}
+                        </span>
+                      </div>
+                      <Badge variant="secondary">test_only</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold">
+                      {renderPreviewTemplate(step.subject_template || "(No subject)", variables)}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {renderPreviewTemplate(step.body_template, variables)}
+                    </p>
+                    {step.signature ? (
+                      <div className="mt-3 border-t pt-3">
+                        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Email signature
+                        </p>
+                        <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                          {renderPreviewTemplate(step.signature, variables)}
+                        </p>
+                      </div>
+                    ) : null}
+                    {step.image_asset_id ? (
+                      <Badge variant="secondary" className="mt-3">
+                        Campaign image attached
+                      </Badge>
+                    ) : null}
+                  </article>
+                );
+              })}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function renderPreviewTemplate(template: string, variables: Record<string, string>) {
+  return template.replace(
+    /\{\{\s*([\w.]+)\s*\}\}/g,
+    (match, key: string) => variables[key] ?? match,
   );
 }
 
