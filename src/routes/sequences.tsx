@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock3,
   Pause,
+  Pencil,
   Play,
   Plus,
   RefreshCcw,
@@ -50,6 +51,12 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useApp } from "@/lib/app-state";
 import {
+  useCampaignsQuery,
+  useLeadAgentSummaryQuery,
+  useUpdateCampaignImageSettingsMutation,
+  useUploadOutreachAssetMutation,
+} from "@/lib/leads-api-hooks";
+import {
   useArchiveSequenceMutation,
   useCreateSequenceMutation,
   useCreateSequenceStepMutation,
@@ -90,6 +97,16 @@ const SENDING_MODE_LABEL: Record<SendingMode, string> = {
   queue_for_approval: "Queue for approval",
   auto_send_if_policy_allows: "Auto-send if policy allows",
 };
+
+const WEEKDAYS = [
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+  { value: 7, label: "Sunday" },
+] as const;
 
 function SequencesPage() {
   const sequencesQuery = useSequencesQuery();
@@ -213,12 +230,18 @@ function CreateSequenceDialog({
   onCreated: (id: string) => void;
 }) {
   const [name, setName] = useState("");
+  const [campaignId, setCampaignId] = useState("");
   const [sendingMode, setSendingMode] = useState<SendingMode>("dry_run");
   const createMutation = useCreateSequenceMutation();
+  const campaignsQuery = useCampaignsQuery();
+  const campaigns = (campaignsQuery.data?.campaigns ?? []).filter(
+    (campaign) => campaign.status !== "archived",
+  );
 
   useEffect(() => {
     if (open) {
       setName("");
+      setCampaignId("");
       setSendingMode("dry_run");
       createMutation.reset();
     }
@@ -229,6 +252,7 @@ function CreateSequenceDialog({
     if (!name.trim()) return;
     const sequence = await createMutation.mutateAsync({
       name: name.trim(),
+      campaign_id: campaignId || undefined,
       sending_mode: sendingMode,
     });
     onOpenChange(false);
@@ -253,6 +277,25 @@ function CreateSequenceDialog({
               onChange={(event) => setName(event.target.value)}
               placeholder="e.g. Managed IT Follow-up"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Campaign</Label>
+            <Select value={campaignId} onValueChange={setCampaignId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a campaign" />
+              </SelectTrigger>
+              <SelectContent>
+                {campaigns.map((campaign) => (
+                  <SelectItem key={campaign.id} value={campaign.id}>
+                    {campaign.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The campaign controls which leads, templates, and approved images this sequence can
+              use.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Sending mode</Label>
@@ -287,7 +330,10 @@ function CreateSequenceDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={!name.trim() || createMutation.isPending}>
+          <Button
+            onClick={handleCreate}
+            disabled={!name.trim() || !campaignId || createMutation.isPending}
+          >
             {createMutation.isPending ? "Creating..." : "Create sequence"}
           </Button>
         </DialogFooter>
@@ -321,6 +367,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   const resumeMutation = useResumeSequenceMutation();
   const archiveMutation = useArchiveSequenceMutation();
   const updateMutation = useUpdateSequenceMutation();
+  const campaignsQuery = useCampaignsQuery();
   const dryRunMutation = useDryRunSequenceMutation();
   const runOnceMutation = useRunSequenceOnceMutation();
   const disqualifyMutation = useDisqualifyEnrollmentMutation();
@@ -426,6 +473,36 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
 
           <TabsContent value="overview" className="space-y-4">
             <div className="space-y-2">
+              <Label>Campaign</Label>
+              <Select
+                value={sequence.campaign_id || "__none__"}
+                onValueChange={(value) =>
+                  updateMutation.mutate({
+                    sequenceId,
+                    patch: { campaign_id: value === "__none__" ? null : value },
+                  })
+                }
+              >
+                <SelectTrigger className="max-w-sm">
+                  <SelectValue placeholder="Choose a campaign" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No campaign</SelectItem>
+                  {(campaignsQuery.data?.campaigns ?? [])
+                    .filter((campaign) => campaign.status !== "archived")
+                    .map((campaign) => (
+                      <SelectItem key={campaign.id} value={campaign.id}>
+                        {campaign.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Changing the campaign changes which approved image assets are available to steps.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label>Sending mode</Label>
               <Select
                 value={sequence.sending_mode}
@@ -494,7 +571,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
           </TabsContent>
 
           <TabsContent value="steps">
-            <StepsBuilder sequenceId={sequenceId} steps={steps} />
+            <StepsBuilder sequenceId={sequenceId} campaignId={sequence.campaign_id} steps={steps} />
           </TabsContent>
 
           <TabsContent value="metrics">
@@ -538,53 +615,143 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   );
 }
 
-function StepsBuilder({ sequenceId, steps }: { sequenceId: string; steps: SequenceStepRecord[] }) {
+function StepsBuilder({
+  sequenceId,
+  campaignId,
+  steps,
+}: {
+  sequenceId: string;
+  campaignId: string | null;
+  steps: SequenceStepRecord[];
+}) {
   const createStepMutation = useCreateSequenceStepMutation();
   const updateStepMutation = useUpdateSequenceStepMutation();
   const deleteStepMutation = useDeleteSequenceStepMutation();
-  const [addOpen, setAddOpen] = useState(false);
+  const summaryQuery = useLeadAgentSummaryQuery();
+  const uploadAssetMutation = useUploadOutreachAssetMutation();
+  const updateCampaignImageSettingsMutation = useUpdateCampaignImageSettingsMutation();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingStep, setEditingStep] = useState<SequenceStepRecord | null>(null);
   const [stepNumber, setStepNumber] = useState("");
-  const [delayDays, setDelayDays] = useState("0");
+  const [sendWeekday, setSendWeekday] = useState("1");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [signature, setSignature] = useState("");
+  const [imageAssetId, setImageAssetId] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageAltText, setImageAltText] = useState("");
 
   const nextStepNumber = steps.length ? Math.max(...steps.map((s) => s.step_number)) + 1 : 1;
+  const campaign = summaryQuery.data?.campaigns.find((item) => item.id === campaignId);
+  const availableAssets = (summaryQuery.data?.outreachAssets ?? []).filter(
+    (asset) => asset.campaignId === campaignId && asset.status !== "archived",
+  );
 
   useEffect(() => {
-    if (addOpen) {
-      setStepNumber(String(nextStepNumber));
-      setDelayDays(steps.length ? "4" : "0");
-      setSubject("");
-      setBody("");
-    }
+    if (!dialogOpen) return;
+    setStepNumber(String(editingStep?.step_number ?? nextStepNumber));
+    setSendWeekday(String(editingStep?.send_weekday ?? 1));
+    setSubject(editingStep?.subject_template ?? "");
+    setBody(editingStep?.body_template ?? "");
+    setSignature(editingStep?.signature ?? "");
+    setImageAssetId(editingStep?.image_asset_id ?? "");
+    setImageFile(null);
+    setImageAltText("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addOpen]);
+  }, [dialogOpen, editingStep]);
 
-  const handleAddStep = async () => {
-    if (!body.trim()) return;
-    await createStepMutation.mutateAsync({
-      sequenceId,
-      input: {
-        step_number: Number(stepNumber),
-        delay_days: Number(delayDays),
-        subject_template: subject.trim() || undefined,
-        body_template: body.trim(),
-      },
-    });
-    setAddOpen(false);
+  const openAdd = () => {
+    setEditingStep(null);
+    setDialogOpen(true);
   };
+
+  const openEdit = (step: SequenceStepRecord) => {
+    setEditingStep(step);
+    setDialogOpen(true);
+  };
+
+  const handleSaveStep = async () => {
+    if (!body.trim()) return;
+    let nextImageAssetId: string | null = imageAssetId || null;
+
+    if (imageFile) {
+      if (!campaignId) return;
+      if (!campaign?.imagesEnabled) {
+        await updateCampaignImageSettingsMutation.mutateAsync({
+          campaignId,
+          imagesEnabled: true,
+        });
+      }
+      const formData = new FormData();
+      formData.append("file", imageFile);
+      formData.append("campaign_id", campaignId);
+      formData.append("title", `${campaign?.name || "Sequence"} step ${stepNumber} image`);
+      formData.append("alt_text", imageAltText.trim());
+      formData.append("placement", "inline");
+      formData.append("status", "pending_approval");
+      const asset = await uploadAssetMutation.mutateAsync(formData);
+      nextImageAssetId = asset.id;
+    }
+
+    const content = {
+      send_weekday: Number(sendWeekday),
+      subject_template: subject.trim() || null,
+      body_template: body.trim(),
+      signature: signature.trim() || null,
+      image_asset_id: nextImageAssetId,
+    };
+
+    if (editingStep) {
+      await updateStepMutation.mutateAsync({
+        sequenceId,
+        stepId: editingStep.id,
+        patch: content,
+      });
+    } else {
+      await createStepMutation.mutateAsync({
+        sequenceId,
+        input: {
+          step_number: Number(stepNumber),
+          ...content,
+        },
+      });
+    }
+    setDialogOpen(false);
+  };
+
+  const saving =
+    createStepMutation.isPending ||
+    updateStepMutation.isPending ||
+    uploadAssetMutation.isPending ||
+    updateCampaignImageSettingsMutation.isPending;
+
+  const mutationError =
+    createStepMutation.error ||
+    updateStepMutation.error ||
+    uploadAssetMutation.error ||
+    updateCampaignImageSettingsMutation.error;
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <p className="text-sm text-muted-foreground">
-          Step 1 is the first touch (delay ignored). Later steps use their delay from the previous
-          step.
+          Each step is sent on its selected weekday. Add the subject, body, signature, and optional
+          approved campaign image here.
         </p>
-        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+        <Button size="sm" onClick={openAdd} className="gap-1.5" disabled={!campaignId}>
           <Plus className="h-3.5 w-3.5" /> Add step
         </Button>
       </div>
+
+      {!campaignId ? (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Choose a campaign first</AlertTitle>
+          <AlertDescription>
+            Assign this sequence to a campaign in Overview before adding steps.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {steps.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -598,15 +765,15 @@ function StepsBuilder({ sequenceId, steps }: { sequenceId: string; steps: Sequen
               <Card key={step.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className="text-[10px]">
                         Step {step.step_number}
                       </Badge>
-                      {step.step_number > 1 ? (
-                        <span className="text-xs text-muted-foreground">
-                          +{step.delay_days}d after previous
-                        </span>
-                      ) : null}
+                      <span className="text-xs font-medium text-primary">
+                        {weekdayLabel(step.send_weekday)}
+                      </span>
+                      {step.image_asset_id ? <Badge variant="secondary">Image</Badge> : null}
+                      {step.signature ? <Badge variant="secondary">Signature</Badge> : null}
                       {step.ai_personalization_enabled ? (
                         <Badge
                           variant="outline"
@@ -622,8 +789,22 @@ function StepsBuilder({ sequenceId, steps }: { sequenceId: string; steps: Sequen
                     <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
                       {step.body_template}
                     </p>
+                    {step.signature ? (
+                      <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
+                        {step.signature}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => openEdit(step)}
+                      title="Edit step"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -659,37 +840,43 @@ function StepsBuilder({ sequenceId, steps }: { sequenceId: string; steps: Sequen
         </div>
       )}
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add step {nextStepNumber}</DialogTitle>
+            <DialogTitle>
+              {editingStep ? `Edit step ${editingStep.step_number}` : `Add step ${nextStepNumber}`}
+            </DialogTitle>
             <DialogDescription>
               Use {"{{first_name}}"}, {"{{company_name}}"}, {"{{contact_name}}"} as placeholders.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Step number</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={stepNumber}
-                  onChange={(event) => setStepNumber(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Delay (days after previous)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={delayDays}
-                  onChange={(event) => setDelayDays(event.target.value)}
-                  disabled={Number(stepNumber) === 1}
-                />
-              </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Step number</Label>
+              <Input
+                type="number"
+                min={1}
+                value={stepNumber}
+                onChange={(event) => setStepNumber(event.target.value)}
+                disabled={Boolean(editingStep)}
+              />
             </div>
             <div className="space-y-2">
+              <Label>Send on</Label>
+              <Select value={sendWeekday} onValueChange={setSendWeekday}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKDAYS.map((weekday) => (
+                    <SelectItem key={weekday.value} value={String(weekday.value)}>
+                      {weekday.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 md:col-span-2">
               <Label>Subject</Label>
               <Input
                 value={subject}
@@ -697,28 +884,94 @@ function StepsBuilder({ sequenceId, steps }: { sequenceId: string; steps: Sequen
                 placeholder="Optional subject line"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <Label>Body</Label>
               <Textarea
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
-                className="min-h-32"
+                className="min-h-40"
                 placeholder="Hi {{first_name}}, ..."
               />
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Email signature</Label>
+              <Textarea
+                value={signature}
+                onChange={(event) => setSignature(event.target.value)}
+                className="min-h-24"
+                placeholder="Kind regards,\nExpert Technology Solutions"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Approved campaign image</Label>
+              <Select
+                value={imageAssetId || "__none__"}
+                onValueChange={(value) => setImageAssetId(value === "__none__" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No image" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No image</SelectItem>
+                  {availableAssets.map((asset) => (
+                    <SelectItem key={asset.id} value={asset.id}>
+                      {asset.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Or upload a new image</Label>
+              <Input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
+            {imageFile ? (
+              <div className="space-y-2 md:col-span-2">
+                <Label>Image alt text</Label>
+                <Input
+                  value={imageAltText}
+                  onChange={(event) => setImageAltText(event.target.value)}
+                  placeholder="Describe what the image shows"
+                />
+              </div>
+            ) : null}
           </div>
+          {mutationError ? (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Could not save this step</AlertTitle>
+              <AlertDescription>{mutationError.message}</AlertDescription>
+            </Alert>
+          ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddStep} disabled={!body.trim() || createStepMutation.isPending}>
-              {createStepMutation.isPending ? "Saving..." : "Add step"}
+            <Button
+              onClick={handleSaveStep}
+              disabled={
+                !body.trim() ||
+                !sendWeekday ||
+                (Boolean(imageFile) && !imageAltText.trim()) ||
+                saving
+              }
+            >
+              {saving ? "Saving..." : editingStep ? "Save changes" : "Add step"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
+}
+
+function weekdayLabel(value: number | null) {
+  if (!value) return "Weekday not set";
+  return WEEKDAYS.find((weekday) => weekday.value === value)?.label || "Weekday not set";
 }
 
 function MetricsPanel({

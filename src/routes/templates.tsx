@@ -7,13 +7,32 @@ import { EmptyCard, PageIntro, SectionCard, StatCard } from "@/components/client
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
-import type { ApprovalRecord, FollowupSequenceRecord, OutreachAssetRecord, OutreachTemplateRecord, OutreachTemplateVariantRecord } from "@/lib/leads-api";
+import type {
+  ApprovalRecord,
+  FollowupSequenceRecord,
+  OutreachAssetRecord,
+  OutreachTemplateRecord,
+  OutreachTemplateVariantRecord,
+} from "@/lib/leads-api";
 import {
   useApprovalDecisionMutation,
   useArchiveOutreachTemplateVariantMutation,
@@ -22,6 +41,7 @@ import {
   useLeadAgentSummaryQuery,
   useTemplateVariantApprovalDecisionMutation,
   useUpdateOutreachAssetMutation,
+  useUpdateCampaignImageSettingsMutation,
   useUpdateTemplateVariantContentMutation,
   useUploadOutreachAssetMutation,
 } from "@/lib/leads-api-hooks";
@@ -79,6 +99,9 @@ type TemplateCreateForm = {
   cta: string;
   signature: string;
   notes: string;
+  imageFile: File | null;
+  imageAltText: string;
+  imagePlacement: string;
 };
 
 const EMPTY_TEMPLATE_FORM: TemplateCreateForm = {
@@ -90,6 +113,9 @@ const EMPTY_TEMPLATE_FORM: TemplateCreateForm = {
   cta: "",
   signature: "",
   notes: "",
+  imageFile: null,
+  imageAltText: "",
+  imagePlacement: "inline",
 };
 
 type CampaignTemplateGroup = {
@@ -112,6 +138,7 @@ function TemplatesPage() {
   const approvalDecisionMutation = useApprovalDecisionMutation();
   const updateOutreachAssetMutation = useUpdateOutreachAssetMutation();
   const uploadOutreachAssetMutation = useUploadOutreachAssetMutation();
+  const updateCampaignImageSettingsMutation = useUpdateCampaignImageSettingsMutation();
   const canApprove = ["client_owner", "manager", "intergrai_admin"].includes(user?.role || "");
   const canEdit = canApprove;
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
@@ -120,7 +147,8 @@ function TemplatesPage() {
   const [requestChangesTarget, setRequestChangesTarget] = useState<RequestTarget | null>(null);
   const [requestChangesNote, setRequestChangesNote] = useState("");
   const [templateCreateState, setTemplateCreateState] = useState<TemplateCreateState>(null);
-  const [templateCreateForm, setTemplateCreateForm] = useState<TemplateCreateForm>(EMPTY_TEMPLATE_FORM);
+  const [templateCreateForm, setTemplateCreateForm] =
+    useState<TemplateCreateForm>(EMPTY_TEMPLATE_FORM);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const data = summaryQuery.data;
@@ -157,10 +185,15 @@ function TemplatesPage() {
     }
 
     for (const template of data.outreachTemplates) {
-      const visibleVariants = template.variants.filter((variant) => normalizeApprovalStatus(variant.status) !== "archived");
+      const visibleVariants = template.variants.filter(
+        (variant) => normalizeApprovalStatus(variant.status) !== "archived",
+      );
       if (!visibleVariants.length) continue;
       const key = template.campaignId || template.campaignName || "unassigned";
-      const resolvedCampaignName = (template.campaignId ? campaignNameById.get(template.campaignId) : null) || template.campaignName || "Unassigned campaign";
+      const resolvedCampaignName =
+        (template.campaignId ? campaignNameById.get(template.campaignId) : null) ||
+        template.campaignName ||
+        "Unassigned campaign";
       const existing = grouped.get(key) || {
         campaignId: template.campaignId || "",
         campaignName: resolvedCampaignName,
@@ -177,9 +210,14 @@ function TemplatesPage() {
       grouped.set(key, existing);
     }
 
-    for (const sequence of data.followupSequences.filter((item) => normalizeApprovalStatus(item.status) !== "archived")) {
+    for (const sequence of data.followupSequences.filter(
+      (item) => normalizeApprovalStatus(item.status) !== "archived",
+    )) {
       const key = sequence.campaignId || sequence.campaignName || "unassigned";
-      const resolvedCampaignName = (sequence.campaignId ? campaignNameById.get(sequence.campaignId) : null) || sequence.campaignName || "Unassigned campaign";
+      const resolvedCampaignName =
+        (sequence.campaignId ? campaignNameById.get(sequence.campaignId) : null) ||
+        sequence.campaignName ||
+        "Unassigned campaign";
       const existing = grouped.get(key) || {
         campaignId: sequence.campaignId || "",
         campaignName: resolvedCampaignName,
@@ -196,7 +234,10 @@ function TemplatesPage() {
     }
 
     return Array.from(grouped.values())
-      .filter((group) => group.campaignName && !/(demo|mock|placeholder|untitled)/i.test(group.campaignName))
+      .filter(
+        (group) =>
+          group.campaignName && !/(demo|mock|placeholder|untitled)/i.test(group.campaignName),
+      )
       .sort((left, right) => left.campaignName.localeCompare(right.campaignName));
   }, [data]);
 
@@ -257,7 +298,11 @@ function TemplatesPage() {
     }));
   }
 
-  function updateAssetDraft(variantId: string, field: keyof AssetDraftState, value: string | number | null) {
+  function updateAssetDraft(
+    variantId: string,
+    field: keyof AssetDraftState,
+    value: string | number | null,
+  ) {
     setAssetDrafts((current) => ({
       ...current,
       [variantId]: {
@@ -267,7 +312,10 @@ function TemplatesPage() {
     }));
   }
 
-  async function saveVariant(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord) {
+  async function saveVariant(
+    template: OutreachTemplateRecord,
+    variant: OutreachTemplateVariantRecord,
+  ) {
     const draft = drafts[variant.id];
     if (!draft) return;
 
@@ -336,7 +384,9 @@ function TemplatesPage() {
       toast.success("Follow-up sequence approved.");
       await summaryQuery.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to approve that follow-up sequence.");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to approve that follow-up sequence.",
+      );
     }
   }
 
@@ -350,7 +400,9 @@ function TemplatesPage() {
       toast.success("Template approval paused.");
       await summaryQuery.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to pause that template approval.");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to pause that template approval.",
+      );
     }
   }
 
@@ -364,7 +416,9 @@ function TemplatesPage() {
       toast.success("Follow-up approval paused.");
       await summaryQuery.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to pause that follow-up approval.");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to pause that follow-up approval.",
+      );
     }
   }
 
@@ -386,7 +440,11 @@ function TemplatesPage() {
     fileInputs.current[variantId]?.click();
   }
 
-  async function uploadAssetForVariant(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord, file?: File | null) {
+  async function uploadAssetForVariant(
+    template: OutreachTemplateRecord,
+    variant: OutreachTemplateVariantRecord,
+    file?: File | null,
+  ) {
     if (!file) return;
 
     const currentAssetDraft = assetDrafts[variant.id] || createEmptyAssetDraft();
@@ -430,7 +488,10 @@ function TemplatesPage() {
     }
   }
 
-  async function saveAssetDetails(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord) {
+  async function saveAssetDetails(
+    template: OutreachTemplateRecord,
+    variant: OutreachTemplateVariantRecord,
+  ) {
     const assetDraft = assetDrafts[variant.id];
     if (!assetDraft?.assetId) {
       toast.error("Upload an image first.");
@@ -514,7 +575,7 @@ function TemplatesPage() {
     }
 
     try {
-      await createOutreachTemplateMutation.mutateAsync({
+      const variant = await createOutreachTemplateMutation.mutateAsync({
         campaign_id: templateCreateState.campaignId,
         name: templateCreateForm.name.trim(),
         template_type: templateCreateForm.templateType,
@@ -525,6 +586,42 @@ function TemplatesPage() {
         signature: templateCreateForm.signature.trim() || null,
         notes: templateCreateForm.notes.trim() || null,
       });
+      if (templateCreateForm.imageFile) {
+        const selectedCampaign = availableCampaigns.find(
+          (campaign) => campaign.id === templateCreateState.campaignId,
+        );
+        if (!selectedCampaign?.imagesEnabled) {
+          await updateCampaignImageSettingsMutation.mutateAsync({
+            campaignId: templateCreateState.campaignId,
+            imagesEnabled: true,
+          });
+        }
+
+        const formData = new FormData();
+        formData.append("file", templateCreateForm.imageFile);
+        formData.append("campaign_id", templateCreateState.campaignId);
+        formData.append("template_variant_id", variant.id);
+        formData.append("title", `${templateCreateForm.name.trim()} image`);
+        formData.append("alt_text", templateCreateForm.imageAltText.trim());
+        formData.append("placement", templateCreateForm.imagePlacement);
+        formData.append("status", "pending_approval");
+        const asset = await uploadOutreachAssetMutation.mutateAsync(formData);
+
+        await updateTemplateVariantContentMutation.mutateAsync({
+          variantId: variant.id,
+          input: {
+            subject_template: templateCreateForm.subject.trim() || null,
+            body_template: templateCreateForm.body.trim(),
+            cta: templateCreateForm.cta.trim() || null,
+            signature: templateCreateForm.signature.trim() || null,
+            include_image: true,
+            asset_id: asset.id,
+            placement: templateCreateForm.imagePlacement,
+            alt_text: templateCreateForm.imageAltText.trim(),
+            approval_reset_reason: "Image added during template creation",
+          },
+        });
+      }
       toast.success("Template saved as draft. It now needs approval before the agent can use it.");
       closeTemplateCreate();
       await summaryQuery.refetch();
@@ -533,8 +630,13 @@ function TemplatesPage() {
     }
   }
 
-  async function archiveTemplateVariant(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord) {
-    const confirmed = window.confirm("This will stop the template from being used going forward. Past messages stay in history.");
+  async function archiveTemplateVariant(
+    template: OutreachTemplateRecord,
+    variant: OutreachTemplateVariantRecord,
+  ) {
+    const confirmed = window.confirm(
+      "This will stop the template from being used going forward. Past messages stay in history.",
+    );
     if (!confirmed) return;
 
     try {
@@ -595,7 +697,9 @@ function TemplatesPage() {
       <div className="mx-auto max-w-[1240px]">
         <Card className="rounded-[28px] p-10 text-center shadow-card">
           <h1 className="text-2xl font-semibold">Templates unavailable</h1>
-          <p className="mt-2 text-sm text-muted-foreground">We couldn’t load the template workspace.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            We couldn’t load the template workspace.
+          </p>
         </Card>
       </div>
     );
@@ -604,8 +708,7 @@ function TemplatesPage() {
   const pendingVariantCount = data.outreachTemplates
     .flatMap((template) => template.variants)
     .filter((variant) => normalizeApprovalStatus(variant.status) !== "archived")
-    .filter((variant) => normalizeApprovalStatus(variant.approvalStatus) === "pending")
-    .length;
+    .filter((variant) => normalizeApprovalStatus(variant.approvalStatus) === "pending").length;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -613,7 +716,7 @@ function TemplatesPage() {
         badge="Templates"
         title="What emails will the system send?"
         description="Review each campaign’s outreach emails, save edits clearly, and use the Approvals page as the central decision hub."
-        actions={(
+        actions={
           <>
             <Button asChild variant="outline">
               <Link to="/approvals">Open approval hub</Link>
@@ -623,18 +726,35 @@ function TemplatesPage() {
               Refresh
             </Button>
           </>
-        )}
+        }
       />
 
       <div className="rounded-[24px] border border-primary/10 bg-primary/5 px-5 py-4 text-sm text-foreground">
-        Images are optional. Text-first emails usually perform better for cold outreach. Sending remains paused, and edited approved emails must be approved again before launch.
+        Images are optional. Text-first emails usually perform better for cold outreach. Sending
+        remains paused, and edited approved emails must be approved again before launch.
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Campaign sections" value={campaigns.length} detail="Templates are grouped by campaign." />
-        <StatCard label="Needs approval" value={pendingVariantCount} detail="Pending email decisions still appear in the approval hub." />
-        <StatCard label="Image assets" value={data.outreachAssets.length} detail="Optional email images only." />
-        <StatCard label="Safety" value={data.sendingEnabled ? "Active" : "Paused"} detail="No send action is available here." />
+        <StatCard
+          label="Campaign sections"
+          value={campaigns.length}
+          detail="Templates are grouped by campaign."
+        />
+        <StatCard
+          label="Needs approval"
+          value={pendingVariantCount}
+          detail="Pending email decisions still appear in the approval hub."
+        />
+        <StatCard
+          label="Image assets"
+          value={data.outreachAssets.length}
+          detail="Optional email images only."
+        />
+        <StatCard
+          label="Safety"
+          value={data.sendingEnabled ? "Active" : "Paused"}
+          detail="No send action is available here."
+        />
       </div>
 
       {campaigns.length ? (
@@ -643,7 +763,16 @@ function TemplatesPage() {
             key={campaign.campaignId || campaign.campaignName}
             title={campaign.campaignName}
             description={`${describeCampaignTemplates(campaign.templates, campaign.sequences)} Launch state: ${friendlyLaunchState(campaign.launchState)}.`}
-            action={canEdit && campaign.campaignId ? <Button size="sm" onClick={() => openTemplateCreate(campaign.campaignId, campaign.campaignName)}>Add template</Button> : undefined}
+            action={
+              canEdit && campaign.campaignId ? (
+                <Button
+                  size="sm"
+                  onClick={() => openTemplateCreate(campaign.campaignId, campaign.campaignName)}
+                >
+                  Add template
+                </Button>
+              ) : undefined
+            }
           >
             <div className="space-y-4">
               <div className="rounded-[22px] border border-border/70 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
@@ -657,19 +786,39 @@ function TemplatesPage() {
               ) : null}
               {campaign.templates.flatMap((template) =>
                 template.variants.map((variant) => {
-                  const approvalRecord = approvalsByEntityKey.get(`outreach_template_variant:${variant.id}`);
-                  const status = normalizeApprovalStatus(approvalRecord?.decisionStatus || approvalRecord?.status || variant.approvalStatus);
-                  const requestedNote = approvalRecord?.decisionNote || variant.approvalDecisionNote || "";
+                  const approvalRecord = approvalsByEntityKey.get(
+                    `outreach_template_variant:${variant.id}`,
+                  );
+                  const status = normalizeApprovalStatus(
+                    approvalRecord?.decisionStatus ||
+                      approvalRecord?.status ||
+                      variant.approvalStatus,
+                  );
+                  const requestedNote =
+                    approvalRecord?.decisionNote || variant.approvalDecisionNote || "";
                   const draft = drafts[variant.id];
                   const current = draft || variantToDraft(variant);
                   const editing = editingVariantId === variant.id;
                   const dirty = isVariantDirty(variant, current);
-                  const selectedAsset = findSelectedAsset(data.outreachAssets, current.assetId || variant.imageSettings.assetId || variant.selectedImageAsset?.id);
-                  const currentAssetDraft = assetDrafts[variant.id] || assetToDraft(selectedAsset, template, variant);
-                  const imageStatus = normalizeApprovalStatus(currentAssetDraft.status || selectedAsset?.approvalStatus || selectedAsset?.status);
+                  const selectedAsset = findSelectedAsset(
+                    data.outreachAssets,
+                    current.assetId ||
+                      variant.imageSettings.assetId ||
+                      variant.selectedImageAsset?.id,
+                  );
+                  const currentAssetDraft =
+                    assetDrafts[variant.id] || assetToDraft(selectedAsset, template, variant);
+                  const imageStatus = normalizeApprovalStatus(
+                    currentAssetDraft.status ||
+                      selectedAsset?.approvalStatus ||
+                      selectedAsset?.status,
+                  );
 
                   return (
-                    <Card key={variant.id} className="rounded-[28px] border-border/70 p-5 shadow-none">
+                    <Card
+                      key={variant.id}
+                      className="rounded-[28px] border-border/70 p-5 shadow-none"
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -682,12 +831,17 @@ function TemplatesPage() {
                               </Badge>
                             ) : null}
                             {variant.latestQualityReview ? (
-                              <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
+                              <Badge
+                                variant="outline"
+                                className="border-primary/20 bg-primary/5 text-primary"
+                              >
                                 Quality {variant.latestQualityReview.score}/100
                               </Badge>
                             ) : null}
                           </div>
-                          <h3 className="mt-3 text-xl font-semibold">{buildVariantTitle(template, variant)}</h3>
+                          <h3 className="mt-3 text-xl font-semibold">
+                            {buildVariantTitle(template, variant)}
+                          </h3>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {campaign.campaignName}
                           </p>
@@ -696,14 +850,29 @@ function TemplatesPage() {
                       </div>
 
                       <div className="mt-5 grid gap-3 md:grid-cols-2">
-                        <TemplateMeta label="Subject line" value={current.subject || "No subject line"} />
-                        <TemplateMeta label="Image included" value={current.includeImage && (selectedAsset || current.assetId) ? "Yes" : "No"} />
-                        <TemplateMeta label="Template name" value={template.name || "Email template"} />
+                        <TemplateMeta
+                          label="Subject line"
+                          value={current.subject || "No subject line"}
+                        />
+                        <TemplateMeta
+                          label="Image included"
+                          value={
+                            current.includeImage && (selectedAsset || current.assetId)
+                              ? "Yes"
+                              : "No"
+                          }
+                        />
+                        <TemplateMeta
+                          label="Template name"
+                          value={template.name || "Email template"}
+                        />
                         <TemplateMeta label="Current status" value={statusLabel(status)} />
                       </div>
 
                       <div className="mt-5 overflow-hidden rounded-[24px] border border-border/70 bg-muted/10 px-4 py-5 sm:px-5">
-                        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Email preview</p>
+                        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+                          Email preview
+                        </p>
                         <p className="mt-3 font-medium">{current.subject || "No subject line"}</p>
                         <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
                           {editing ? current.body : current.body || "No email body yet."}
@@ -714,20 +883,46 @@ function TemplatesPage() {
                         <div className="mt-5 space-y-4">
                           <div>
                             <p className="text-sm font-medium">Subject line</p>
-                            <Input className="mt-2" value={current.subject} onChange={(event) => updateDraft(variant.id, "subject", event.target.value)} />
+                            <Input
+                              className="mt-2"
+                              value={current.subject}
+                              onChange={(event) =>
+                                updateDraft(variant.id, "subject", event.target.value)
+                              }
+                            />
                           </div>
                           <div>
                             <p className="text-sm font-medium">Email body</p>
-                            <Textarea className="mt-2 min-h-[220px]" value={current.body} onChange={(event) => updateDraft(variant.id, "body", event.target.value)} />
+                            <Textarea
+                              className="mt-2 min-h-[220px]"
+                              value={current.body}
+                              onChange={(event) =>
+                                updateDraft(variant.id, "body", event.target.value)
+                              }
+                            />
                           </div>
                           <div className="grid gap-3 md:grid-cols-2">
                             <div>
                               <p className="text-sm font-medium">CTA</p>
-                              <Input className="mt-2" value={current.cta} onChange={(event) => updateDraft(variant.id, "cta", event.target.value)} placeholder="Optional CTA" />
+                              <Input
+                                className="mt-2"
+                                value={current.cta}
+                                onChange={(event) =>
+                                  updateDraft(variant.id, "cta", event.target.value)
+                                }
+                                placeholder="Optional CTA"
+                              />
                             </div>
                             <div>
                               <p className="text-sm font-medium">Signature</p>
-                              <Input className="mt-2" value={current.signature} onChange={(event) => updateDraft(variant.id, "signature", event.target.value)} placeholder="Optional signature" />
+                              <Input
+                                className="mt-2"
+                                value={current.signature}
+                                onChange={(event) =>
+                                  updateDraft(variant.id, "signature", event.target.value)
+                                }
+                                placeholder="Optional signature"
+                              />
                             </div>
                           </div>
 
@@ -736,7 +931,8 @@ function TemplatesPage() {
                               <div>
                                 <p className="font-medium">Optional image</p>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                  Upload an approved image to include with this email. Images are optional and text-first emails usually perform better.
+                                  Upload an approved image to include with this email. Images are
+                                  optional and text-first emails usually perform better.
                                 </p>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                   This image will appear inside the email after approval.
@@ -747,10 +943,19 @@ function TemplatesPage() {
 
                             {currentAssetDraft.fileUrl ? (
                               <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/10 px-4 py-4">
-                                <img src={currentAssetDraft.fileUrl} alt={currentAssetDraft.altText || current.altText} className="max-h-56 w-full rounded-2xl bg-background/80 p-3 object-contain" />
-                                <p className="mt-3 text-sm font-medium">{currentAssetDraft.title || "Linked image"}</p>
+                                <img
+                                  src={currentAssetDraft.fileUrl}
+                                  alt={currentAssetDraft.altText || current.altText}
+                                  className="max-h-56 w-full rounded-2xl bg-background/80 p-3 object-contain"
+                                />
+                                <p className="mt-3 text-sm font-medium">
+                                  {currentAssetDraft.title || "Linked image"}
+                                </p>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                  {currentAssetDraft.originalFilename || "Uploaded image"} · {friendlyPlacement(currentAssetDraft.placement || current.placement)}
+                                  {currentAssetDraft.originalFilename || "Uploaded image"} ·{" "}
+                                  {friendlyPlacement(
+                                    currentAssetDraft.placement || current.placement,
+                                  )}
                                 </p>
                               </div>
                             ) : (
@@ -762,7 +967,9 @@ function TemplatesPage() {
                             <div className="mt-4 grid gap-3 md:grid-cols-2">
                               <div className="md:col-span-2">
                                 <input
-                                  ref={(node) => { fileInputs.current[variant.id] = node; }}
+                                  ref={(node) => {
+                                    fileInputs.current[variant.id] = node;
+                                  }}
                                   type="file"
                                   accept="image/png,image/jpeg,image/webp"
                                   className="hidden"
@@ -780,14 +987,23 @@ function TemplatesPage() {
                                     onClick={() => openFilePicker(variant.id)}
                                     disabled={uploadOutreachAssetMutation.isPending}
                                   >
-                                    {currentAssetDraft.assetId ? "Upload / Replace image" : "Upload image"}
+                                    {currentAssetDraft.assetId
+                                      ? "Upload / Replace image"
+                                      : "Upload image"}
                                   </Button>
-                                  <span className="text-sm text-muted-foreground">PNG, JPG/JPEG, or WebP up to 1MB.</span>
+                                  <span className="text-sm text-muted-foreground">
+                                    PNG, JPG/JPEG, or WebP up to 1MB.
+                                  </span>
                                 </div>
                               </div>
                               <div>
                                 <p className="text-sm font-medium">Use image</p>
-                                <Select value={current.includeImage ? "yes" : "no"} onValueChange={(value) => updateDraft(variant.id, "includeImage", value === "yes")}>
+                                <Select
+                                  value={current.includeImage ? "yes" : "no"}
+                                  onValueChange={(value) =>
+                                    updateDraft(variant.id, "includeImage", value === "yes")
+                                  }
+                                >
                                   <SelectTrigger className="mt-2">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -804,7 +1020,10 @@ function TemplatesPage() {
                                   onValueChange={(value) => {
                                     const nextAssetId = value === "__none__" ? "" : value;
                                     updateDraft(variant.id, "assetId", nextAssetId);
-                                    const nextAsset = findSelectedAsset(data.outreachAssets, nextAssetId);
+                                    const nextAsset = findSelectedAsset(
+                                      data.outreachAssets,
+                                      nextAssetId,
+                                    );
                                     setAssetDrafts((currentDrafts) => ({
                                       ...currentDrafts,
                                       [variant.id]: assetToDraft(nextAsset, template, variant),
@@ -817,10 +1036,19 @@ function TemplatesPage() {
                                   <SelectContent>
                                     <SelectItem value="__none__">No image selected</SelectItem>
                                     {data.outreachAssets
-                                      .filter((asset) => asset.campaignId === template.campaignId || asset.templateVariantId === variant.id)
+                                      .filter(
+                                        (asset) =>
+                                          asset.campaignId === template.campaignId ||
+                                          asset.templateVariantId === variant.id,
+                                      )
                                       .map((asset) => (
                                         <SelectItem key={asset.id} value={asset.id}>
-                                          {asset.title || "Image"} · {statusLabel(normalizeApprovalStatus(asset.approvalStatus || asset.status))}
+                                          {asset.title || "Image"} ·{" "}
+                                          {statusLabel(
+                                            normalizeApprovalStatus(
+                                              asset.approvalStatus || asset.status,
+                                            ),
+                                          )}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -828,7 +1056,14 @@ function TemplatesPage() {
                               </div>
                               <div>
                                 <p className="text-sm font-medium">Image title</p>
-                                <Input className="mt-2" value={currentAssetDraft.title} onChange={(event) => updateAssetDraft(variant.id, "title", event.target.value)} placeholder="Short image title" />
+                                <Input
+                                  className="mt-2"
+                                  value={currentAssetDraft.title}
+                                  onChange={(event) =>
+                                    updateAssetDraft(variant.id, "title", event.target.value)
+                                  }
+                                  placeholder="Short image title"
+                                />
                               </div>
                               <div>
                                 <p className="text-sm font-medium">Placement</p>
@@ -866,7 +1101,9 @@ function TemplatesPage() {
                                 <Textarea
                                   className="mt-2 min-h-[96px]"
                                   value={currentAssetDraft.description}
-                                  onChange={(event) => updateAssetDraft(variant.id, "description", event.target.value)}
+                                  onChange={(event) =>
+                                    updateAssetDraft(variant.id, "description", event.target.value)
+                                  }
                                   placeholder="Optional note about how this image should be used."
                                 />
                               </div>
@@ -876,7 +1113,11 @@ function TemplatesPage() {
                               </div>
                               <div>
                                 <p className="text-sm font-medium">Linked template</p>
-                                <Input className="mt-2" value={buildVariantTitle(template, variant)} readOnly />
+                                <Input
+                                  className="mt-2"
+                                  value={buildVariantTitle(template, variant)}
+                                  readOnly
+                                />
                               </div>
                             </div>
 
@@ -886,14 +1127,26 @@ function TemplatesPage() {
                                 variant="outline"
                                 className="w-full sm:w-auto"
                                 onClick={() => void saveAssetDetails(template, variant)}
-                                disabled={updateOutreachAssetMutation.isPending || !currentAssetDraft.assetId}
-                                title={!currentAssetDraft.assetId ? "Upload an image first." : undefined}
+                                disabled={
+                                  updateOutreachAssetMutation.isPending ||
+                                  !currentAssetDraft.assetId
+                                }
+                                title={
+                                  !currentAssetDraft.assetId ? "Upload an image first." : undefined
+                                }
                               >
                                 Save image details
                               </Button>
-                              {canApprove && currentAssetDraft.approvalId && imageStatus === "pending" ? (
+                              {canApprove &&
+                              currentAssetDraft.approvalId &&
+                              imageStatus === "pending" ? (
                                 <>
-                                  <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => void approveAsset(currentAssetDraft.approvalId)}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full sm:w-auto"
+                                    onClick={() => void approveAsset(currentAssetDraft.approvalId)}
+                                  >
                                     Approve image
                                   </Button>
                                   <Button
@@ -901,8 +1154,14 @@ function TemplatesPage() {
                                     variant="outline"
                                     className="w-full sm:w-auto"
                                     onClick={() => {
-                                      setRequestChangesTarget({ kind: "asset", title: currentAssetDraft.title || "Image", approvalId: currentAssetDraft.approvalId });
-                                      setRequestChangesNote(currentAssetDraft.approvalDecisionNote || "");
+                                      setRequestChangesTarget({
+                                        kind: "asset",
+                                        title: currentAssetDraft.title || "Image",
+                                        approvalId: currentAssetDraft.approvalId,
+                                      });
+                                      setRequestChangesNote(
+                                        currentAssetDraft.approvalDecisionNote || "",
+                                      );
                                     }}
                                   >
                                     Request Changes
@@ -911,7 +1170,8 @@ function TemplatesPage() {
                               ) : null}
                             </div>
 
-                            {currentAssetDraft.status && normalizeApprovalStatus(currentAssetDraft.status) === "approved" ? (
+                            {currentAssetDraft.status &&
+                            normalizeApprovalStatus(currentAssetDraft.status) === "approved" ? (
                               <p className="mt-3 text-sm text-warning-foreground">
                                 If this image changes, it will need approval again before launch.
                               </p>
@@ -919,17 +1179,33 @@ function TemplatesPage() {
                           </div>
 
                           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                            <Button className="w-full sm:w-auto" onClick={() => void saveVariant(template, variant)} disabled={!dirty || updateTemplateVariantContentMutation.isPending}>
+                            <Button
+                              className="w-full sm:w-auto"
+                              onClick={() => void saveVariant(template, variant)}
+                              disabled={!dirty || updateTemplateVariantContentMutation.isPending}
+                            >
                               Save changes
                             </Button>
-                            <Button className="w-full sm:w-auto" variant="outline" onClick={() => stopEditing(variant.id)}>
+                            <Button
+                              className="w-full sm:w-auto"
+                              variant="outline"
+                              onClick={() => stopEditing(variant.id)}
+                            >
                               Cancel
                             </Button>
-                            <Button className="w-full sm:w-auto" variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
+                            <Button
+                              className="w-full sm:w-auto"
+                              variant="outline"
+                              onClick={() => void archiveTemplateVariant(template, variant)}
+                              disabled={archiveTemplateVariantMutation.isPending}
+                            >
                               Archive template
                             </Button>
                             {!dirty ? (
-                              <Badge variant="outline" className="w-full justify-center border-border/70 bg-muted/10 text-muted-foreground sm:w-auto">
+                              <Badge
+                                variant="outline"
+                                className="w-full justify-center border-border/70 bg-muted/10 text-muted-foreground sm:w-auto"
+                              >
                                 No unsaved changes
                               </Badge>
                             ) : null}
@@ -937,7 +1213,8 @@ function TemplatesPage() {
 
                           {normalizeApprovalStatus(variant.approvalStatus) === "approved" ? (
                             <p className="text-sm text-warning-foreground">
-                              Saving changes will reset approval. The updated email must be approved again before launch.
+                              Saving changes will reset approval. The updated email must be approved
+                              again before launch.
                             </p>
                           ) : null}
                         </div>
@@ -946,20 +1223,37 @@ function TemplatesPage() {
                           <div className="rounded-[24px] border border-border/70 bg-background px-5 py-5">
                             <p className="font-medium">Optional image</p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                              {selectedAsset ? `${selectedAsset.title || "Linked image"} · ${friendlyPlacement(selectedAsset.placement || current.placement)} · ${statusLabel(imageStatus)}` : "No image selected"}
+                              {selectedAsset
+                                ? `${selectedAsset.title || "Linked image"} · ${friendlyPlacement(selectedAsset.placement || current.placement)} · ${statusLabel(imageStatus)}`
+                                : "No image selected"}
                             </p>
                             {selectedAsset?.fileUrl ? (
-                              <img src={selectedAsset.fileUrl} alt={selectedAsset.altText || current.altText} className="mt-4 max-h-56 w-full rounded-2xl bg-background/80 p-3 object-contain" />
+                              <img
+                                src={selectedAsset.fileUrl}
+                                alt={selectedAsset.altText || current.altText}
+                                className="mt-4 max-h-56 w-full rounded-2xl bg-background/80 p-3 object-contain"
+                              />
                             ) : null}
                             {selectedAsset?.altText ? (
-                              <p className="mt-3 text-sm text-muted-foreground">Alt text: {selectedAsset.altText}</p>
+                              <p className="mt-3 text-sm text-muted-foreground">
+                                Alt text: {selectedAsset.altText}
+                              </p>
                             ) : null}
                             {selectedAsset?.approvalDecisionNote ? (
-                              <p className="mt-3 text-sm text-muted-foreground">{selectedAsset.approvalDecisionNote}</p>
+                              <p className="mt-3 text-sm text-muted-foreground">
+                                {selectedAsset.approvalDecisionNote}
+                              </p>
                             ) : null}
-                            {canApprove && selectedAsset?.approvalId && imageStatus === "pending" ? (
+                            {canApprove &&
+                            selectedAsset?.approvalId &&
+                            imageStatus === "pending" ? (
                               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                                <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => void approveAsset(selectedAsset.approvalId)}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full sm:w-auto"
+                                  onClick={() => void approveAsset(selectedAsset.approvalId)}
+                                >
                                   Approve image
                                 </Button>
                                 <Button
@@ -967,7 +1261,11 @@ function TemplatesPage() {
                                   variant="outline"
                                   className="w-full sm:w-auto"
                                   onClick={() => {
-                                    setRequestChangesTarget({ kind: "asset", title: selectedAsset.title || "Image", approvalId: selectedAsset.approvalId });
+                                    setRequestChangesTarget({
+                                      kind: "asset",
+                                      title: selectedAsset.title || "Image",
+                                      approvalId: selectedAsset.approvalId,
+                                    });
                                     setRequestChangesNote(selectedAsset.approvalDecisionNote || "");
                                   }}
                                 >
@@ -984,20 +1282,42 @@ function TemplatesPage() {
                           ) : null}
 
                           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                            {canEdit ? <Button className="w-full sm:w-auto" variant="outline" onClick={() => startEditing(template, variant)}>Edit</Button> : null}
                             {canEdit ? (
-                              <Button className="w-full sm:w-auto" variant="outline" onClick={() => void archiveTemplateVariant(template, variant)} disabled={archiveTemplateVariantMutation.isPending}>
+                              <Button
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                                onClick={() => startEditing(template, variant)}
+                              >
+                                Edit
+                              </Button>
+                            ) : null}
+                            {canEdit ? (
+                              <Button
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                                onClick={() => void archiveTemplateVariant(template, variant)}
+                                disabled={archiveTemplateVariantMutation.isPending}
+                              >
                                 Archive template
                               </Button>
                             ) : null}
                             {canApprove && status === "pending" ? (
                               <>
-                                <Button className="w-full sm:w-auto" onClick={() => void approveVariant(variant.id)}>Approve</Button>
+                                <Button
+                                  className="w-full sm:w-auto"
+                                  onClick={() => void approveVariant(variant.id)}
+                                >
+                                  Approve
+                                </Button>
                                 <Button
                                   variant="outline"
                                   className="w-full sm:w-auto"
                                   onClick={() => {
-                                    setRequestChangesTarget({ kind: "variant", title: buildVariantTitle(template, variant), id: variant.id });
+                                    setRequestChangesTarget({
+                                      kind: "variant",
+                                      title: buildVariantTitle(template, variant),
+                                      id: variant.id,
+                                    });
                                     setRequestChangesNote(requestedNote);
                                   }}
                                 >
@@ -1006,12 +1326,19 @@ function TemplatesPage() {
                               </>
                             ) : null}
                             {canApprove && status === "approved" ? (
-                              <Button className="w-full sm:w-auto" variant="outline" onClick={() => void pauseVariantApproval(variant.id)}>
+                              <Button
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                                onClick={() => void pauseVariantApproval(variant.id)}
+                              >
                                 Unapprove / Pause
                               </Button>
                             ) : null}
                             {status === "approved" ? (
-                              <Badge variant="outline" className="w-full justify-center border-success/30 bg-success/10 text-success sm:w-auto">
+                              <Badge
+                                variant="outline"
+                                className="w-full justify-center border-success/30 bg-success/10 text-success sm:w-auto"
+                              >
                                 Approved
                               </Badge>
                             ) : null}
@@ -1026,15 +1353,26 @@ function TemplatesPage() {
               {campaign.sequences.length ? (
                 <div className="grid gap-4 lg:grid-cols-2">
                   {campaign.sequences.map((sequence) => {
-                    const status = normalizeApprovalStatus(sequence.approvalStatus || sequence.approvalDecisionStatus);
+                    const status = normalizeApprovalStatus(
+                      sequence.approvalStatus || sequence.approvalDecisionStatus,
+                    );
                     return (
-                      <Card key={sequence.id} className="rounded-[26px] border-border/70 p-5 shadow-none">
+                      <Card
+                        key={sequence.id}
+                        className="rounded-[26px] border-border/70 p-5 shadow-none"
+                      >
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
-                            <Badge variant="outline" className="border-border/70 bg-muted/10">Follow-up</Badge>
-                            <h3 className="mt-3 text-lg font-semibold">{sequence.name || `Follow-up sequence for ${sequence.campaignName || campaign.campaignName}`}</h3>
+                            <Badge variant="outline" className="border-border/70 bg-muted/10">
+                              Follow-up
+                            </Badge>
+                            <h3 className="mt-3 text-lg font-semibold">
+                              {sequence.name ||
+                                `Follow-up sequence for ${sequence.campaignName || campaign.campaignName}`}
+                            </h3>
                             <p className="mt-1 text-sm text-muted-foreground">
-                              {sequence.followupCount} follow-up step{sequence.followupCount === 1 ? "" : "s"}
+                              {sequence.followupCount} follow-up step
+                              {sequence.followupCount === 1 ? "" : "s"}
                             </p>
                           </div>
                           <ApprovalStatusBadge status={status} />
@@ -1047,13 +1385,23 @@ function TemplatesPage() {
                         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                           {canApprove && status === "pending" ? (
                             <>
-                              <Button size="sm" className="w-full sm:w-auto" onClick={() => void approveSequence(sequence.id)}>Approve</Button>
+                              <Button
+                                size="sm"
+                                className="w-full sm:w-auto"
+                                onClick={() => void approveSequence(sequence.id)}
+                              >
+                                Approve
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="w-full sm:w-auto"
                                 onClick={() => {
-                                  setRequestChangesTarget({ kind: "sequence", title: sequence.name || "Follow-up sequence", id: sequence.id });
+                                  setRequestChangesTarget({
+                                    kind: "sequence",
+                                    title: sequence.name || "Follow-up sequence",
+                                    id: sequence.id,
+                                  });
                                   setRequestChangesNote(sequence.approvalDecisionNote || "");
                                 }}
                               >
@@ -1063,11 +1411,21 @@ function TemplatesPage() {
                           ) : (
                             <>
                               {canApprove && status === "approved" ? (
-                                <Button size="sm" className="w-full sm:w-auto" variant="outline" onClick={() => void pauseSequenceApproval(sequence.id)}>
+                                <Button
+                                  size="sm"
+                                  className="w-full sm:w-auto"
+                                  variant="outline"
+                                  onClick={() => void pauseSequenceApproval(sequence.id)}
+                                >
                                   Unapprove / Pause
                                 </Button>
                               ) : null}
-                              <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="w-full sm:w-auto"
+                              >
                                 <Link to="/approvals">View in approval hub</Link>
                               </Button>
                             </>
@@ -1088,7 +1446,12 @@ function TemplatesPage() {
         />
       )}
 
-      <Dialog open={Boolean(templateCreateState)} onOpenChange={(open) => { if (!open) closeTemplateCreate(); }}>
+      <Dialog
+        open={Boolean(templateCreateState)}
+        onOpenChange={(open) => {
+          if (!open) closeTemplateCreate();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add template</DialogTitle>
@@ -1102,8 +1465,13 @@ function TemplatesPage() {
               <Select
                 value={templateCreateState?.campaignId || "__none__"}
                 onValueChange={(value) => {
-                  const nextCampaign = availableCampaigns.find((campaign) => campaign.id === value) || null;
-                  setTemplateCreateState(nextCampaign ? { campaignId: nextCampaign.id, campaignName: nextCampaign.name } : null);
+                  const nextCampaign =
+                    availableCampaigns.find((campaign) => campaign.id === value) || null;
+                  setTemplateCreateState(
+                    nextCampaign
+                      ? { campaignId: nextCampaign.id, campaignName: nextCampaign.name }
+                      : null,
+                  );
                 }}
               >
                 <SelectTrigger className="mt-2">
@@ -1120,7 +1488,12 @@ function TemplatesPage() {
             </div>
             <div>
               <p className="text-sm font-medium">Template type</p>
-              <Select value={templateCreateForm.templateType} onValueChange={(value) => setTemplateCreateForm((current) => ({ ...current, templateType: value }))}>
+              <Select
+                value={templateCreateForm.templateType}
+                onValueChange={(value) =>
+                  setTemplateCreateForm((current) => ({ ...current, templateType: value }))
+                }
+              >
                 <SelectTrigger className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
@@ -1134,50 +1507,170 @@ function TemplatesPage() {
             </div>
             <div>
               <p className="text-sm font-medium">Template name</p>
-              <Input className="mt-2" value={templateCreateForm.name} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, name: event.target.value }))} placeholder="Example: Managed IT first outreach" />
+              <Input
+                className="mt-2"
+                value={templateCreateForm.name}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="Example: Managed IT first outreach"
+              />
             </div>
             <div>
               <p className="text-sm font-medium">Variant name</p>
-              <Input className="mt-2" value={templateCreateForm.variantLabel} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, variantLabel: event.target.value }))} placeholder="Example: A" />
+              <Input
+                className="mt-2"
+                value={templateCreateForm.variantLabel}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({
+                    ...current,
+                    variantLabel: event.target.value,
+                  }))
+                }
+                placeholder="Example: A"
+              />
             </div>
             <div className="md:col-span-2">
               <p className="text-sm font-medium">Subject line</p>
-              <Input className="mt-2" value={templateCreateForm.subject} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, subject: event.target.value }))} placeholder="Optional subject line" />
+              <Input
+                className="mt-2"
+                value={templateCreateForm.subject}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({ ...current, subject: event.target.value }))
+                }
+                placeholder="Optional subject line"
+              />
             </div>
             <div className="md:col-span-2">
               <p className="text-sm font-medium">Body</p>
-              <Textarea className="mt-2 min-h-[220px]" value={templateCreateForm.body} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, body: event.target.value }))} placeholder="Write the email body here." />
+              <Textarea
+                className="mt-2 min-h-[220px]"
+                value={templateCreateForm.body}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({ ...current, body: event.target.value }))
+                }
+                placeholder="Write the email body here."
+              />
             </div>
             <div>
               <p className="text-sm font-medium">CTA</p>
-              <Input className="mt-2" value={templateCreateForm.cta} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, cta: event.target.value }))} placeholder="Optional CTA" />
+              <Input
+                className="mt-2"
+                value={templateCreateForm.cta}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({ ...current, cta: event.target.value }))
+                }
+                placeholder="Optional CTA"
+              />
             </div>
             <div>
               <p className="text-sm font-medium">Signature</p>
-              <Input className="mt-2" value={templateCreateForm.signature} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, signature: event.target.value }))} placeholder="Optional signature" />
+              <Textarea
+                className="mt-2 min-h-[100px]"
+                value={templateCreateForm.signature}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({
+                    ...current,
+                    signature: event.target.value,
+                  }))
+                }
+                placeholder="Kind regards,\nExpert Technology Solutions"
+              />
             </div>
+            <div>
+              <p className="text-sm font-medium">Optional image</p>
+              <Input
+                className="mt-2"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({
+                    ...current,
+                    imageFile: event.target.files?.[0] ?? null,
+                  }))
+                }
+              />
+              <p className="mt-2 text-xs text-muted-foreground">PNG, JPG, or WebP up to 1MB.</p>
+            </div>
+            {templateCreateForm.imageFile ? (
+              <>
+                <div>
+                  <p className="text-sm font-medium">Image alt text</p>
+                  <Input
+                    className="mt-2"
+                    value={templateCreateForm.imageAltText}
+                    onChange={(event) =>
+                      setTemplateCreateForm((current) => ({
+                        ...current,
+                        imageAltText: event.target.value,
+                      }))
+                    }
+                    placeholder="Describe what the image shows"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Image placement</p>
+                  <Select
+                    value={templateCreateForm.imagePlacement}
+                    onValueChange={(value) =>
+                      setTemplateCreateForm((current) => ({ ...current, imagePlacement: value }))
+                    }
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="header">Header</SelectItem>
+                      <SelectItem value="inline">Inside email</SelectItem>
+                      <SelectItem value="footer">Footer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : null}
             <div className="md:col-span-2">
               <p className="text-sm font-medium">Notes</p>
-              <Textarea className="mt-2 min-h-[100px]" value={templateCreateForm.notes} onChange={(event) => setTemplateCreateForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional internal guidance for this template." />
+              <Textarea
+                className="mt-2 min-h-[100px]"
+                value={templateCreateForm.notes}
+                onChange={(event) =>
+                  setTemplateCreateForm((current) => ({ ...current, notes: event.target.value }))
+                }
+                placeholder="Optional internal guidance for this template."
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeTemplateCreate}>
               Cancel
             </Button>
-            <Button onClick={() => void saveTemplateCreate()} disabled={createOutreachTemplateMutation.isPending}>
-              Save template
+            <Button
+              onClick={() => void saveTemplateCreate()}
+              disabled={
+                createOutreachTemplateMutation.isPending ||
+                uploadOutreachAssetMutation.isPending ||
+                updateTemplateVariantContentMutation.isPending ||
+                updateCampaignImageSettingsMutation.isPending ||
+                (Boolean(templateCreateForm.imageFile) && !templateCreateForm.imageAltText.trim())
+              }
+            >
+              {createOutreachTemplateMutation.isPending || uploadOutreachAssetMutation.isPending
+                ? "Saving..."
+                : "Save template"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(requestChangesTarget)} onOpenChange={(open) => {
-        if (!open) {
-          setRequestChangesTarget(null);
-          setRequestChangesNote("");
-        }
-      }}>
+      <Dialog
+        open={Boolean(requestChangesTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRequestChangesTarget(null);
+            setRequestChangesNote("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Request changes</DialogTitle>
@@ -1200,15 +1693,16 @@ function TemplatesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setRequestChangesTarget(null);
-              setRequestChangesNote("");
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRequestChangesTarget(null);
+                setRequestChangesNote("");
+              }}
+            >
               Cancel
             </Button>
-            <Button onClick={() => void submitRequestChanges()}>
-              Save request
-            </Button>
+            <Button onClick={() => void submitRequestChanges()}>Save request</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1272,7 +1766,11 @@ function createEmptyAssetDraft(): AssetDraftState {
   };
 }
 
-function assetToDraft(asset: OutreachAssetRecord | null, template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord): AssetDraftState {
+function assetToDraft(
+  asset: OutreachAssetRecord | null,
+  template: OutreachTemplateRecord,
+  variant: OutreachTemplateVariantRecord,
+): AssetDraftState {
   if (!asset) {
     return {
       ...createEmptyAssetDraft(),
@@ -1316,15 +1814,15 @@ function variantToDraft(variant: OutreachTemplateVariantRecord): VariantDraft {
 
 function isVariantDirty(variant: OutreachTemplateVariantRecord, draft: VariantDraft) {
   return (
-    draft.subject !== (variant.subjectTemplate || "")
-    || draft.body !== (variant.bodyTemplate || "")
-    || draft.cta !== (variant.callToAction || "")
-    || draft.signature !== (variant.signature || "")
-    || draft.includeImage !== Boolean(variant.imageSettings.includeImage)
-    || draft.assetId !== (variant.imageSettings.assetId || "")
-    || draft.placement !== (variant.imageSettings.placement || "inline")
-    || draft.altText !== (variant.imageSettings.altText || "")
-    || draft.fallbackText !== (variant.imageSettings.fallbackText || "")
+    draft.subject !== (variant.subjectTemplate || "") ||
+    draft.body !== (variant.bodyTemplate || "") ||
+    draft.cta !== (variant.callToAction || "") ||
+    draft.signature !== (variant.signature || "") ||
+    draft.includeImage !== Boolean(variant.imageSettings.includeImage) ||
+    draft.assetId !== (variant.imageSettings.assetId || "") ||
+    draft.placement !== (variant.imageSettings.placement || "inline") ||
+    draft.altText !== (variant.imageSettings.altText || "") ||
+    draft.fallbackText !== (variant.imageSettings.fallbackText || "")
   );
 }
 
@@ -1333,13 +1831,19 @@ function findSelectedAsset(assets: OutreachAssetRecord[], assetId?: string) {
   return assets.find((asset) => asset.id === assetId) || null;
 }
 
-function buildVariantTitle(template: OutreachTemplateRecord, variant: OutreachTemplateVariantRecord) {
+function buildVariantTitle(
+  template: OutreachTemplateRecord,
+  variant: OutreachTemplateVariantRecord,
+) {
   const type = friendlyTemplateType(template.templateType);
   const variantLabel = variant.variantLabel ? ` · Variant ${variant.variantLabel}` : "";
   return `${type} for ${template.name || template.campaignName || "campaign"}${variantLabel}`;
 }
 
-function describeCampaignTemplates(templates: OutreachTemplateRecord[], sequences: FollowupSequenceRecord[]) {
+function describeCampaignTemplates(
+  templates: OutreachTemplateRecord[],
+  sequences: FollowupSequenceRecord[],
+) {
   const emailCount = templates.reduce((total, template) => total + template.variants.length, 0);
   const followups = sequences.reduce((total, sequence) => total + sequence.followupCount, 0);
   return `${emailCount} email ${emailCount === 1 ? "variant" : "variants"}${followups ? ` · ${followups} follow-up ${followups === 1 ? "step" : "steps"}` : ""}`;
@@ -1373,11 +1877,13 @@ function friendlyTemplateType(value: string) {
     case "variant":
       return "Variant";
     default:
-      return value
-        .split("_")
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ") || "Email";
+      return (
+        value
+          .split("_")
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ") || "Email"
+      );
   }
 }
 
@@ -1386,15 +1892,19 @@ function friendlyPlacement(value: string) {
     case "attachment_link":
       return "Attachment link";
     default:
-      return value
-        .split("_")
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ") || "Inline";
+      return (
+        value
+          .split("_")
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ") || "Inline"
+      );
   }
 }
 
-function normalizeApprovalStatus(value?: string): "pending" | "approved" | "changes_requested" | "archived" {
+function normalizeApprovalStatus(
+  value?: string,
+): "pending" | "approved" | "changes_requested" | "archived" {
   switch ((value || "").toLowerCase()) {
     case "approved":
       return "approved";

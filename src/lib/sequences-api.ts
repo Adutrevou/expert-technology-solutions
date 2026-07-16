@@ -51,8 +51,11 @@ export interface SequenceStepRecord {
   sequence_id: string;
   step_number: number;
   delay_days: number;
+  send_weekday: number | null;
   subject_template: string | null;
   body_template: string;
+  signature: string | null;
+  image_asset_id: string | null;
   template_variables: Record<string, unknown>;
   ai_personalization_enabled: boolean;
   status: "active" | "inactive";
@@ -159,6 +162,7 @@ export async function updateSequence(
       | "stop_on_reply"
       | "stop_on_bounce"
       | "stop_on_disqualified"
+      | "campaign_id"
     >
   >,
 ): Promise<SequenceRecord> {
@@ -200,9 +204,11 @@ export async function createSequenceStep(
   sequenceId: string,
   input: {
     step_number: number;
-    delay_days: number;
-    subject_template?: string;
+    send_weekday: number;
+    subject_template?: string | null;
     body_template: string;
+    signature?: string | null;
+    image_asset_id?: string | null;
     ai_personalization_enabled?: boolean;
   },
 ): Promise<SequenceStepRecord> {
@@ -222,7 +228,13 @@ export async function updateSequenceStep(
   patch: Partial<
     Pick<
       SequenceStepRecord,
-      "delay_days" | "subject_template" | "body_template" | "ai_personalization_enabled" | "status"
+      | "send_weekday"
+      | "subject_template"
+      | "body_template"
+      | "signature"
+      | "image_asset_id"
+      | "ai_personalization_enabled"
+      | "status"
     >
   >,
 ): Promise<SequenceStepRecord> {
