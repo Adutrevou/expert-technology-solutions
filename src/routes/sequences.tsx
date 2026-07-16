@@ -17,6 +17,7 @@ import {
   Play,
   Plus,
   RefreshCcw,
+  Send,
   ShieldAlert,
   Trash2,
   UserPlus,
@@ -66,6 +67,7 @@ import {
 } from "@/lib/leads-api-hooks";
 import {
   useArchiveSequenceMutation,
+  useCreateSequenceTestRunMutation,
   useCreateSequenceMutation,
   useCreateSequenceStepMutation,
   useDeleteSequenceStepMutation,
@@ -77,7 +79,10 @@ import {
   useRunSequenceOnceMutation,
   useSequenceMetricsQuery,
   useSequenceQuery,
+  useSequenceTestRunQuery,
+  useSequenceTestRunsQuery,
   useSequencesQuery,
+  useSendSequenceTestRunMutation,
   useUpdateSequenceMutation,
   useUpdateSequenceStepMutation,
 } from "@/lib/sequences-api-hooks";
@@ -87,6 +92,7 @@ import type {
   SequenceRecord,
   SequenceStatus,
   SequenceStepRecord,
+  SequenceTestRunRecord,
 } from "@/lib/sequences-api";
 
 export const Route = createFileRoute("/sequences")({
@@ -105,6 +111,22 @@ const SENDING_MODE_LABEL: Record<SendingMode, string> = {
   dry_run: "Dry run (no send attempt at all)",
   queue_for_approval: "Queue for approval",
   auto_send_if_policy_allows: "Auto-send if policy allows",
+};
+
+const TEST_RUN_STATUS_LABEL: Record<SequenceTestRunRecord["status"], string> = {
+  preview_ready: "Preview ready",
+  sending: "Sending",
+  partially_sent: "Partially sent",
+  sent: "Sent",
+  failed: "Needs attention",
+};
+
+const TEST_RUN_STATUS_STYLE: Record<SequenceTestRunRecord["status"], string> = {
+  preview_ready: "bg-primary/10 text-primary border-primary/25",
+  sending: "bg-warning/15 text-warning-foreground border-warning/40",
+  partially_sent: "bg-warning/15 text-warning-foreground border-warning/40",
+  sent: "bg-success/15 text-success border-success/30",
+  failed: "bg-destructive/10 text-destructive border-destructive/25",
 };
 
 const WEEKDAYS = [
@@ -136,11 +158,14 @@ const MONTHS = [
 
 function SequencesPage() {
   const sequencesQuery = useSequencesQuery();
+  const testRunsQuery = useSequenceTestRunsQuery();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedTestRunId, setSelectedTestRunId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
 
   const sequences = useMemo(() => sequencesQuery.data ?? [], [sequencesQuery.data]);
+  const testRuns = testRunsQuery.data ?? [];
 
   useEffect(() => {
     if (!sequences.length) {
@@ -235,6 +260,34 @@ function SequencesPage() {
                 </button>
               ))}
             </div>
+            <div className="border-y border-border bg-muted/20 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                  <FlaskConical className="h-3.5 w-3.5 text-primary" /> Test runs
+                </span>
+                <Badge variant="outline">{testRuns.length}</Badge>
+              </div>
+            </div>
+            {testRunsQuery.isLoading ? (
+              <div className="space-y-2 p-4">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+              </div>
+            ) : testRuns.length ? (
+              <div className="divide-y divide-border">
+                {testRuns.map((run) => (
+                  <TestRunListItem
+                    key={run.id}
+                    run={run}
+                    onClick={() => setSelectedTestRunId(run.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="px-4 py-5 text-sm text-muted-foreground">
+                Saved previews and test sends will appear here.
+              </p>
+            )}
           </Card>
 
           {selectedId ? <SequenceDetailPanel sequenceId={selectedId} /> : null}
@@ -252,7 +305,52 @@ function SequencesPage() {
         sequences={sequences}
         initialSequenceId={selectedId}
       />
+      <TestRunDetailDialog
+        runId={selectedTestRunId}
+        open={Boolean(selectedTestRunId)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelectedTestRunId(null);
+        }}
+      />
     </div>
+  );
+}
+
+function TestRunListItem({ run, onClick }: { run: SequenceTestRunRecord; onClick: () => void }) {
+  const progress = run.total_messages
+    ? Math.round(((run.sent_count + run.failed_count) / run.total_messages) * 100)
+    : 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full px-4 py-3 text-left transition-smooth hover:bg-muted/40"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{run.sequence_name}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {run.recipient_count} recipient{run.recipient_count === 1 ? "" : "s"} | {run.sent_count}
+            /{run.total_messages} sent
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className={`${TEST_RUN_STATUS_STYLE[run.status]} shrink-0 text-[10px]`}
+        >
+          {TEST_RUN_STATUS_LABEL[run.status]}
+        </Badge>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary transition-all"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        {formatDistanceToNow(new Date(run.updated_at), { addSuffix: true })}
+      </p>
+    </button>
   );
 }
 
@@ -405,6 +503,8 @@ function TestSequenceDialog({
   const [recipientSearch, setRecipientSearch] = useState("");
   const [recipients, setRecipients] = useState<PreviewRecipient[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [savedRun, setSavedRun] = useState<SequenceTestRunRecord | null>(null);
+  const createTestRun = useCreateSequenceTestRunMutation();
   const deferredSearch = useDeferredValue(recipientSearch.trim());
   const sequenceQuery = useSequenceQuery(sequenceId || undefined);
   const campaigns = campaignsQuery.data?.campaigns ?? [];
@@ -436,6 +536,7 @@ function TestSequenceDialog({
     setRecipientCompany("Expert Technology Solutions");
     setRecipientSearch("");
     setPreviewVisible(false);
+    setSavedRun(null);
   }, [initialSequenceId, open, sequences]);
 
   const addRecipient = (recipient: Omit<PreviewRecipient, "id"> & { id?: string }) => {
@@ -446,6 +547,10 @@ function TestSequenceDialog({
     }
     if (recipients.some((item) => item.email.toLowerCase() === email)) {
       toast.error("That recipient is already in this test.");
+      return;
+    }
+    if (recipients.length >= 5) {
+      toast.error("A test run is limited to 5 recipients.");
       return;
     }
     setRecipients((current) => [
@@ -460,6 +565,7 @@ function TestSequenceDialog({
     setRecipientName("");
     setRecipientSearch("");
     setPreviewVisible(false);
+    setSavedRun(null);
   };
 
   const selectCampaign = (value: string) => {
@@ -468,6 +574,7 @@ function TestSequenceDialog({
     setSequenceId(firstSequence?.id ?? "");
     setRecipients([]);
     setPreviewVisible(false);
+    setSavedRun(null);
   };
 
   const steps = sequenceQuery.data?.steps ?? [];
@@ -480,8 +587,8 @@ function TestSequenceDialog({
             <FlaskConical className="h-5 w-5 text-primary" /> Test a sequence
           </DialogTitle>
           <DialogDescription>
-            Preview real campaign sequence content for one or several recipients. This test never
-            creates enrollments, queue records, or emails.
+            Save a preview, then optionally send one step or the full sequence to up to five test
+            recipients. Tests never create campaign enrollments or outreach queue records.
           </DialogDescription>
         </DialogHeader>
 
@@ -508,6 +615,7 @@ function TestSequenceDialog({
               onValueChange={(value) => {
                 setSequenceId(value);
                 setPreviewVisible(false);
+                setSavedRun(null);
               }}
               disabled={!campaignId || campaignSequences.length === 0}
             >
@@ -554,6 +662,7 @@ function TestSequenceDialog({
                         current.filter((item) => item.id !== recipient.id),
                       );
                       setPreviewVisible(false);
+                      setSavedRun(null);
                     }}
                     className="rounded-full p-0.5 hover:bg-muted"
                   >
@@ -659,16 +768,58 @@ function TestSequenceDialog({
           />
         ) : null}
 
+        {savedRun ? (
+          <section className="rounded-2xl border border-success/30 bg-success/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">Test saved to the list</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Previewing does not send anything. Choose an option below only when you are ready.
+                </p>
+              </div>
+              <Badge variant="outline" className={TEST_RUN_STATUS_STYLE[savedRun.status]}>
+                {TEST_RUN_STATUS_LABEL[savedRun.status]}
+              </Badge>
+            </div>
+            <TestSendControls run={savedRun} onSent={setSavedRun} />
+          </section>
+        ) : null}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
           <Button
             className="gap-2"
-            onClick={() => setPreviewVisible(true)}
-            disabled={!sequenceId || !recipients.length || sequenceQuery.isLoading || !steps.length}
+            onClick={async () => {
+              try {
+                const run = await createTestRun.mutateAsync({
+                  sequenceId,
+                  recipients: recipients.map(({ name, company, email }) => ({
+                    name,
+                    company,
+                    email,
+                  })),
+                });
+                setSavedRun(run);
+                setPreviewVisible(true);
+                toast.success("Test preview saved. It is now visible in Test runs.");
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Unable to save this test preview.",
+                );
+              }
+            }}
+            disabled={
+              !sequenceId ||
+              !recipients.length ||
+              sequenceQuery.isLoading ||
+              !steps.length ||
+              createTestRun.isPending
+            }
           >
-            <FlaskConical className="h-4 w-4" /> Generate test preview
+            <FlaskConical className="h-4 w-4" />
+            {createTestRun.isPending ? "Saving preview..." : "Save test preview"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -760,6 +911,256 @@ function SequencePreviewCards({
         </div>
       ))}
     </section>
+  );
+}
+
+function TestSendControls({
+  run,
+  onSent,
+}: {
+  run: SequenceTestRunRecord;
+  onSent: (run: SequenceTestRunRecord) => void;
+}) {
+  const messages = run.messages ?? [];
+  const stepNumbers = [...new Set(messages.map((message) => message.step_number))].sort(
+    (left, right) => left - right,
+  );
+  const [stepNumber, setStepNumber] = useState(String(stepNumbers[0] ?? 1));
+  const [sendMode, setSendMode] = useState<"single_step" | "full_sequence">("single_step");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const sendTest = useSendSequenceTestRunMutation();
+  const selectedCount = messages.filter(
+    (message) =>
+      message.status !== "sent" &&
+      (sendMode === "full_sequence" || message.step_number === Number(stepNumber)),
+  ).length;
+
+  const openConfirmation = (mode: "single_step" | "full_sequence") => {
+    setSendMode(mode);
+    setConfirmOpen(true);
+  };
+
+  const send = async () => {
+    try {
+      const updated = await sendTest.mutateAsync({
+        runId: run.id,
+        input:
+          sendMode === "full_sequence"
+            ? { mode: "full_sequence" }
+            : { mode: "single_step", step_number: Number(stepNumber) },
+      });
+      setConfirmOpen(false);
+      onSent(updated);
+      toast.success(
+        sendMode === "full_sequence"
+          ? "Full test sequence sent."
+          : `Test email for Step ${stepNumber} sent.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send this test.");
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_auto_auto] sm:items-end">
+        <div className="space-y-2">
+          <Label>Single email</Label>
+          <Select value={stepNumber} onValueChange={setStepNumber}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {stepNumbers.map((number) => (
+                <SelectItem key={number} value={String(number)}>
+                  Step {number}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2"
+          disabled={
+            !messages.some(
+              (message) => message.step_number === Number(stepNumber) && message.status !== "sent",
+            )
+          }
+          onClick={() => openConfirmation("single_step")}
+        >
+          <Mail className="h-4 w-4" /> Send selected email
+        </Button>
+        <Button
+          type="button"
+          className="gap-2"
+          disabled={!messages.some((message) => message.status !== "sent")}
+          onClick={() => openConfirmation("full_sequence")}
+        >
+          <Send className="h-4 w-4" /> Send full test sequence
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Full sequence sends every unsent step immediately as separate emails, ignoring the live
+        calendar schedule so you can inspect the complete experience now.
+      </p>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {sendMode === "full_sequence"
+                ? "Send the full test sequence?"
+                : "Send this test email?"}
+            </DialogTitle>
+            <DialogDescription>
+              This will send {selectedCount} real email{selectedCount === 1 ? "" : "s"} now to the
+              test recipients. Every subject is prefixed with [TEST], and no campaign contacts are
+              enrolled.
+            </DialogDescription>
+          </DialogHeader>
+          <Alert>
+            <FlaskConical className="h-4 w-4" />
+            <AlertTitle>Test-only delivery</AlertTitle>
+            <AlertDescription>
+              {run.recipient_count} recipient{run.recipient_count === 1 ? "" : "s"} |{" "}
+              {run.sequence_name}
+              {sendMode === "single_step" ? ` | Step ${stepNumber}` : " | All unsent steps"}
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              disabled={sendTest.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={send}
+              disabled={sendTest.isPending || selectedCount === 0}
+              className="gap-2"
+            >
+              <Send className="h-4 w-4" />
+              {sendTest.isPending
+                ? "Sending..."
+                : `Send ${selectedCount} test email${selectedCount === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function TestRunDetailDialog({
+  runId,
+  open,
+  onOpenChange,
+}: {
+  runId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const runQuery = useSequenceTestRunQuery(runId || undefined);
+  const [latestRun, setLatestRun] = useState<SequenceTestRunRecord | null>(null);
+  useEffect(() => {
+    if (runQuery.data) setLatestRun(runQuery.data);
+  }, [runQuery.data]);
+  useEffect(() => {
+    if (!open) setLatestRun(null);
+  }, [open]);
+  const run = latestRun ?? runQuery.data;
+  const progress = run?.total_messages
+    ? Math.round(((run.sent_count + run.failed_count) / run.total_messages) * 100)
+    : 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-primary" /> Test run details
+          </DialogTitle>
+          <DialogDescription>
+            Review delivery progress, inspect each email, or send any remaining test messages.
+          </DialogDescription>
+        </DialogHeader>
+        {runQuery.isLoading || !run ? (
+          <Skeleton className="h-72 w-full" />
+        ) : (
+          <div className="space-y-5">
+            <section className="rounded-2xl border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{run.sequence_name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {run.campaign_name || "No campaign"} | Created{" "}
+                    {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
+                  </p>
+                </div>
+                <Badge variant="outline" className={TEST_RUN_STATUS_STYLE[run.status]}>
+                  {TEST_RUN_STATUS_LABEL[run.status]}
+                </Badge>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <DetailLine label="Recipients" value={String(run.recipient_count)} />
+                <DetailLine label="Emails" value={String(run.total_messages)} />
+                <DetailLine label="Sent" value={String(run.sent_count)} />
+                <DetailLine label="Failed" value={String(run.failed_count)} />
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+              </div>
+              {run.last_error ? (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Latest delivery error</AlertTitle>
+                  <AlertDescription>{run.last_error}</AlertDescription>
+                </Alert>
+              ) : null}
+              <TestSendControls run={run} onSent={setLatestRun} />
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="font-semibold">Email status</h3>
+              {(run.messages ?? []).map((message) => (
+                <article key={message.id} className="rounded-xl border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        Step {message.step_number}: {message.subject}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {message.recipient_name} &lt;{message.recipient_email}&gt;
+                      </p>
+                    </div>
+                    <Badge
+                      variant={message.status === "failed" ? "destructive" : "outline"}
+                      className="capitalize"
+                    >
+                      {message.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {message.body}
+                  </p>
+                  {message.error ? (
+                    <p className="mt-2 text-xs text-destructive">{message.error}</p>
+                  ) : null}
+                </article>
+              ))}
+            </section>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

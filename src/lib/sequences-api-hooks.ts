@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/lib/app-state";
 import {
   archiveSequence,
+  createSequenceTestRun,
   createSequence,
   createSequenceStep,
   deleteSequenceStep,
@@ -10,10 +11,13 @@ import {
   enrollLeadsInSequence,
   getSequence,
   getSequenceMetrics,
+  getSequenceTestRun,
   listEnrollments,
   listSequences,
+  listSequenceTestRuns,
   pauseSequence,
   resumeSequence,
+  sendSequenceTestRun,
   runSequenceOnce,
   updateSequence,
   updateSequenceStep,
@@ -26,6 +30,7 @@ import {
 
 const isBrowser = typeof window !== "undefined";
 const SEQUENCES_KEY = ["intergrai", "sequences"] as const;
+const SEQUENCE_TEST_RUNS_KEY = ["intergrai", "sequence-test-runs"] as const;
 
 export function useSequencesQuery() {
   const { isAuthenticated } = useApp();
@@ -44,6 +49,61 @@ export function useSequenceQuery(sequenceId?: string) {
     queryFn: () => getSequence(sequenceId as string),
     enabled: isBrowser && isAuthenticated && Boolean(sequenceId),
     retry: 1,
+  });
+}
+
+export function useSequenceTestRunsQuery() {
+  const { isAuthenticated } = useApp();
+  return useQuery({
+    queryKey: SEQUENCE_TEST_RUNS_KEY,
+    queryFn: listSequenceTestRuns,
+    enabled: isBrowser && isAuthenticated,
+    refetchInterval: 15_000,
+    retry: 1,
+  });
+}
+
+export function useSequenceTestRunQuery(runId?: string) {
+  const { isAuthenticated } = useApp();
+  return useQuery({
+    queryKey: ["intergrai", "sequence-test-run", runId],
+    queryFn: () => getSequenceTestRun(runId as string),
+    enabled: isBrowser && isAuthenticated && Boolean(runId),
+    retry: 1,
+  });
+}
+
+export function useCreateSequenceTestRunMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sequenceId,
+      recipients,
+    }: {
+      sequenceId: string;
+      recipients: Array<{ name: string; company: string; email: string }>;
+    }) => createSequenceTestRun(sequenceId, recipients),
+    onSuccess: (run) => {
+      void queryClient.invalidateQueries({ queryKey: SEQUENCE_TEST_RUNS_KEY });
+      queryClient.setQueryData(["intergrai", "sequence-test-run", run.id], run);
+    },
+  });
+}
+
+export function useSendSequenceTestRunMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      runId,
+      input,
+    }: {
+      runId: string;
+      input: { mode: "single_step"; step_number: number } | { mode: "full_sequence" };
+    }) => sendSequenceTestRun(runId, input),
+    onSuccess: (run) => {
+      void queryClient.invalidateQueries({ queryKey: SEQUENCE_TEST_RUNS_KEY });
+      queryClient.setQueryData(["intergrai", "sequence-test-run", run.id], run);
+    },
   });
 }
 

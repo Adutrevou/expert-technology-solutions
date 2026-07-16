@@ -124,6 +124,54 @@ export interface SequenceMetrics {
   next_due_count: number;
 }
 
+export type SequenceTestRunStatus =
+  | "preview_ready"
+  | "sending"
+  | "partially_sent"
+  | "sent"
+  | "failed";
+export type SequenceTestRunMode = "preview" | "single_step" | "full_sequence";
+
+export interface SequenceTestMessageRecord {
+  id: string;
+  run_id: string;
+  recipient_name: string;
+  recipient_company: string | null;
+  recipient_email: string;
+  step_id: string | null;
+  step_number: number;
+  subject: string;
+  body: string;
+  signature: string | null;
+  image_asset_id: string | null;
+  image_url: string | null;
+  image_alt_text: string | null;
+  status: "preview" | "sending" | "sent" | "failed";
+  provider_message_id: string | null;
+  error: string | null;
+  sent_at: string | null;
+}
+
+export interface SequenceTestRunRecord {
+  id: string;
+  sequence_id: string;
+  campaign_id: string | null;
+  name: string;
+  sequence_name: string;
+  campaign_name: string | null;
+  status: SequenceTestRunStatus;
+  mode: SequenceTestRunMode;
+  recipient_count: number;
+  total_messages: number;
+  sent_count: number;
+  failed_count: number;
+  last_error: string | null;
+  last_sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+  messages?: SequenceTestMessageRecord[];
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -349,4 +397,41 @@ export async function runSequenceOnce(sequenceId: string, maxSends?: number): Pr
     method: "POST",
     body: JSON.stringify({ sequence_id: sequenceId, max_sends: maxSends }),
   });
+}
+
+export async function listSequenceTestRuns(): Promise<SequenceTestRunRecord[]> {
+  const value = await apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/sequence-test-runs`);
+  return asArray(asRecord(value).test_runs) as SequenceTestRunRecord[];
+}
+
+export async function getSequenceTestRun(runId: string): Promise<SequenceTestRunRecord> {
+  const value = await apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/sequence-test-runs/${encodeURIComponent(runId)}`,
+  );
+  return asRecord(value).test_run as SequenceTestRunRecord;
+}
+
+export async function createSequenceTestRun(
+  sequenceId: string,
+  recipients: Array<{ name: string; company: string; email: string }>,
+): Promise<SequenceTestRunRecord> {
+  const value = await apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/test-runs`,
+    { method: "POST", body: JSON.stringify({ recipients }) },
+  );
+  return asRecord(value).test_run as SequenceTestRunRecord;
+}
+
+export async function sendSequenceTestRun(
+  runId: string,
+  input: { mode: "single_step"; step_number: number } | { mode: "full_sequence" },
+): Promise<SequenceTestRunRecord> {
+  const value = await apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/sequence-test-runs/${encodeURIComponent(runId)}/send`,
+    {
+      method: "POST",
+      body: JSON.stringify({ ...input, confirm_test_send: true }),
+    },
+  );
+  return asRecord(value).test_run as SequenceTestRunRecord;
 }
