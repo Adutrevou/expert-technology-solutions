@@ -418,6 +418,13 @@ export async function getSequenceTestRun(runId: string): Promise<SequenceTestRun
   return asRecord(value).test_run as SequenceTestRunRecord;
 }
 
+export async function deleteSequenceTestRun(runId: string): Promise<void> {
+  await apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/sequence-test-runs/${encodeURIComponent(runId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function createSequenceTestRun(
   sequenceId: string,
   recipients: Array<{ name: string; company: string; email: string }>,

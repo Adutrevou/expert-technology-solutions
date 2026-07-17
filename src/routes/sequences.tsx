@@ -71,6 +71,7 @@ import {
   useCreateSequenceMutation,
   useCreateSequenceStepMutation,
   useDeleteSequenceStepMutation,
+  useDeleteSequenceTestRunMutation,
   useDisqualifyEnrollmentMutation,
   useDryRunSequenceMutation,
   useEnrollmentsQuery,
@@ -161,6 +162,7 @@ function SequencesPage() {
   const testRunsQuery = useSequenceTestRunsQuery();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTestRunId, setSelectedTestRunId] = useState<string | null>(null);
+  const [testRunToDelete, setTestRunToDelete] = useState<SequenceTestRunRecord | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
 
@@ -280,6 +282,7 @@ function SequencesPage() {
                     key={run.id}
                     run={run}
                     onClick={() => setSelectedTestRunId(run.id)}
+                    onDelete={() => setTestRunToDelete(run)}
                   />
                 ))}
               </div>
@@ -312,63 +315,153 @@ function SequencesPage() {
           if (!nextOpen) setSelectedTestRunId(null);
         }}
       />
+      <DeleteTestRunDialog
+        run={testRunToDelete}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setTestRunToDelete(null);
+        }}
+        onDeleted={(runId) => {
+          if (selectedTestRunId === runId) setSelectedTestRunId(null);
+          setTestRunToDelete(null);
+        }}
+      />
     </div>
   );
 }
 
-function TestRunListItem({ run, onClick }: { run: SequenceTestRunRecord; onClick: () => void }) {
+function TestRunListItem({
+  run,
+  onClick,
+  onDelete,
+}: {
+  run: SequenceTestRunRecord;
+  onClick: () => void;
+  onDelete: () => void;
+}) {
   const progress = run.total_messages
     ? Math.round(((run.sent_count + run.failed_count) / run.total_messages) * 100)
     : 0;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full px-4 py-3 text-left transition-smooth hover:bg-muted/40"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{run.sequence_name}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {run.recipient_count} recipient{run.recipient_count === 1 ? "" : "s"} | {run.sent_count}
-            /{run.total_messages} sent
-          </p>
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full px-4 py-3 pr-12 text-left transition-smooth hover:bg-muted/40"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{run.sequence_name}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {run.recipient_count} recipient{run.recipient_count === 1 ? "" : "s"} |{" "}
+              {run.sent_count}/{run.total_messages} sent
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={`${TEST_RUN_STATUS_STYLE[run.status]} shrink-0 text-[10px]`}
+          >
+            {TEST_RUN_STATUS_LABEL[run.status]}
+          </Badge>
         </div>
-        <Badge
-          variant="outline"
-          className={`${TEST_RUN_STATUS_STYLE[run.status]} shrink-0 text-[10px]`}
-        >
-          {TEST_RUN_STATUS_LABEL[run.status]}
-        </Badge>
-      </div>
-      {run.recipients?.length ? (
-        <div className="mt-2 space-y-1 rounded-lg border bg-background/70 px-2.5 py-2">
-          {run.recipients.map((recipient) => (
-            <div
-              key={recipient.email}
-              className="flex min-w-0 items-center justify-between gap-2 text-[11px]"
-            >
-              <span className="min-w-0 truncate text-muted-foreground">
-                <span className="font-medium text-foreground">{recipient.name}</span> &lt;
-                {recipient.email}&gt;
-              </span>
-              <span className="shrink-0 font-medium text-primary">
-                {recipient.sent_count}/{recipient.total_messages} sent
-              </span>
-            </div>
-          ))}
+        {run.recipients?.length ? (
+          <div className="mt-2 space-y-1 rounded-lg border bg-background/70 px-2.5 py-2">
+            {run.recipients.map((recipient) => (
+              <div
+                key={recipient.email}
+                className="flex min-w-0 items-center justify-between gap-2 text-[11px]"
+              >
+                <span className="min-w-0 truncate text-muted-foreground">
+                  <span className="font-medium text-foreground">{recipient.name}</span> &lt;
+                  {recipient.email}&gt;
+                </span>
+                <span className="shrink-0 font-medium text-primary">
+                  {recipient.sent_count}/{recipient.total_messages} sent
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${progress}%` }}
+          />
         </div>
-      ) : null}
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">
-        {formatDistanceToNow(new Date(run.updated_at), { addSuffix: true })}
-      </p>
-    </button>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {formatDistanceToNow(new Date(run.updated_at), { addSuffix: true })}
+        </p>
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={`Delete test run for ${run.sequence_name}`}
+        className="absolute bottom-2.5 right-2 h-8 w-8 text-muted-foreground opacity-70 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+        onClick={onDelete}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function DeleteTestRunDialog({
+  run,
+  onOpenChange,
+  onDeleted,
+}: {
+  run: SequenceTestRunRecord | null;
+  onOpenChange: (open: boolean) => void;
+  onDeleted: (runId: string) => void;
+}) {
+  const deleteRun = useDeleteSequenceTestRunMutation();
+  const handleDelete = async () => {
+    if (!run) return;
+    try {
+      await deleteRun.mutateAsync(run.id);
+      toast.success("Test run and its message records deleted.");
+      onDeleted(run.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete this test run.");
+    }
+  };
+
+  return (
+    <Dialog open={Boolean(run)} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete this test run?</DialogTitle>
+          <DialogDescription>
+            This permanently removes the test record and its {run?.total_messages ?? 0} message
+            status records. The sequence, campaign, contacts, and enrollment history are not
+            affected.
+          </DialogDescription>
+        </DialogHeader>
+        {run ? (
+          <Alert variant="destructive">
+            <Trash2 className="h-4 w-4" />
+            <AlertTitle>{run.sequence_name}</AlertTitle>
+            <AlertDescription>
+              {run.recipient_count} recipient{run.recipient_count === 1 ? "" : "s"} |{" "}
+              {run.sent_count}/{run.total_messages} sent
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={deleteRun.isPending}
+          >
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={deleteRun.isPending}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            {deleteRun.isPending ? "Deleting..." : "Delete test run"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

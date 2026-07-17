@@ -6,6 +6,7 @@ import {
   createSequence,
   createSequenceStep,
   deleteSequenceStep,
+  deleteSequenceTestRun,
   disqualifyEnrollment,
   dryRunSequenceEngine,
   enrollLeadsInSequence,
@@ -103,6 +104,17 @@ export function useSendSequenceTestRunMutation() {
     onSuccess: (run) => {
       void queryClient.invalidateQueries({ queryKey: SEQUENCE_TEST_RUNS_KEY });
       queryClient.setQueryData(["intergrai", "sequence-test-run", run.id], run);
+    },
+  });
+}
+
+export function useDeleteSequenceTestRunMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => deleteSequenceTestRun(runId),
+    onSuccess: (_void, runId) => {
+      queryClient.removeQueries({ queryKey: ["intergrai", "sequence-test-run", runId] });
+      void queryClient.invalidateQueries({ queryKey: SEQUENCE_TEST_RUNS_KEY });
     },
   });
 }
