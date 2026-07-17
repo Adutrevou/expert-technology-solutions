@@ -341,6 +341,24 @@ function TestRunListItem({ run, onClick }: { run: SequenceTestRunRecord; onClick
           {TEST_RUN_STATUS_LABEL[run.status]}
         </Badge>
       </div>
+      {run.recipients?.length ? (
+        <div className="mt-2 space-y-1 rounded-lg border bg-background/70 px-2.5 py-2">
+          {run.recipients.map((recipient) => (
+            <div
+              key={recipient.email}
+              className="flex min-w-0 items-center justify-between gap-2 text-[11px]"
+            >
+              <span className="min-w-0 truncate text-muted-foreground">
+                <span className="font-medium text-foreground">{recipient.name}</span> &lt;
+                {recipient.email}&gt;
+              </span>
+              <span className="shrink-0 font-medium text-primary">
+                {recipient.sent_count}/{recipient.total_messages} sent
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary transition-all"

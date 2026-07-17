@@ -169,6 +169,13 @@ export interface SequenceTestRunRecord {
   last_sent_at: string | null;
   created_at: string;
   updated_at: string;
+  recipients?: Array<{
+    name: string;
+    email: string;
+    total_messages: number;
+    sent_count: number;
+    failed_count: number;
+  }>;
   messages?: SequenceTestMessageRecord[];
 }
 
