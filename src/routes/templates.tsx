@@ -26,7 +26,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-state";
-import { readSignatureHtmlFile } from "@/lib/signature-html";
+import {
+  buildSignatureImageHtml,
+  getSignatureImageUrl,
+  isSignatureImageFile,
+  readSignatureHtmlFile,
+  validateSignatureImageFile,
+} from "@/lib/signature-html";
 import type {
   ApprovalRecord,
   FollowupSequenceRecord,
@@ -299,9 +305,31 @@ function TemplatesPage() {
     }));
   }
 
-  async function loadSignatureDocument(file: File | null, onLoaded: (html: string) => void) {
+  async function loadSignatureDocument(
+    file: File | null,
+    onLoaded: (html: string) => void,
+    campaignId: string,
+    templateVariantId = "",
+  ) {
     if (!file) return;
     try {
+      if (isSignatureImageFile(file)) {
+        validateSignatureImageFile(file);
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("campaign_id", campaignId);
+        if (templateVariantId) formData.append("template_variant_id", templateVariantId);
+        formData.append("title", "Email signature photo");
+        formData.append("alt_text", "Email signature");
+        formData.append("placement", "inline");
+        formData.append("status", "pending_approval");
+        formData.append("image_purpose", "email_signature");
+        formData.append("allow_in_email_body", "false");
+        const asset = await uploadOutreachAssetMutation.mutateAsync(formData);
+        onLoaded(buildSignatureImageHtml(asset.fileUrl, asset.altText || "Email signature"));
+        toast.success("Signature photo uploaded. Review it before saving.");
+        return;
+      }
       onLoaded(await readSignatureHtmlFile(file));
       toast.success("HTML signature loaded. Review it before saving.");
     } catch (error) {
@@ -937,18 +965,28 @@ function TemplatesPage() {
                               <Input
                                 className="mt-2"
                                 type="file"
-                                accept=".html,.htm,text/html"
+                                accept=".html,.htm,text/html,image/png,image/jpeg,image/webp"
                                 onChange={(event) => {
                                   const file = event.target.files?.[0] ?? null;
                                   event.currentTarget.value = "";
-                                  void loadSignatureDocument(file, (html) =>
-                                    updateDraft(variant.id, "signature", html),
+                                  void loadSignatureDocument(
+                                    file,
+                                    (html) => updateDraft(variant.id, "signature", html),
+                                    template.campaignId,
+                                    variant.id,
                                   );
                                 }}
                               />
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Upload an .html/.htm signature up to 256KB.
+                                Upload HTML up to 256KB, or a PNG, JPG, or WebP photo up to 1MB.
                               </p>
+                              {getSignatureImageUrl(current.signature) ? (
+                                <img
+                                  src={getSignatureImageUrl(current.signature)}
+                                  alt="Signature preview"
+                                  className="mt-3 max-h-40 max-w-full rounded-xl border bg-background p-2 object-contain"
+                                />
+                              ) : null}
                             </div>
                           </div>
 
@@ -1605,18 +1643,27 @@ function TemplatesPage() {
               <Input
                 className="mt-2"
                 type="file"
-                accept=".html,.htm,text/html"
+                accept=".html,.htm,text/html,image/png,image/jpeg,image/webp"
                 onChange={(event) => {
                   const file = event.target.files?.[0] ?? null;
                   event.currentTarget.value = "";
-                  void loadSignatureDocument(file, (html) =>
-                    setTemplateCreateForm((current) => ({ ...current, signature: html })),
+                  void loadSignatureDocument(
+                    file,
+                    (html) => setTemplateCreateForm((current) => ({ ...current, signature: html })),
+                    templateCreateState?.campaignId || "",
                   );
                 }}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Upload an .html/.htm signature up to 256KB.
+                Upload HTML up to 256KB, or a PNG, JPG, or WebP photo up to 1MB.
               </p>
+              {getSignatureImageUrl(templateCreateForm.signature) ? (
+                <img
+                  src={getSignatureImageUrl(templateCreateForm.signature)}
+                  alt="Signature preview"
+                  className="mt-3 max-h-40 max-w-full rounded-xl border bg-background p-2 object-contain"
+                />
+              ) : null}
             </div>
             <div>
               <p className="text-sm font-medium">Optional image</p>

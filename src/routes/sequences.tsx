@@ -58,7 +58,13 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useApp } from "@/lib/app-state";
 import { getLeads, type LeadRecord } from "@/lib/leads-api";
-import { readSignatureHtmlFile } from "@/lib/signature-html";
+import {
+  buildSignatureImageHtml,
+  getSignatureImageUrl,
+  isSignatureImageFile,
+  readSignatureHtmlFile,
+  validateSignatureImageFile,
+} from "@/lib/signature-html";
 import {
   useCampaignsQuery,
   useLeadAgentSummaryQuery,
@@ -1898,11 +1904,52 @@ function StepsBuilder({
               />
               <Input
                 type="file"
-                accept=".html,.htm,text/html"
+                accept=".html,.htm,text/html,image/png,image/jpeg,image/webp"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.currentTarget.value = "";
                   if (!file) return;
+                  if (isSignatureImageFile(file)) {
+                    try {
+                      validateSignatureImageFile(file);
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      if (campaignId) formData.append("campaign_id", campaignId);
+                      formData.append("title", `${campaign?.name || "Sequence"} signature photo`);
+                      formData.append("alt_text", "Email signature");
+                      formData.append("placement", "inline");
+                      formData.append("status", "pending_approval");
+                      formData.append("image_purpose", "email_signature");
+                      formData.append("allow_in_email_body", "false");
+                      void uploadAssetMutation
+                        .mutateAsync(formData)
+                        .then((asset) => {
+                          setSignature(
+                            buildSignatureImageHtml(
+                              asset.fileUrl,
+                              asset.altText || "Email signature",
+                            ),
+                          );
+                          toast.success(
+                            "Signature photo uploaded. Review it before saving the step.",
+                          );
+                        })
+                        .catch((error) =>
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Unable to upload that signature photo.",
+                          ),
+                        );
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Unable to read that signature photo.",
+                      );
+                    }
+                    return;
+                  }
                   void readSignatureHtmlFile(file)
                     .then((html) => {
                       setSignature(html);
@@ -1916,8 +1963,16 @@ function StepsBuilder({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Paste a signature or upload an .html/.htm document up to 256KB.
+                Paste a signature, upload HTML up to 256KB, or add a PNG, JPG, or WebP photo up to
+                1MB.
               </p>
+              {getSignatureImageUrl(signature) ? (
+                <img
+                  src={getSignatureImageUrl(signature)}
+                  alt="Signature preview"
+                  className="max-h-40 max-w-full rounded-xl border bg-background p-2 object-contain"
+                />
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Approved campaign image</Label>
