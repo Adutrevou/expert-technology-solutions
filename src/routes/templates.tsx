@@ -30,8 +30,8 @@ import {
   buildSignatureImageHtml,
   getSignatureImageUrl,
   isSignatureImageFile,
+  optimizeSignatureImageFile,
   readSignatureHtmlFile,
-  validateSignatureImageFile,
 } from "@/lib/signature-html";
 import type {
   ApprovalRecord,
@@ -314,9 +314,9 @@ function TemplatesPage() {
     if (!file) return;
     try {
       if (isSignatureImageFile(file)) {
-        validateSignatureImageFile(file);
+        const optimizedFile = await optimizeSignatureImageFile(file);
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", optimizedFile);
         formData.append("campaign_id", campaignId);
         if (templateVariantId) formData.append("template_variant_id", templateVariantId);
         formData.append("title", "Email signature photo");

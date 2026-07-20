@@ -62,8 +62,8 @@ import {
   buildSignatureImageHtml,
   getSignatureImageUrl,
   isSignatureImageFile,
+  optimizeSignatureImageFile,
   readSignatureHtmlFile,
-  validateSignatureImageFile,
 } from "@/lib/signature-html";
 import {
   useCampaignsQuery,
@@ -1911,18 +1911,22 @@ function StepsBuilder({
                   if (!file) return;
                   if (isSignatureImageFile(file)) {
                     try {
-                      validateSignatureImageFile(file);
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      if (campaignId) formData.append("campaign_id", campaignId);
-                      formData.append("title", `${campaign?.name || "Sequence"} signature photo`);
-                      formData.append("alt_text", "Email signature");
-                      formData.append("placement", "inline");
-                      formData.append("status", "pending_approval");
-                      formData.append("image_purpose", "email_signature");
-                      formData.append("allow_in_email_body", "false");
-                      void uploadAssetMutation
-                        .mutateAsync(formData)
+                      void optimizeSignatureImageFile(file)
+                        .then((optimizedFile) => {
+                          const formData = new FormData();
+                          formData.append("file", optimizedFile);
+                          if (campaignId) formData.append("campaign_id", campaignId);
+                          formData.append(
+                            "title",
+                            `${campaign?.name || "Sequence"} signature photo`,
+                          );
+                          formData.append("alt_text", "Email signature");
+                          formData.append("placement", "inline");
+                          formData.append("status", "pending_approval");
+                          formData.append("image_purpose", "email_signature");
+                          formData.append("allow_in_email_body", "false");
+                          return uploadAssetMutation.mutateAsync(formData);
+                        })
                         .then((asset) => {
                           setSignature(
                             buildSignatureImageHtml(
