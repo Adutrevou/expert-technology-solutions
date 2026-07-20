@@ -3,7 +3,7 @@ import path from "node:path";
 
 const REQUIRED_API_BASE_URL = "https://api.intergrai.co.za";
 const DEPLOY_COMMAND =
-  "rsync -av --delete --exclude 'server/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/";
+  "rsync -av --delete --exclude 'server/' --exclude 'uploads/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/";
 const APPROVED_AGENT_ROUTE = process.env.APPROVED_AGENT_ROUTE === "true";
 
 const rootDir = process.cwd();
@@ -42,7 +42,11 @@ function findAgentRouteSignals() {
 
   if (fs.existsSync(routeTreePath)) {
     const routeTree = safeRead(routeTreePath);
-    if (routeTree.includes("'./routes/agent'") || routeTree.includes('"/agent"') || routeTree.includes("'/agent'")) {
+    if (
+      routeTree.includes("'./routes/agent'") ||
+      routeTree.includes('"/agent"') ||
+      routeTree.includes("'/agent'")
+    ) {
       signals.push("src/routeTree.gen.ts references /agent");
     }
   }
@@ -112,11 +116,16 @@ try {
     fail("package.json is missing.");
   } else {
     const packageJson = JSON.parse(safeRead(packageJsonPath));
-    if (packageJson?.scripts?.["build:static"] === "VITE_STATIC_BUILD=true BUILD_STATIC=1 vite build --mode static") {
+    if (
+      packageJson?.scripts?.["build:static"] ===
+      "VITE_STATIC_BUILD=true BUILD_STATIC=1 vite build --mode static"
+    ) {
       pass("package.json contains the expected build:static script.");
     } else if (typeof packageJson?.scripts?.["build:static"] === "string") {
       pass("package.json contains a build:static script.");
-      warn("build:static differs from the confirmed recovery command. Verify it before production deploy.");
+      warn(
+        "build:static differs from the confirmed recovery command. Verify it before production deploy.",
+      );
     } else {
       fail("package.json does not contain build:static.");
     }
@@ -141,7 +150,9 @@ try {
 
   const agentRouteSignals = findAgentRouteSignals();
   if (agentRouteSignals.length > 0 && !APPROVED_AGENT_ROUTE) {
-    warn(`/agent route signals found but APPROVED_AGENT_ROUTE=true is not set: ${agentRouteSignals.join("; ")}`);
+    warn(
+      `/agent route signals found but APPROVED_AGENT_ROUTE=true is not set: ${agentRouteSignals.join("; ")}`,
+    );
   } else if (agentRouteSignals.length > 0) {
     pass(`/agent route signals found and explicitly approved: ${agentRouteSignals.join("; ")}`);
   } else {
@@ -152,7 +163,9 @@ try {
   console.log("Correct deploy command:");
   console.log(DEPLOY_COMMAND);
 } catch (error) {
-  fail(`Unexpected predeploy check error: ${error instanceof Error ? error.message : String(error)}`);
+  fail(
+    `Unexpected predeploy check error: ${error instanceof Error ? error.message : String(error)}`,
+  );
 }
 
 if (hasCriticalFailure) {

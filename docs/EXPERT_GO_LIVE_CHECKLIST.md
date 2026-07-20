@@ -8,7 +8,7 @@
 - Static build points the frontend to `https://api.intergrai.co.za`.
 - Current safe deployment target is `/var/www/experttechnologysolutions.intergrai.co.za/`.
 - Current safe deployment command is:
-  `rsync -av --delete --exclude 'server/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/`
+  `rsync -av --delete --exclude 'server/' --exclude 'uploads/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/`
 - Dashboard is loading from the Intergrai Leads API instead of seeded local demo data.
 - Leads page is loading from the Intergrai Leads API and supports filtering and CSV export.
 - Campaigns page is loading from the Intergrai Leads API.

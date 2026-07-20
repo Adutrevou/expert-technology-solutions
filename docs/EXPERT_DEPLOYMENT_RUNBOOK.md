@@ -32,13 +32,14 @@ This project is currently deployed as a static VPS build. Follow this runbook ex
 Use this exact command:
 
 ```bash
-rsync -av --delete --exclude 'server/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/
+rsync -av --delete --exclude 'server/' --exclude 'uploads/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/
 ```
 
 Notes:
 
 - The trailing slashes matter.
-- `--exclude 'server/'` is required for this static VPS deployment.
+- `--exclude 'server/'` and `--exclude 'uploads/'` are required for this static VPS deployment.
+- The uploads exclusion protects hosted email and signature images from `rsync --delete`.
 - Do not replace this with a `dist/client` deploy path.
 
 ## Web Server Reload
@@ -78,7 +79,7 @@ If the deployment is bad and you need to return to the last confirmed working st
 ```bash
 git checkout 99f3c13
 npm run build:static
-rsync -av --delete --exclude 'server/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/
+rsync -av --delete --exclude 'server/' --exclude 'uploads/' /root/expert-technology-solutions/dist/ /var/www/experttechnologysolutions.intergrai.co.za/
 sudo systemctl reload nginx
 ```
 
