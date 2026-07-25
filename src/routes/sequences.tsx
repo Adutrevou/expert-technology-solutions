@@ -1303,11 +1303,11 @@ function AutoSendWarning() {
     <Alert className="border-warning/40 bg-warning/10">
       <ShieldAlert className="h-4 w-4 text-warning-foreground" />
       <AlertTitle className="text-warning-foreground text-sm">
-        This does not enable live sending yet
+        Live sends remain policy-controlled
       </AlertTitle>
       <AlertDescription className="text-xs">
-        Auto-send is inert until separately approved after a safety proof. Every queued step is
-        still dry-run regardless of this setting.
+        Sequence steps are queued automatically. A send only proceeds when recipient verification,
+        suppression, campaign approval, and the final live-send guard all pass.
       </AlertDescription>
     </Alert>
   );
