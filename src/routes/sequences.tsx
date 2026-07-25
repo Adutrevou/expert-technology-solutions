@@ -95,7 +95,6 @@ import {
 } from "@/lib/sequences-api-hooks";
 import type {
   EnrollmentRecord,
-  SendingMode,
   SequenceRecord,
   SequenceStatus,
   SequenceStepRecord,
@@ -112,12 +111,6 @@ const SEQUENCE_STATUS_STYLE: Record<SequenceStatus, string> = {
   active: "bg-success/15 text-success border-success/30",
   paused: "bg-warning/15 text-warning-foreground border-warning/40",
   archived: "bg-muted text-muted-foreground",
-};
-
-const SENDING_MODE_LABEL: Record<SendingMode, string> = {
-  dry_run: "Dry run (no send attempt at all)",
-  queue_for_approval: "Queue for approval",
-  auto_send_if_policy_allows: "Auto-send if policy allows",
 };
 
 const TEST_RUN_STATUS_LABEL: Record<SequenceTestRunRecord["status"], string> = {
@@ -492,7 +485,6 @@ function CreateSequenceDialog({
 }) {
   const [name, setName] = useState("");
   const [campaignId, setCampaignId] = useState("");
-  const [sendingMode, setSendingMode] = useState<SendingMode>("dry_run");
   const createMutation = useCreateSequenceMutation();
   const campaignsQuery = useCampaignsQuery();
   const campaigns = (campaignsQuery.data?.campaigns ?? []).filter(
@@ -503,7 +495,6 @@ function CreateSequenceDialog({
     if (open) {
       setName("");
       setCampaignId("");
-      setSendingMode("dry_run");
       createMutation.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -514,7 +505,7 @@ function CreateSequenceDialog({
     const sequence = await createMutation.mutateAsync({
       name: name.trim(),
       campaign_id: campaignId || undefined,
-      sending_mode: sendingMode,
+      sending_mode: "queue_for_approval",
     });
     onOpenChange(false);
     onCreated(sequence.id);
@@ -526,7 +517,7 @@ function CreateSequenceDialog({
         <DialogHeader>
           <DialogTitle>New sequence</DialogTitle>
           <DialogDescription>
-            Sequences start as draft. Add steps, then activate when ready.
+            Sequences start as drafts. Add the steps, then use Go live &amp; start when ready.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -558,30 +549,9 @@ function CreateSequenceDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Without a campaign, add every step manually. If linked, the campaign's outreach email
-              becomes Step 1 and manual steps move forward.
+              Without a campaign, add every step manually. If linked, verified campaign contacts
+              enter directly at Step 1 when you go live.
             </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Sending mode</Label>
-            <Select
-              value={sendingMode}
-              onValueChange={(value) => setSendingMode(value as SendingMode)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dry_run">{SENDING_MODE_LABEL.dry_run}</SelectItem>
-                <SelectItem value="queue_for_approval">
-                  {SENDING_MODE_LABEL.queue_for_approval}
-                </SelectItem>
-                <SelectItem value="auto_send_if_policy_allows">
-                  {SENDING_MODE_LABEL.auto_send_if_policy_allows}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {sendingMode === "auto_send_if_policy_allows" ? <AutoSendWarning /> : null}
           </div>
           {createMutation.isError ? (
             <Alert variant="destructive">
@@ -1298,21 +1268,6 @@ function renderPreviewTemplate(template: string, variables: Record<string, strin
   );
 }
 
-function AutoSendWarning() {
-  return (
-    <Alert className="border-warning/40 bg-warning/10">
-      <ShieldAlert className="h-4 w-4 text-warning-foreground" />
-      <AlertTitle className="text-warning-foreground text-sm">
-        Live sends remain policy-controlled
-      </AlertTitle>
-      <AlertDescription className="text-xs">
-        Sequence steps are queued automatically. A send only proceeds when recipient verification,
-        suppression, campaign approval, and the final live-send guard all pass.
-      </AlertDescription>
-    </Alert>
-  );
-}
-
 function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   const { user } = useApp();
   const isAdmin = user?.role === "intergrai_admin";
@@ -1486,33 +1441,6 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
                 belong to this sequence. The separate campaign outreach email is currently skipped,
                 so verified contacts enter directly at Step 1.
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Sending mode</Label>
-              <Select
-                value={sequence.sending_mode}
-                onValueChange={(value) =>
-                  updateMutation.mutate({
-                    sequenceId,
-                    patch: { sending_mode: value as SendingMode },
-                  })
-                }
-              >
-                <SelectTrigger className="max-w-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dry_run">{SENDING_MODE_LABEL.dry_run}</SelectItem>
-                  <SelectItem value="queue_for_approval">
-                    {SENDING_MODE_LABEL.queue_for_approval}
-                  </SelectItem>
-                  <SelectItem value="auto_send_if_policy_allows">
-                    {SENDING_MODE_LABEL.auto_send_if_policy_allows}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              {sequence.sending_mode === "auto_send_if_policy_allows" ? <AutoSendWarning /> : null}
             </div>
 
             <div className="rounded-lg border border-border bg-muted/20 p-4">
