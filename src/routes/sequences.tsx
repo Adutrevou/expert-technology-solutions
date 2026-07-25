@@ -82,7 +82,7 @@ import {
   useDryRunSequenceMutation,
   useEnrollmentsQuery,
   usePauseSequenceMutation,
-  useResumeSequenceMutation,
+  useStartLiveSequenceMutation,
   useRunSequenceOnceMutation,
   useSequenceMetricsQuery,
   useSequenceQuery,
@@ -231,9 +231,9 @@ function SequencesPage() {
         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
         <AlertTitle>Direct-to-sequence mode is live</AlertTitle>
         <AlertDescription>
-          The separate campaign first-outreach email is temporarily skipped. Every 15 minutes,
-          newly qualified contacts with verified email addresses are added directly to Step 1 of
-          the sequence linked to their campaign.
+          The separate campaign first-outreach email is temporarily skipped. Every 15 minutes, newly
+          qualified contacts with verified email addresses are added directly to Step 1 of the
+          sequence linked to their campaign.
         </AlertDescription>
       </Alert>
 
@@ -1320,7 +1320,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   const metricsQuery = useSequenceMetricsQuery(sequenceId);
   const enrollmentsQuery = useEnrollmentsQuery(sequenceId);
   const pauseMutation = usePauseSequenceMutation();
-  const resumeMutation = useResumeSequenceMutation();
+  const startLiveMutation = useStartLiveSequenceMutation();
   const archiveMutation = useArchiveSequenceMutation();
   const updateMutation = useUpdateSequenceMutation();
   const campaignsQuery = useCampaignsQuery();
@@ -1329,6 +1329,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   const disqualifyMutation = useDisqualifyEnrollmentMutation();
   const [dryRunResult, setDryRunResult] = useState<string | null>(null);
   const [runOnceConfirmOpen, setRunOnceConfirmOpen] = useState(false);
+  const [goLiveConfirmOpen, setGoLiveConfirmOpen] = useState(false);
 
   if (sequenceQuery.isLoading) {
     return (
@@ -1347,6 +1348,10 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   }
 
   const { sequence, steps } = sequenceQuery.data;
+  const isLive =
+    sequence.live_sending_enabled === true ||
+    sequence.metadata?.live_sending_enabled === true ||
+    sequence.metadata?.live_sending_enabled === "true";
 
   const handleDryRun = async () => {
     const result = await dryRunMutation.mutateAsync(sequenceId);
@@ -1360,18 +1365,19 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
     await runOnceMutation.mutateAsync({ sequenceId });
   };
 
-  const handleActivate = async () => {
+  const handleGoLive = async () => {
+    setGoLiveConfirmOpen(false);
     try {
-      const activated = await resumeMutation.mutateAsync(sequenceId);
+      const activated = await startLiveMutation.mutateAsync(sequenceId);
       if (activated.campaign_id) {
         toast.success(
-          `Sequence activated: ${activated.enrolled_count ?? 0} new campaign contact${activated.enrolled_count === 1 ? "" : "s"} enrolled, ${activated.already_enrolled_count ?? 0} already enrolled.`,
+          `Sequence is live. ${activated.launch_queued_count ?? activated.launch_processed_count ?? 0} contact${activated.launch_queued_count === 1 ? "" : "s"} queued at Step 1; approved emails will now send automatically.`,
         );
       } else {
-        toast.success("Manual sequence activated. Add contacts through enrollment when ready.");
+        toast.success("Sequence is live. Enrolled contacts will now follow its sending schedule.");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to activate this sequence.");
+      toast.error(error instanceof Error ? error.message : "Unable to start this sequence.");
     }
   };
 
@@ -1387,26 +1393,33 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
                 : "Engine has never run for this sequence yet"}
             </p>
           </div>
-          <Badge
-            variant="outline"
-            className={`${SEQUENCE_STATUS_STYLE[sequence.status]} uppercase text-[10px] tracking-wide`}
-          >
-            {sequence.status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {sequence.status === "active" ? (
+              <Badge variant={isLive ? "default" : "secondary"}>
+                {isLive ? "Live sending" : "Ready to launch"}
+              </Badge>
+            ) : null}
+            <Badge
+              variant="outline"
+              className={`${SEQUENCE_STATUS_STYLE[sequence.status]} uppercase text-[10px] tracking-wide`}
+            >
+              {sequence.status}
+            </Badge>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {sequence.status !== "active" ? (
+          {!isLive && sequence.status !== "archived" ? (
             <Button
               size="sm"
-              variant="outline"
               className="gap-1.5"
-              onClick={() => void handleActivate()}
-              disabled={resumeMutation.isPending}
+              onClick={() => setGoLiveConfirmOpen(true)}
+              disabled={startLiveMutation.isPending}
             >
-              <Play className="h-3.5 w-3.5" /> Activate
+              <Play className="h-3.5 w-3.5" /> Go live &amp; start
             </Button>
-          ) : (
+          ) : null}
+          {sequence.status === "active" ? (
             <Button
               size="sm"
               variant="outline"
@@ -1416,7 +1429,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
             >
               <Pause className="h-3.5 w-3.5" /> Pause
             </Button>
-          )}
+          ) : null}
           {sequence.status !== "archived" ? (
             <Button
               size="sm"
@@ -1581,6 +1594,31 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
               Cancel
             </Button>
             <Button onClick={handleRunOnce}>Run once</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={goLiveConfirmOpen} onOpenChange={setGoLiveConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Go live and start this sequence?</DialogTitle>
+            <DialogDescription>
+              {sequence.campaign_name
+                ? `Verified contacts from ${sequence.campaign_name} will enter directly at Step 1. `
+                : "Enrolled contacts will enter directly at Step 1. "}
+              The separate campaign first-outreach email stays off. Approved sequence emails will
+              send automatically when their schedule, business-hour rules, and final safety checks
+              pass.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGoLiveConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleGoLive()} disabled={startLiveMutation.isPending}>
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              Go live &amp; start
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

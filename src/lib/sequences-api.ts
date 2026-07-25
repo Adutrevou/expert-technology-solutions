@@ -44,6 +44,11 @@ export interface SequenceRecord {
   campaign_contact_count?: number;
   enrolled_count?: number;
   already_enrolled_count?: number;
+  launch_due_count?: number;
+  launch_processed_count?: number;
+  launch_queued_count?: number;
+  live_sending_enabled?: boolean;
+  metadata?: Record<string, unknown>;
   last_run_at: string | null;
   created_at: string;
   updated_at: string;
@@ -266,6 +271,14 @@ export async function pauseSequence(sequenceId: string): Promise<SequenceRecord>
 export async function resumeSequence(sequenceId: string): Promise<SequenceRecord> {
   const value = await apiRequest<unknown>(
     `/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/resume`,
+    { method: "POST" },
+  );
+  return asRecord(value).followup_sequence as SequenceRecord;
+}
+
+export async function startLiveSequence(sequenceId: string): Promise<SequenceRecord> {
+  const value = await apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/go-live`,
     { method: "POST" },
   );
   return asRecord(value).followup_sequence as SequenceRecord;

@@ -18,6 +18,7 @@ import {
   listSequenceTestRuns,
   pauseSequence,
   resumeSequence,
+  startLiveSequence,
   sendSequenceTestRun,
   runSequenceOnce,
   updateSequence,
@@ -194,6 +195,9 @@ export function usePauseSequenceMutation() {
 }
 export function useResumeSequenceMutation() {
   return useSequenceStatusMutation(resumeSequence);
+}
+export function useStartLiveSequenceMutation() {
+  return useSequenceStatusMutation(startLiveSequence);
 }
 
 export function useCreateSequenceStepMutation() {
