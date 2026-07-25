@@ -210,8 +210,8 @@ function SequencesPage() {
         <div>
           <h1 className="text-3xl font-bold">Sequences</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Multi-step follow-up sequences. Every sequence is dry-run/queued only until live sending
-            is separately approved.
+            Linked campaigns feed qualified, verified contacts directly into their follow-up
+            sequences.
           </p>
         </div>
         <div className="flex gap-2">
@@ -226,6 +226,16 @@ function SequencesPage() {
           </Button>
         </div>
       </header>
+
+      <Alert className="border-emerald-500/40 bg-emerald-500/10">
+        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        <AlertTitle>Direct-to-sequence mode is live</AlertTitle>
+        <AlertDescription>
+          The separate campaign first-outreach email is temporarily skipped. Every 15 minutes,
+          newly qualified contacts with verified email addresses are added directly to Step 1 of
+          the sequence linked to their campaign.
+        </AlertDescription>
+      </Alert>
 
       {sequences.length === 0 ? (
         <Card className="p-10 text-center shadow-card">
@@ -1459,9 +1469,9 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Changing the campaign replaces Step 1 with that campaign's outreach email and
-                changes which approved image assets are available. Activating the sequence finds
-                eligible contacts assigned to this campaign and enrolls them at Step 1.
+                Changing the campaign changes which qualified contacts and approved image assets
+                belong to this sequence. The separate campaign outreach email is currently skipped,
+                so verified contacts enter directly at Step 1.
               </p>
             </div>
 
@@ -1497,8 +1507,8 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
                 Run the engine
               </p>
               <p className="text-xs text-muted-foreground mb-3">
-                Dry-run previews what would happen. Every step this engine ever queues is dry-run
-                regardless of sending mode - it can never send a live email.
+                Dry-run previews what would happen. Run once processes due contacts and creates
+                their sequence email queue records.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1527,7 +1537,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
               {dryRunResult ? <p className="mt-3 text-xs text-success">{dryRunResult}</p> : null}
               {runOnceMutation.isSuccess ? (
                 <p className="mt-3 text-xs text-success">
-                  Engine ran. Steps were queued as dry-run only - check the Enrollments tab.
+                  Engine ran. Due sequence steps were queued - check the Enrollments tab.
                 </p>
               ) : null}
             </div>
@@ -1562,8 +1572,8 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
           <DialogHeader>
             <DialogTitle>Run the sequence engine now?</DialogTitle>
             <DialogDescription>
-              This processes due enrollments for real (not a preview). Every queued step is still
-              dry-run - this can never send a live email. Continue?
+              This processes due enrollments for real and creates their sequence email queue
+              records. Continue?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
