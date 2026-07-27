@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -12,6 +12,7 @@ import {
   Clock3,
   FlaskConical,
   Mail,
+  MessageSquareReply,
   Pause,
   Pencil,
   Play,
@@ -1303,6 +1304,13 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   }
 
   const { sequence, steps } = sequenceQuery.data;
+  const enrollments = enrollmentsQuery.data ?? [];
+  const repliedEnrollments = enrollments.filter(
+    (enrollment) =>
+      enrollment.status === "replied" ||
+      enrollment.replies > 0 ||
+      Boolean(enrollment.conversation_id),
+  );
   const isLive =
     sequence.live_sending_enabled === true ||
     sequence.metadata?.live_sending_enabled === true ||
@@ -1401,13 +1409,12 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
 
       <div className="p-5">
         <Tabs defaultValue="overview">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 h-auto flex-wrap justify-start">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="steps">Steps ({steps.length})</TabsTrigger>
             <TabsTrigger value="metrics">Metrics</TabsTrigger>
-            <TabsTrigger value="enrollments">
-              Enrollments ({enrollmentsQuery.data?.length ?? 0})
-            </TabsTrigger>
+            <TabsTrigger value="replies">Replies ({repliedEnrollments.length})</TabsTrigger>
+            <TabsTrigger value="enrollments">Enrollments ({enrollments.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -1492,9 +1499,13 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
             <MetricsPanel sequenceId={sequenceId} metricsQuery={metricsQuery} />
           </TabsContent>
 
+          <TabsContent value="replies">
+            <RepliesPanel replies={repliedEnrollments} isLoading={enrollmentsQuery.isLoading} />
+          </TabsContent>
+
           <TabsContent value="enrollments">
             <EnrollmentsTable
-              enrollments={enrollmentsQuery.data ?? []}
+              enrollments={enrollments}
               isLoading={enrollmentsQuery.isLoading}
               onDisqualify={(enrollmentId) =>
                 disqualifyMutation.mutate({
@@ -2126,6 +2137,84 @@ function MetricStat({
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
       {note ? <p className="mt-1 text-[10px] text-muted-foreground">{note}</p> : null}
+    </div>
+  );
+}
+
+function RepliesPanel({ replies, isLoading }: { replies: EnrollmentRecord[]; isLoading: boolean }) {
+  if (isLoading) return <Skeleton className="h-48" />;
+  if (!replies.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+        <MessageSquareReply className="mx-auto h-7 w-7 text-muted-foreground" />
+        <p className="mt-3 font-medium">No replies received for this sequence yet</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          When an enrolled contact replies, their details and latest message will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+        <div>
+          <h3 className="font-semibold">Replies received</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            These contacts have stopped receiving automated sequence steps.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/conversations">Open full conversations</Link>
+        </Button>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {replies.map((enrollment) => (
+          <article key={enrollment.id} className="rounded-xl border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">
+                  {enrollment.contact_name || "Contact name unavailable"}
+                </p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {[enrollment.title, enrollment.company_name].filter(Boolean).join(" at ") ||
+                    "Company details unavailable"}
+                </p>
+                <a
+                  href={enrollment.email ? `mailto:${enrollment.email}` : undefined}
+                  className="mt-1 block truncate text-xs text-primary hover:underline"
+                >
+                  {enrollment.email || "Email unavailable"}
+                </a>
+              </div>
+              <Badge className="shrink-0 bg-success/15 text-success hover:bg-success/15">
+                Reply received
+              </Badge>
+            </div>
+
+            <div className="mt-4 rounded-lg border bg-muted/25 p-3">
+              <p className="text-xs font-semibold">{enrollment.reply_subject || "Inbound reply"}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                {enrollment.reply_preview ||
+                  "The reply is recorded. Open Conversations to view the full message thread."}
+              </p>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {enrollment.replied_at
+                  ? `Received ${formatDistanceToNow(new Date(enrollment.replied_at), { addSuffix: true })}`
+                  : `Stopped at step ${enrollment.current_step}`}
+              </span>
+              <span>
+                {Math.max(1, enrollment.replies || 0)} repl
+                {Math.max(1, enrollment.replies || 0) === 1 ? "y" : "ies"}
+              </span>
+            </div>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

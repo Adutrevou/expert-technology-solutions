@@ -98,6 +98,12 @@ export interface EnrollmentRecord {
   send_attempts: number;
   replies: number;
   bounces: number;
+  conversation_id?: string | null;
+  reply_status?: string | null;
+  conversation_status?: string | null;
+  reply_subject?: string | null;
+  reply_preview?: string | null;
+  replied_at?: string | null;
 }
 
 export interface SequenceMetrics {
