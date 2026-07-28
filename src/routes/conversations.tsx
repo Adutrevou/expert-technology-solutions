@@ -777,9 +777,19 @@ function SentEmailDialog({
                 <h3 className="mt-3 font-semibold">
                   {message.subject || conversation.latestSubject || "No subject"}
                 </h3>
-                <pre className="mt-4 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
-                  {message.bodyText || "No body captured."}
-                </pre>
+                {message.bodyHtml ? (
+                  <iframe
+                    title={`Sent email to ${message.toEmail || conversation.contactEmail}`}
+                    srcDoc={message.bodyHtml}
+                    sandbox=""
+                    loading="lazy"
+                    className="mt-4 min-h-[420px] w-full rounded-xl border border-border bg-white"
+                  />
+                ) : (
+                  <pre className="mt-4 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
+                    {message.bodyText || "No body captured."}
+                  </pre>
+                )}
               </article>
             ))}
             {outboundMessages.length === 0 ? (

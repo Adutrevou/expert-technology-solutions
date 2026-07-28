@@ -330,6 +330,7 @@ export interface ConversationMessageRecord {
   providerMessageId: string;
   subject: string;
   bodyText: string;
+  bodyHtml: string;
   fromEmail: string;
   toEmail: string;
   status: string;
@@ -2628,6 +2629,7 @@ function normalizeConversationMessage(value: unknown, index = 0): ConversationMe
     providerMessageId: pickString(record, ["provider_message_id", "providerMessageId"]) || "",
     subject: pickString(record, ["subject"]) || "",
     bodyText: pickString(record, ["body_text", "bodyText"]) || "",
+    bodyHtml: pickString(record, ["body_html", "bodyHtml"]) || "",
     fromEmail: pickString(record, ["from_email", "fromEmail"]) || "",
     toEmail: pickString(record, ["to_email", "toEmail"]) || "",
     status: pickString(record, ["status"]) || "prepared",
