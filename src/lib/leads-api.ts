@@ -369,6 +369,12 @@ export interface ConversationRecord {
   latestSubject: string;
   latestSnippet: string;
   messageCount: number;
+  inboundCount: number;
+  outboundCount: number;
+  outreachStage: string;
+  sequenceId: string;
+  sequenceName: string;
+  sequenceStepNumber: number | null;
   previewOnly: boolean;
   lastMessageAt?: string;
   createdAt?: string;
@@ -2669,6 +2675,15 @@ function normalizeConversation(value: unknown, index = 0): ConversationRecord {
     latestSubject: pickString(record, ["latest_subject", "latestSubject"]) || "",
     latestSnippet: pickString(record, ["latest_snippet", "latestSnippet"]) || "",
     messageCount: normalizeCount(record.message_count ?? record.messageCount),
+    inboundCount: normalizeCount(record.inbound_count ?? record.inboundCount),
+    outboundCount: normalizeCount(record.outbound_count ?? record.outboundCount),
+    outreachStage: pickString(record, ["outreach_stage", "outreachStage"]) || "",
+    sequenceId: pickString(record, ["sequence_id", "sequenceId"]) || "",
+    sequenceName: pickString(record, ["sequence_name", "sequenceName"]) || "",
+    sequenceStepNumber: (() => {
+      const step = normalizeCount(record.sequence_step_number ?? record.sequenceStepNumber);
+      return step > 0 ? step : null;
+    })(),
     previewOnly: pickBoolean(record, ["preview_only", "previewOnly"]) ?? false,
     lastMessageAt: normalizeTimestamp(record.last_message_at ?? record.lastMessageAt),
     createdAt: normalizeTimestamp(record.created_at ?? record.createdAt),
