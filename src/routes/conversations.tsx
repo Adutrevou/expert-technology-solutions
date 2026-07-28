@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Eye,
   MailOpen,
   Mailbox,
@@ -596,6 +598,8 @@ function SentEmailGroup({
   conversations: ConversationRecord[];
   onOpen: (conversationId: string) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+
   return (
     <section>
       <div className="flex items-end justify-between gap-3">
@@ -603,9 +607,31 @@ function SentEmailGroup({
           <p className="text-sm font-semibold">{title}</p>
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
-        <span className="text-xs tabular-nums text-muted-foreground">{conversations.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs tabular-nums text-muted-foreground">{conversations.length}</span>
+          {conversations.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => setShowAll((current) => !current)}
+            >
+              {showAll ? "Show less" : "Open all"}
+              {showAll ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+      <div
+        className={`mt-3 space-y-2 pr-1 ${
+          showAll ? "max-h-[70vh] overflow-y-auto" : "max-h-64 overflow-y-auto"
+        }`}
+      >
         {conversations.map((conversation) => (
           <button
             key={conversation.id}
@@ -653,16 +679,37 @@ function ReplyConversationGroup({
   selectedConversationId: string;
   onSelect: (conversationId: string) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const visibleConversations = showAll ? conversations : conversations.slice(0, 5);
+
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {title}
         </p>
-        <Badge variant="outline">{conversations.length}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{conversations.length}</Badge>
+          {conversations.length > 5 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs normal-case tracking-normal"
+              onClick={() => setShowAll((current) => !current)}
+            >
+              {showAll ? "Show less" : "Open all"}
+              {showAll ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <div className="space-y-3">
-        {conversations.map((conversation) => (
+      <div className={showAll ? "max-h-[70vh] space-y-3 overflow-y-auto pr-1" : "space-y-3"}>
+        {visibleConversations.map((conversation) => (
           <button
             key={conversation.id}
             type="button"
