@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileUp, Upload } from "lucide-react";
 import {
   Dialog,
@@ -52,10 +52,14 @@ export function ImportContactsDialog({
   open,
   onOpenChange,
   onImported,
+  initialSequenceId,
+  lockSequence = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImported?: () => void;
+  initialSequenceId?: string | null;
+  lockSequence?: boolean;
 }) {
   const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -67,12 +71,23 @@ export function ImportContactsDialog({
   const previewMutation = usePreviewImportMutation();
   const commitMutation = useCommitImportMutation();
 
-  const activeSequences = (sequencesQuery.data ?? []).filter((s) => s.status === "active");
+  const eligibleSequences = (sequencesQuery.data ?? []).filter(
+    (sequence) =>
+      sequence.status === "active" ||
+      (sequence.status === "draft" && sequence.metadata?.audience_type === "existing_clients"),
+  );
+  const selectedSequence = (sequencesQuery.data ?? []).find(
+    (sequence) => sequence.id === sequenceId,
+  );
+
+  useEffect(() => {
+    if (open) setSequenceId(initialSequenceId || "");
+  }, [initialSequenceId, open]);
 
   const reset = () => {
     setStep("upload");
     setFile(null);
-    setSequenceId("");
+    setSequenceId(initialSequenceId || "");
     setPreview(null);
     previewMutation.reset();
     commitMutation.reset();
@@ -145,20 +160,33 @@ export function ImportContactsDialog({
             </div>
 
             <div className="space-y-2">
-              <Label>Enroll into sequence (optional)</Label>
-              <Select value={sequenceId} onValueChange={setSequenceId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Don't enroll - just add contacts" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeSequences.map((sequence) => (
-                    <SelectItem key={sequence.id} value={sequence.id}>
-                      {sequence.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {activeSequences.length === 0 ? (
+              <Label>
+                {lockSequence ? "Existing-client sequence" : "Enroll into sequence (optional)"}
+              </Label>
+              {lockSequence ? (
+                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm font-medium">
+                  {selectedSequence?.name || "Loading sequence..."}
+                </div>
+              ) : (
+                <Select value={sequenceId} onValueChange={setSequenceId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Don't enroll - just add contacts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleSequences.map((sequence) => (
+                      <SelectItem key={sequence.id} value={sequence.id}>
+                        {sequence.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {lockSequence ? (
+                <p className="text-xs text-muted-foreground">
+                  Contacts are prepared in this sequence only. No email sends until you click Go
+                  live.
+                </p>
+              ) : eligibleSequences.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   No active sequences yet - contacts can still be uploaded without enrollment.
                 </p>

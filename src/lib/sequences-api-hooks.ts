@@ -8,6 +8,7 @@ import {
   deleteSequenceStep,
   deleteSequenceTestRun,
   disqualifyEnrollment,
+  duplicateSequenceForExistingClients,
   dryRunSequenceEngine,
   enrollLeadsInSequence,
   getSequence,
@@ -145,6 +146,15 @@ export function useCreateSequenceMutation() {
   return useMutation({
     mutationFn: (input: { name: string; campaign_id?: string; sending_mode?: SendingMode }) =>
       createSequence(input),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY }),
+  });
+}
+
+export function useDuplicateExistingClientSequenceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sequenceId, name }: { sequenceId: string; name?: string }) =>
+      duplicateSequenceForExistingClients(sequenceId, name),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY }),
   });
 }

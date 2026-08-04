@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  CopyPlus,
   FlaskConical,
   Mail,
   MessageSquareReply,
@@ -21,6 +22,7 @@ import {
   Send,
   ShieldAlert,
   Trash2,
+  UploadCloud,
   UserPlus,
   Users2,
   X,
@@ -57,6 +59,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ImportContactsDialog } from "@/components/import-contacts-dialog";
 import { useApp } from "@/lib/app-state";
 import { getLeads, type LeadRecord } from "@/lib/leads-api";
 import {
@@ -81,6 +84,7 @@ import {
   useDeleteSequenceTestRunMutation,
   useDisqualifyEnrollmentMutation,
   useDryRunSequenceMutation,
+  useDuplicateExistingClientSequenceMutation,
   useEnrollmentsQuery,
   usePauseSequenceMutation,
   useStartLiveSequenceMutation,
@@ -165,19 +169,32 @@ function SequencesPage() {
   const [testRunToDelete, setTestRunToDelete] = useState<SequenceTestRunRecord | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [audience, setAudience] = useState<"campaigns" | "existing_clients">("campaigns");
 
   const sequences = useMemo(() => sequencesQuery.data ?? [], [sequencesQuery.data]);
+  const campaignSequences = useMemo(
+    () => sequences.filter((sequence) => sequence.metadata?.audience_type !== "existing_clients"),
+    [sequences],
+  );
+  const existingClientSequences = useMemo(
+    () => sequences.filter((sequence) => sequence.metadata?.audience_type === "existing_clients"),
+    [sequences],
+  );
+  const visibleSequences =
+    audience === "existing_clients" ? existingClientSequences : campaignSequences;
   const testRuns = testRunsQuery.data ?? [];
 
   useEffect(() => {
-    if (!sequences.length) {
+    if (!visibleSequences.length) {
       if (selectedId !== null) setSelectedId(null);
       return;
     }
-    if (!selectedId || !sequences.some((s) => s.id === selectedId)) {
-      setSelectedId(sequences[0].id);
+    if (!selectedId || !visibleSequences.some((sequence) => sequence.id === selectedId)) {
+      setSelectedId(visibleSequences[0].id);
     }
-  }, [sequences, selectedId]);
+  }, [visibleSequences, selectedId]);
 
   if (sequencesQuery.isLoading) {
     return <SequencesLoadingState />;
@@ -208,47 +225,104 @@ function SequencesPage() {
             sequences.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={() => sequencesQuery.refetch()} variant="outline" className="gap-2">
             <RefreshCcw className="h-4 w-4" /> Refresh
           </Button>
           <Button onClick={() => setTestOpen(true)} variant="outline" className="gap-2">
             <FlaskConical className="h-4 w-4" /> Test sequence
           </Button>
-          <Button onClick={() => setCreateOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" /> New sequence
+          <Button
+            onClick={() => setAudience("campaigns")}
+            variant={audience === "campaigns" ? "secondary" : "outline"}
+            className="gap-2"
+          >
+            <Mail className="h-4 w-4" /> Campaign sequences
           </Button>
+          <Button
+            onClick={() => setAudience("existing_clients")}
+            variant={audience === "existing_clients" ? "secondary" : "outline"}
+            className="gap-2"
+          >
+            <Users2 className="h-4 w-4" /> Existing clients
+          </Button>
+          {audience === "existing_clients" ? (
+            <Button onClick={() => setDuplicateOpen(true)} className="gap-2">
+              <CopyPlus className="h-4 w-4" /> Duplicate sequence
+            </Button>
+          ) : (
+            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" /> New sequence
+            </Button>
+          )}
         </div>
       </header>
 
-      <Alert className="border-emerald-500/40 bg-emerald-500/10">
-        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-        <AlertTitle>Direct-to-sequence mode is live</AlertTitle>
-        <AlertDescription>
-          The separate campaign first-outreach email is temporarily skipped. Every 15 minutes, newly
-          qualified contacts with verified email addresses are added directly to Step 1 of the
-          sequence linked to their campaign.
-        </AlertDescription>
-      </Alert>
+      {audience === "campaigns" ? (
+        <Alert className="border-emerald-500/40 bg-emerald-500/10">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          <AlertTitle>Direct-to-sequence mode is live</AlertTitle>
+          <AlertDescription>
+            The separate campaign first-outreach email is temporarily skipped. Every 15 minutes,
+            newly qualified contacts with verified email addresses are added directly to Step 1 of
+            the sequence linked to their campaign.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Card className="flex flex-col gap-4 border-sky-500/30 bg-sky-500/5 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold">Existing client sequences</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Duplicate a sequence, adjust its dates, then upload the client database. Its sends,
+              replies, and metrics remain separate from campaign prospecting.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            className="gap-2 shrink-0"
+            onClick={() => setImportOpen(true)}
+            disabled={!selectedId}
+          >
+            <UploadCloud className="h-4 w-4" /> Upload client database
+          </Button>
+        </Card>
+      )}
 
-      {sequences.length === 0 ? (
+      {visibleSequences.length === 0 ? (
         <Card className="p-10 text-center shadow-card">
-          <h2 className="text-xl font-semibold">No sequences yet</h2>
+          <h2 className="text-xl font-semibold">
+            {audience === "existing_clients"
+              ? "No existing-client sequences yet"
+              : "No sequences yet"}
+          </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Create your first follow-up sequence to get started.
+            {audience === "existing_clients"
+              ? "Duplicate one of your campaign sequences to create the first separate client run."
+              : "Create your first follow-up sequence to get started."}
           </p>
-          <Button onClick={() => setCreateOpen(true)} className="mt-6 gap-2">
-            <Plus className="h-4 w-4" /> New sequence
+          <Button
+            onClick={() =>
+              audience === "existing_clients" ? setDuplicateOpen(true) : setCreateOpen(true)
+            }
+            className="mt-6 gap-2"
+          >
+            {audience === "existing_clients" ? (
+              <CopyPlus className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {audience === "existing_clients" ? "Duplicate sequence" : "New sequence"}
           </Button>
         </Card>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
           <Card className="overflow-hidden shadow-card">
             <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
-              {sequences.length} sequence{sequences.length === 1 ? "" : "s"}
+              {visibleSequences.length} {audience === "existing_clients" ? "existing-client " : ""}
+              sequence{visibleSequences.length === 1 ? "" : "s"}
             </div>
             <div className="divide-y divide-border">
-              {sequences.map((sequence) => (
+              {visibleSequences.map((sequence) => (
                 <button
                   key={sequence.id}
                   onClick={() => setSelectedId(sequence.id)}
@@ -257,7 +331,9 @@ function SequencesPage() {
                   <div className="min-w-0">
                     <p className="font-medium truncate">{sequence.name}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                      {sequence.campaign_name || "No campaign"}
+                      {audience === "existing_clients"
+                        ? "Uploaded client database"
+                        : sequence.campaign_name || "No campaign"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -272,20 +348,22 @@ function SequencesPage() {
                 </button>
               ))}
             </div>
-            <div className="border-y border-border bg-muted/20 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-                  <FlaskConical className="h-3.5 w-3.5 text-primary" /> Test runs
-                </span>
-                <Badge variant="outline">{testRuns.length}</Badge>
+            {audience === "campaigns" ? (
+              <div className="border-y border-border bg-muted/20 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                    <FlaskConical className="h-3.5 w-3.5 text-primary" /> Test runs
+                  </span>
+                  <Badge variant="outline">{testRuns.length}</Badge>
+                </div>
               </div>
-            </div>
-            {testRunsQuery.isLoading ? (
+            ) : null}
+            {audience === "campaigns" && testRunsQuery.isLoading ? (
               <div className="space-y-2 p-4">
                 <Skeleton className="h-14 w-full" />
                 <Skeleton className="h-14 w-full" />
               </div>
-            ) : testRuns.length ? (
+            ) : audience === "campaigns" && testRuns.length ? (
               <div className="divide-y divide-border">
                 {testRuns.map((run) => (
                   <TestRunListItem
@@ -296,11 +374,11 @@ function SequencesPage() {
                   />
                 ))}
               </div>
-            ) : (
+            ) : audience === "campaigns" ? (
               <p className="px-4 py-5 text-sm text-muted-foreground">
                 Saved previews and test sends will appear here.
               </p>
-            )}
+            ) : null}
           </Card>
 
           {selectedId ? <SequenceDetailPanel sequenceId={selectedId} /> : null}
@@ -311,6 +389,21 @@ function SequencesPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={(id) => setSelectedId(id)}
+      />
+      <DuplicateExistingClientSequenceDialog
+        open={duplicateOpen}
+        onOpenChange={setDuplicateOpen}
+        sequences={campaignSequences}
+        onCreated={(id) => {
+          setAudience("existing_clients");
+          setSelectedId(id);
+        }}
+      />
+      <ImportContactsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        initialSequenceId={selectedId}
+        lockSequence
       />
       <TestSequenceDialog
         open={testOpen}
@@ -568,6 +661,114 @@ function CreateSequenceDialog({
           </Button>
           <Button onClick={handleCreate} disabled={!name.trim() || createMutation.isPending}>
             {createMutation.isPending ? "Creating..." : "Create sequence"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DuplicateExistingClientSequenceDialog({
+  open,
+  onOpenChange,
+  sequences,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sequences: SequenceRecord[];
+  onCreated: (id: string) => void;
+}) {
+  const [sourceSequenceId, setSourceSequenceId] = useState("");
+  const [name, setName] = useState("");
+  const duplicateMutation = useDuplicateExistingClientSequenceMutation();
+
+  useEffect(() => {
+    if (!open) return;
+    const initial = sequences[0];
+    setSourceSequenceId(initial?.id || "");
+    setName(initial ? `${initial.name} - Existing Clients` : "");
+    duplicateMutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sequences]);
+
+  const handleSourceChange = (sequenceId: string) => {
+    const source = sequences.find((sequence) => sequence.id === sequenceId);
+    setSourceSequenceId(sequenceId);
+    if (source) setName(`${source.name} - Existing Clients`);
+  };
+
+  const handleDuplicate = async () => {
+    if (!sourceSequenceId || !name.trim()) return;
+    try {
+      const sequence = await duplicateMutation.mutateAsync({
+        sequenceId: sourceSequenceId,
+        name: name.trim(),
+      });
+      onOpenChange(false);
+      onCreated(sequence.id);
+      toast.success(`Created ${sequence.name}. Adjust the dates, then upload the client database.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to duplicate this sequence.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Duplicate for existing clients</DialogTitle>
+          <DialogDescription>
+            All steps, content, images, signatures, and dates are copied into a separate draft. You
+            can then change its schedule without affecting the original campaign sequence.
+          </DialogDescription>
+        </DialogHeader>
+        {sequences.length ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Sequence to duplicate</Label>
+              <Select value={sourceSequenceId} onValueChange={handleSourceChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a sequence" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sequences.map((sequence) => (
+                    <SelectItem key={sequence.id} value={sequence.id}>
+                      {sequence.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="existing-client-sequence-name">New sequence name</Label>
+              <Input
+                id="existing-client-sequence-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+          </div>
+        ) : (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Create a campaign sequence first</AlertTitle>
+            <AlertDescription>
+              There is no source sequence to copy yet. Return to Campaign sequences and create one
+              first.
+            </AlertDescription>
+          </Alert>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDuplicate}
+            disabled={!sourceSequenceId || !name.trim() || duplicateMutation.isPending}
+          >
+            <CopyPlus className="mr-2 h-4 w-4" />
+            {duplicateMutation.isPending ? "Duplicating..." : "Duplicate sequence"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1304,6 +1505,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   }
 
   const { sequence, steps } = sequenceQuery.data;
+  const isExistingClientSequence = sequence.metadata?.audience_type === "existing_clients";
   const enrollments = enrollmentsQuery.data ?? [];
   const repliedEnrollments = enrollments.filter(
     (enrollment) =>
@@ -1350,6 +1552,11 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">{sequence.name}</h2>
+            {isExistingClientSequence ? (
+              <Badge variant="secondary" className="mt-2 gap-1.5">
+                <Users2 className="h-3 w-3" /> Existing clients
+              </Badge>
+            ) : null}
             <p className="mt-1 text-sm text-muted-foreground">
               {sequence.last_run_at
                 ? `Engine last ran ${formatDistanceToNow(new Date(sequence.last_run_at), { addSuffix: true })}`
@@ -1418,37 +1625,47 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="space-y-2">
-              <Label>Campaign</Label>
-              <Select
-                value={sequence.campaign_id || "__none__"}
-                onValueChange={(value) =>
-                  updateMutation.mutate({
-                    sequenceId,
-                    patch: { campaign_id: value === "__none__" ? null : value },
-                  })
-                }
-              >
-                <SelectTrigger className="max-w-sm">
-                  <SelectValue placeholder="Choose a campaign" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No campaign</SelectItem>
-                  {(campaignsQuery.data?.campaigns ?? [])
-                    .filter((campaign) => campaign.status !== "archived")
-                    .map((campaign) => (
-                      <SelectItem key={campaign.id} value={campaign.id}>
-                        {campaign.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Changing the campaign changes which qualified contacts and approved image assets
-                belong to this sequence. The separate campaign outreach email is currently skipped,
-                so verified contacts enter directly at Step 1.
-              </p>
-            </div>
+            {isExistingClientSequence ? (
+              <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
+                <p className="text-sm font-medium">Separate existing-client audience</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This sequence is not linked to campaign lead sourcing. Only contacts uploaded to
+                  this copy are enrolled, and all metrics below belong to this copy alone.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Campaign</Label>
+                <Select
+                  value={sequence.campaign_id || "__none__"}
+                  onValueChange={(value) =>
+                    updateMutation.mutate({
+                      sequenceId,
+                      patch: { campaign_id: value === "__none__" ? null : value },
+                    })
+                  }
+                >
+                  <SelectTrigger className="max-w-sm">
+                    <SelectValue placeholder="Choose a campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No campaign</SelectItem>
+                    {(campaignsQuery.data?.campaigns ?? [])
+                      .filter((campaign) => campaign.status !== "archived")
+                      .map((campaign) => (
+                        <SelectItem key={campaign.id} value={campaign.id}>
+                          {campaign.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Changing the campaign changes which qualified contacts and approved image assets
+                  belong to this sequence. The separate campaign outreach email is currently
+                  skipped, so verified contacts enter directly at Step 1.
+                </p>
+              </div>
+            )}
 
             <div className="rounded-lg border border-border bg-muted/20 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
