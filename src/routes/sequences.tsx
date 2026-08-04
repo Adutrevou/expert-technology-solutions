@@ -61,6 +61,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ImportContactsDialog } from "@/components/import-contacts-dialog";
 import { useApp } from "@/lib/app-state";
+import { listContacts, type ContactRecord } from "@/lib/contacts-import-api";
 import { getLeads, type LeadRecord } from "@/lib/leads-api";
 import {
   buildSignatureImageHtml,
@@ -85,6 +86,7 @@ import {
   useDisqualifyEnrollmentMutation,
   useDryRunSequenceMutation,
   useDuplicateExistingClientSequenceMutation,
+  useEnrollLeadsMutation,
   useEnrollmentsQuery,
   usePauseSequenceMutation,
   useStartLiveSequenceMutation,
@@ -172,6 +174,7 @@ function SequencesPage() {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [audience, setAudience] = useState<"campaigns" | "existing_clients">("campaigns");
+  const enrollExistingClientsMutation = useEnrollLeadsMutation();
 
   const sequences = useMemo(() => sequencesQuery.data ?? [], [sequencesQuery.data]);
   const campaignSequences = useMemo(
@@ -185,6 +188,42 @@ function SequencesPage() {
   const visibleSequences =
     audience === "existing_clients" ? existingClientSequences : campaignSequences;
   const testRuns = testRunsQuery.data ?? [];
+  const existingContactsQuery = useQuery({
+    queryKey: ["intergrai", "existing-client-contacts"],
+    queryFn: () => listContacts({ audienceType: "existing_clients", limit: 200 }),
+    enabled: audience === "existing_clients",
+    retry: 1,
+  });
+  const selectedExistingEnrollmentsQuery = useEnrollmentsQuery(
+    audience === "existing_clients" ? selectedId || undefined : undefined,
+  );
+  const selectedExistingSequence = existingClientSequences.find(
+    (sequence) => sequence.id === selectedId,
+  );
+  const selectedEnrollmentLeadIds = new Set(
+    (selectedExistingEnrollmentsQuery.data ?? [])
+      .map((enrollment) => enrollment.lead_id)
+      .filter(Boolean),
+  );
+  const unassignedExistingContacts = (existingContactsQuery.data ?? []).filter(
+    (contact) => !selectedEnrollmentLeadIds.has(contact.id),
+  );
+
+  const addUploadedClientsToSelectedSequence = async () => {
+    if (!selectedId || !unassignedExistingContacts.length) return;
+    try {
+      await enrollExistingClientsMutation.mutateAsync({
+        sequenceId: selectedId,
+        leadIds: unassignedExistingContacts.map((contact) => contact.id),
+        source: "imported_csv",
+      });
+      toast.success(
+        `${unassignedExistingContacts.length} uploaded client${unassignedExistingContacts.length === 1 ? "" : "s"} added to ${selectedExistingSequence?.name || "the selected sequence"}.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to add these clients.");
+    }
+  };
 
   useEffect(() => {
     if (!visibleSequences.length) {
@@ -277,15 +316,23 @@ function SequencesPage() {
               replies, and metrics remain separate from campaign prospecting.
             </p>
           </div>
-          <Button
-            variant="outline"
-            className="gap-2 shrink-0"
-            onClick={() => (selectedId ? setImportOpen(true) : setDuplicateOpen(true))}
-          >
+          <Button variant="outline" className="gap-2 shrink-0" onClick={() => setImportOpen(true)}>
             <UploadCloud className="h-4 w-4" /> Upload client database
           </Button>
         </Card>
       )}
+
+      {audience === "existing_clients" ? (
+        <ExistingClientsDatabase
+          contacts={existingContactsQuery.data ?? []}
+          isLoading={existingContactsQuery.isLoading}
+          selectedSequence={selectedExistingSequence}
+          selectedEnrollmentLeadIds={selectedEnrollmentLeadIds}
+          unassignedCount={unassignedExistingContacts.length}
+          isAdding={enrollExistingClientsMutation.isPending}
+          onAddToSequence={addUploadedClientsToSelectedSequence}
+        />
+      ) : null}
 
       {visibleSequences.length === 0 ? (
         <Card className="p-10 text-center shadow-card">
@@ -396,14 +443,15 @@ function SequencesPage() {
         onCreated={(id) => {
           setAudience("existing_clients");
           setSelectedId(id);
-          setImportOpen(true);
         }}
       />
       <ImportContactsDialog
         open={importOpen}
         onOpenChange={setImportOpen}
         initialSequenceId={selectedId}
-        lockSequence
+        lockSequence={Boolean(selectedId)}
+        audienceType="existing_clients"
+        onImported={() => existingContactsQuery.refetch()}
       />
       <TestSequenceDialog
         open={testOpen}
@@ -429,6 +477,106 @@ function SequencesPage() {
         }}
       />
     </div>
+  );
+}
+
+function ExistingClientsDatabase({
+  contacts,
+  isLoading,
+  selectedSequence,
+  selectedEnrollmentLeadIds,
+  unassignedCount,
+  isAdding,
+  onAddToSequence,
+}: {
+  contacts: ContactRecord[];
+  isLoading: boolean;
+  selectedSequence?: SequenceRecord;
+  selectedEnrollmentLeadIds: Set<string | null>;
+  unassignedCount: number;
+  isAdding: boolean;
+  onAddToSequence: () => void;
+}) {
+  return (
+    <Card className="overflow-hidden shadow-card">
+      <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-semibold">Uploaded existing clients</h2>
+            <Badge variant="outline">{contacts.length}</Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Current sequence: {selectedSequence?.name || "None selected"}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-2"
+          disabled={!selectedSequence || unassignedCount === 0 || isAdding}
+          onClick={onAddToSequence}
+        >
+          <UserPlus className="h-4 w-4" />
+          {isAdding
+            ? "Adding clients..."
+            : selectedSequence
+              ? `Add ${unassignedCount} to selected sequence`
+              : "Select a sequence to add clients"}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2 p-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : contacts.length ? (
+        <div className="max-h-80 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Number</TableHead>
+                <TableHead>Company</TableHead>
+                <TableHead>Selected sequence</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contacts.map((contact) => {
+                const isInSelectedSequence = selectedEnrollmentLeadIds.has(contact.id);
+                return (
+                  <TableRow key={contact.id}>
+                    <TableCell className="font-medium">
+                      {contact.contact_name || "Unnamed client"}
+                    </TableCell>
+                    <TableCell>{contact.email || "-"}</TableCell>
+                    <TableCell>{contact.phone || "-"}</TableCell>
+                    <TableCell>{contact.company_name || "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={isInSelectedSequence ? "secondary" : "outline"}>
+                        {isInSelectedSequence
+                          ? selectedSequence?.name || "Added"
+                          : selectedSequence
+                            ? "Not added"
+                            : "Choose sequence"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <div className="p-6 text-center">
+          <p className="text-sm font-medium">No existing clients uploaded yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Use Upload client database above. Uploading and duplicating are now separate actions.
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 

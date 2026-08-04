@@ -27,8 +27,15 @@ export function usePreviewImportMutation() {
 export function useCommitImportMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ importId, sequenceId }: { importId: string; sequenceId?: string }) =>
-      commitContactImport(importId, sequenceId),
+    mutationFn: ({
+      importId,
+      sequenceId,
+      audienceType,
+    }: {
+      importId: string;
+      sequenceId?: string;
+      audienceType?: "existing_clients";
+    }) => commitContactImport(importId, sequenceId, audienceType),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "leads"] });
       void queryClient.invalidateQueries({

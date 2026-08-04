@@ -54,12 +54,14 @@ export function ImportContactsDialog({
   onImported,
   initialSequenceId,
   lockSequence = false,
+  audienceType,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImported?: () => void;
   initialSequenceId?: string | null;
   lockSequence?: boolean;
+  audienceType?: "existing_clients";
 }) {
   const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -73,8 +75,9 @@ export function ImportContactsDialog({
 
   const eligibleSequences = (sequencesQuery.data ?? []).filter(
     (sequence) =>
-      sequence.status === "active" ||
-      (sequence.status === "draft" && sequence.metadata?.audience_type === "existing_clients"),
+      (sequence.status === "active" ||
+        (sequence.status === "draft" && sequence.metadata?.audience_type === "existing_clients")) &&
+      (!audienceType || sequence.metadata?.audience_type === audienceType),
   );
   const selectedSequence = (sequencesQuery.data ?? []).find(
     (sequence) => sequence.id === sequenceId,
@@ -111,6 +114,7 @@ export function ImportContactsDialog({
     await commitMutation.mutateAsync({
       importId: preview.import_id,
       sequenceId: sequenceId || undefined,
+      audienceType,
     });
     setStep("done");
     onImported?.();
@@ -160,7 +164,11 @@ export function ImportContactsDialog({
 
             <div className="space-y-2">
               <Label>
-                {lockSequence ? "Existing-client sequence" : "Enroll into sequence (optional)"}
+                {lockSequence
+                  ? "Existing-client sequence"
+                  : audienceType === "existing_clients"
+                    ? "Add to existing-client sequence (optional)"
+                    : "Enroll into sequence (optional)"}
               </Label>
               {lockSequence ? (
                 <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm font-medium">

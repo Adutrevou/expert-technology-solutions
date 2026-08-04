@@ -104,12 +104,17 @@ export async function previewContactImport(
 export async function commitContactImport(
   importId: string,
   sequenceId?: string,
+  audienceType?: "existing_clients",
 ): Promise<ImportRecord> {
   const value = await apiRequest<unknown>(
     `/clients/${INTERGRAI_CLIENT_SLUG}/contacts/import/commit`,
     {
       method: "POST",
-      body: JSON.stringify({ import_id: importId, sequence_id: sequenceId }),
+      body: JSON.stringify({
+        import_id: importId,
+        sequence_id: sequenceId,
+        audience_type: audienceType,
+      }),
     },
   );
   return asRecord(value).import as ImportRecord;
@@ -125,10 +130,14 @@ export async function getContactImport(importId: string): Promise<ImportRecord> 
 export async function listContacts(filters?: {
   search?: string;
   source?: string;
+  audienceType?: "existing_clients";
+  limit?: number;
 }): Promise<ContactRecord[]> {
   const params = new URLSearchParams();
   if (filters?.search) params.set("search", filters.search);
   if (filters?.source) params.set("source", filters.source);
+  if (filters?.audienceType) params.set("audience_type", filters.audienceType);
+  if (filters?.limit) params.set("limit", String(filters.limit));
   const query = params.toString() ? `?${params.toString()}` : "";
   const value = await apiRequest<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/contacts${query}`);
   return asArray(asRecord(value).contacts) as ContactRecord[];
