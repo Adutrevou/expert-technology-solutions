@@ -1655,11 +1655,15 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   const { sequence, steps } = sequenceQuery.data;
   const isExistingClientSequence = sequence.metadata?.audience_type === "existing_clients";
   const enrollments = enrollmentsQuery.data ?? [];
+  const outOfOfficeEnrollments = enrollments.filter((enrollment) =>
+    Boolean(getOutOfOfficeInfo(enrollment)),
+  );
   const repliedEnrollments = enrollments.filter(
     (enrollment) =>
-      enrollment.status === "replied" ||
-      enrollment.replies > 0 ||
-      Boolean(enrollment.conversation_id),
+      !getOutOfOfficeInfo(enrollment) &&
+      (enrollment.status === "replied" ||
+        enrollment.replies > 0 ||
+        Boolean(enrollment.conversation_id)),
   );
   const isLive =
     sequence.live_sending_enabled === true ||
@@ -1769,6 +1773,9 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
             <TabsTrigger value="steps">Steps ({steps.length})</TabsTrigger>
             <TabsTrigger value="metrics">Metrics</TabsTrigger>
             <TabsTrigger value="replies">Replies ({repliedEnrollments.length})</TabsTrigger>
+            <TabsTrigger value="out-of-office">
+              Out of office ({outOfOfficeEnrollments.length})
+            </TabsTrigger>
             <TabsTrigger value="enrollments">Enrollments ({enrollments.length})</TabsTrigger>
           </TabsList>
 
@@ -1866,6 +1873,13 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
 
           <TabsContent value="replies">
             <RepliesPanel replies={repliedEnrollments} isLoading={enrollmentsQuery.isLoading} />
+          </TabsContent>
+
+          <TabsContent value="out-of-office">
+            <OutOfOfficePanel
+              enrollments={outOfOfficeEnrollments}
+              isLoading={enrollmentsQuery.isLoading}
+            />
           </TabsContent>
 
           <TabsContent value="enrollments">
@@ -2579,6 +2593,145 @@ function RepliesPanel({ replies, isLoading }: { replies: EnrollmentRecord[]; isL
             </div>
           </article>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function getOutOfOfficeInfo(enrollment: EnrollmentRecord) {
+  const metadata = enrollment.metadata ?? {};
+  const resumeAt = metadata.out_of_office_resume_at;
+  const returnDate = metadata.out_of_office_return_date;
+  const isOutOfOffice =
+    metadata.pause_reason === "out_of_office" ||
+    typeof resumeAt === "string" ||
+    typeof returnDate === "string";
+
+  if (!isOutOfOffice) return null;
+
+  return {
+    resumeAt: typeof resumeAt === "string" ? resumeAt : enrollment.next_due_at,
+    returnDate: typeof returnDate === "string" ? returnDate : null,
+    estimated: metadata.out_of_office_date_estimated === true,
+  };
+}
+
+function formatOutOfOfficeDate(value: string | null) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return new Intl.DateTimeFormat("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function OutOfOfficePanel({
+  enrollments,
+  isLoading,
+}: {
+  enrollments: EnrollmentRecord[];
+  isLoading: boolean;
+}) {
+  if (isLoading) return <Skeleton className="h-48" />;
+  if (!enrollments.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+        <Clock3 className="mx-auto h-7 w-7 text-muted-foreground" />
+        <p className="mt-3 font-medium">No out-of-office replies</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Automatic absence replies will appear here for the sales team to review.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/25 bg-sky-500/5 p-4">
+        <div>
+          <h3 className="font-semibold">Out-of-office follow-ups</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            These contacts are paused individually and will continue from their next unsent step
+            after they return.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/conversations">Open full conversations</Link>
+        </Button>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {enrollments.map((enrollment) => {
+          const info = getOutOfOfficeInfo(enrollment);
+          if (!info) return null;
+          const isWaiting =
+            enrollment.status === "paused" &&
+            Boolean(info.resumeAt && new Date(info.resumeAt).getTime() > Date.now());
+
+          return (
+            <article key={enrollment.id} className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">
+                    {enrollment.contact_name || "Contact name unavailable"}
+                  </p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {[enrollment.title, enrollment.company_name].filter(Boolean).join(" at ") ||
+                      "Company details unavailable"}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0 border-sky-500/30 bg-sky-500/10">
+                  {isWaiting ? "Paused" : "Resumed"}
+                </Badge>
+              </div>
+
+              <div className="mt-4 grid gap-2 rounded-lg border bg-muted/25 p-3 text-sm sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Contact returns</p>
+                  <p className="mt-1 font-medium">{formatOutOfOfficeDate(info.returnDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Sequence resumes</p>
+                  <p className="mt-1 font-medium">{formatOutOfOfficeDate(info.resumeAt)}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-lg border bg-muted/25 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold">
+                    {enrollment.reply_subject || "Out-of-office reply"}
+                  </p>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {info.estimated ? "7-day estimate" : "Return date detected"}
+                  </Badge>
+                </div>
+                <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                  {enrollment.reply_preview ||
+                    "Open Conversations to view the full automatic reply."}
+                </p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {enrollment.email ? (
+                  <Button asChild variant="outline" size="sm">
+                    <a href={`mailto:${enrollment.email}`}>Email contact</a>
+                  </Button>
+                ) : null}
+                {enrollment.phone ? (
+                  <Button asChild variant="outline" size="sm">
+                    <a href={`tel:${enrollment.phone}`}>Call contact</a>
+                  </Button>
+                ) : null}
+                <span className="self-center text-xs text-muted-foreground">
+                  Next: step {enrollment.current_step + 1}
+                </span>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
