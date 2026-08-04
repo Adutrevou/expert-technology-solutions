@@ -280,8 +280,7 @@ function SequencesPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => setImportOpen(true)}
-            disabled={!selectedId}
+            onClick={() => (selectedId ? setImportOpen(true) : setDuplicateOpen(true))}
           >
             <UploadCloud className="h-4 w-4" /> Upload client database
           </Button>
@@ -397,6 +396,7 @@ function SequencesPage() {
         onCreated={(id) => {
           setAudience("existing_clients");
           setSelectedId(id);
+          setImportOpen(true);
         }}
       />
       <ImportContactsDialog

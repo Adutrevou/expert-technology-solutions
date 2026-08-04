@@ -23,8 +23,8 @@ import { usePreviewImportMutation, useCommitImportMutation } from "@/lib/contact
 import { useSequencesQuery } from "@/lib/sequences-api-hooks";
 import type { ImportPreviewResult } from "@/lib/contacts-import-api";
 
-const SAMPLE_CSV = `email,first_name,last_name,company,phone,website,job_title,linkedin_url,notes
-jordan.lee@example.co.za,Jordan,Lee,Example Co,+27 11 555 0100,https://example.co.za,IT Manager,https://linkedin.com/in/jordan-lee,Sample row
+const SAMPLE_CSV = `Client Name,Email Address,Number,Business Name,Role
+Jordan Lee,jordan.lee@example.co.za,+27 11 555 0100,Example Co,IT Manager
 `;
 
 function downloadSampleCsv() {
@@ -122,8 +122,8 @@ export function ImportContactsDialog({
         <DialogHeader>
           <DialogTitle>Upload contacts</DialogTitle>
           <DialogDescription>
-            Upload a CSV of contacts. Preview validates every row before anything is created -
-            nothing is saved until you confirm.
+            Upload a CSV, Excel (.xlsx), TSV, or text contact list. Preview validates every row
+            before anything is created - nothing is saved until you confirm.
           </DialogDescription>
         </DialogHeader>
 
@@ -133,8 +133,7 @@ export function ImportContactsDialog({
               <div>
                 <p className="text-sm font-medium">Need the column format?</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  email, first_name, last_name, company, phone, website, job_title, linkedin_url,
-                  notes
+                  Client Name, Email Address, Number, Business Name, Role
                 </p>
               </div>
               <Button
@@ -148,12 +147,12 @@ export function ImportContactsDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contacts-file">CSV file</Label>
+              <Label htmlFor="contacts-file">Client database file</Label>
               <input
                 ref={fileInputRef}
                 id="contacts-file"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.tsv,.txt,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
               />
