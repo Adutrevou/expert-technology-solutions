@@ -1659,11 +1659,7 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
     Boolean(getOutOfOfficeInfo(enrollment)),
   );
   const repliedEnrollments = enrollments.filter(
-    (enrollment) =>
-      !getOutOfOfficeInfo(enrollment) &&
-      (enrollment.status === "replied" ||
-        enrollment.replies > 0 ||
-        Boolean(enrollment.conversation_id)),
+    (enrollment) => !getOutOfOfficeInfo(enrollment) && Boolean(enrollment.conversation_id),
   );
   const isLive =
     sequence.live_sending_enabled === true ||
