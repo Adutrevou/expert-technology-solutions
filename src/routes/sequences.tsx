@@ -2567,15 +2567,28 @@ function RepliesPanel({ replies, isLoading }: { replies: EnrollmentRecord[]; isL
                   {enrollment.email || "Email unavailable"}
                 </a>
               </div>
-              <Badge className="shrink-0 bg-success/15 text-success hover:bg-success/15">
-                Reply received
-              </Badge>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <Badge className="bg-success/15 text-success hover:bg-success/15">
+                  Reply received
+                </Badge>
+                <Badge variant="outline" className="border-primary/25 bg-primary/5 text-[10px]">
+                  {enrollment.reply_origin === "sequence" && enrollment.reply_sequence_step
+                    ? `Responded to Step ${enrollment.reply_sequence_step}`
+                    : "Campaign outreach (before Step 1)"}
+                </Badge>
+              </div>
             </div>
 
             <div className="mt-4 rounded-lg border bg-muted/25 p-3">
-              <p className="text-xs font-semibold">{enrollment.reply_subject || "Inbound reply"}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Their reply
+              </p>
+              <p className="mt-1 text-xs font-semibold">
+                {enrollment.reply_subject || "Inbound reply"}
+              </p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                {enrollment.reply_preview ||
+                {enrollment.reply_body ||
+                  enrollment.reply_preview ||
                   "The reply is recorded. Open Conversations to view the full message thread."}
               </p>
             </div>

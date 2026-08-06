@@ -103,6 +103,9 @@ export interface EnrollmentRecord {
   conversation_status?: string | null;
   reply_subject?: string | null;
   reply_preview?: string | null;
+  reply_body?: string | null;
+  reply_sequence_step?: number | null;
+  reply_origin?: "sequence" | "campaign_outreach" | null;
   replied_at?: string | null;
 }
 
