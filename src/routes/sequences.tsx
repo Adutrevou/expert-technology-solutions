@@ -300,11 +300,11 @@ function SequencesPage() {
       {audience === "campaigns" ? (
         <Alert className="border-emerald-500/40 bg-emerald-500/10">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertTitle>Direct-to-sequence mode is live</AlertTitle>
+          <AlertTitle>POPIA-first sequence mode is live</AlertTitle>
           <AlertDescription>
-            The separate campaign first-outreach email is temporarily skipped. Every 15 minutes,
-            newly qualified contacts with verified email addresses are added directly to Step 1 of
-            the sequence linked to their campaign.
+            Every 15 minutes, newly qualified contacts with verified email addresses enter their
+            campaign sequence and receive one consent request. Marketing steps remain paused until
+            they accept, then Step 1 starts seven days later.
           </AlertDescription>
         </Alert>
       ) : (
@@ -1812,8 +1812,8 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   Changing the campaign changes which qualified contacts and approved image assets
-                  belong to this sequence. The separate campaign outreach email is currently
-                  skipped, so verified contacts enter directly at Step 1.
+                  belong to this sequence. New verified contacts receive one POPIA consent request;
+                  after acceptance, their first marketing step starts seven days later.
                 </p>
               </div>
             )}
