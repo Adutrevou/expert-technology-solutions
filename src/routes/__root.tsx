@@ -82,23 +82,29 @@ function RootComponent() {
 }
 
 function Gate() {
-  const { authStatus, isAuthenticated } = useApp();
+  const { authStatus, isAuthenticated, isInternalAdmin } = useApp();
   const router = useRouterState();
   const navigate = useNavigate();
   const path = router.location.pathname;
   const isPublicAuthPath = path === "/login" || path === "/forgot-password" || path === "/reset-password";
+  const isInternalOnlyPath = path === "/ai-agent-status" || path === "/opportunity-watch";
 
   useEffect(() => {
     if (authStatus === "loading") return;
     if (!isAuthenticated && !isPublicAuthPath) navigate({ to: "/login", replace: true });
     if (isAuthenticated && isPublicAuthPath) navigate({ to: "/", replace: true });
-  }, [authStatus, isAuthenticated, isPublicAuthPath, navigate]);
+    if (isAuthenticated && isInternalOnlyPath && !isInternalAdmin) navigate({ to: "/", replace: true });
+  }, [authStatus, isAuthenticated, isInternalAdmin, isInternalOnlyPath, isPublicAuthPath, navigate]);
 
   if (authStatus === "loading") {
     return <LoadingGate />;
   }
 
   if (isAuthenticated && isPublicAuthPath) {
+    return <LoadingGate />;
+  }
+
+  if (isAuthenticated && isInternalOnlyPath && !isInternalAdmin) {
     return <LoadingGate />;
   }
 

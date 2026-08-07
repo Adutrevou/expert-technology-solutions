@@ -58,7 +58,7 @@ const BASE_NAV = [
 // Internal-only nav entries - never shown to client-side roles (client_owner/
 // manager/sales_user/viewer). AI Agent Status exposes provider/model/budget/
 // cap internals that must stay Intergrai-internal only.
-const INTERNAL_ONLY_NAV_PATHS = new Set(["/ai-agent-status"]);
+const INTERNAL_ONLY_NAV_PATHS = new Set(["/ai-agent-status", "/opportunity-watch"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, client, logout, theme, toggleTheme, isInternalAdmin } = useApp();
