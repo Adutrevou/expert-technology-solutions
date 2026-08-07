@@ -18,6 +18,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as OpportunityWatchRouteImport } from './routes/opportunity-watch'
 import { Route as MeetingsRouteImport } from './routes/meetings'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
@@ -77,6 +78,11 @@ const ReportsRoute = ReportsRouteImport.update({
 const ProgressRoute = ProgressRouteImport.update({
   id: '/progress',
   path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpportunityWatchRoute = OpportunityWatchRouteImport.update({
+  id: '/opportunity-watch',
+  path: '/opportunity-watch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeetingsRoute = MeetingsRouteImport.update({
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
+  '/opportunity-watch': typeof OpportunityWatchRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
+  '/opportunity-watch': typeof OpportunityWatchRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
@@ -221,6 +229,7 @@ export interface FileRoutesById {
   '/leads': typeof LeadsRoute
   '/login': typeof LoginRoute
   '/meetings': typeof MeetingsRoute
+  '/opportunity-watch': typeof OpportunityWatchRoute
   '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/requests': typeof RequestsRoute
@@ -249,6 +258,7 @@ export interface FileRouteTypes {
     | '/leads'
     | '/login'
     | '/meetings'
+    | '/opportunity-watch'
     | '/progress'
     | '/reports'
     | '/requests'
@@ -275,6 +285,7 @@ export interface FileRouteTypes {
     | '/leads'
     | '/login'
     | '/meetings'
+    | '/opportunity-watch'
     | '/progress'
     | '/reports'
     | '/requests'
@@ -301,6 +312,7 @@ export interface FileRouteTypes {
     | '/leads'
     | '/login'
     | '/meetings'
+    | '/opportunity-watch'
     | '/progress'
     | '/reports'
     | '/requests'
@@ -328,6 +340,7 @@ export interface RootRouteChildren {
   LeadsRoute: typeof LeadsRoute
   LoginRoute: typeof LoginRoute
   MeetingsRoute: typeof MeetingsRoute
+  OpportunityWatchRoute: typeof OpportunityWatchRoute
   ProgressRoute: typeof ProgressRoute
   ReportsRoute: typeof ReportsRoute
   RequestsRoute: typeof RequestsRoute
@@ -405,6 +418,13 @@ declare module '@tanstack/react-router' {
       path: '/progress'
       fullPath: '/progress'
       preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/opportunity-watch': {
+      id: '/opportunity-watch'
+      path: '/opportunity-watch'
+      fullPath: '/opportunity-watch'
+      preLoaderRoute: typeof OpportunityWatchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/meetings': {
@@ -528,6 +548,7 @@ const rootRouteChildren: RootRouteChildren = {
   LeadsRoute: LeadsRoute,
   LoginRoute: LoginRoute,
   MeetingsRoute: MeetingsRoute,
+  OpportunityWatchRoute: OpportunityWatchRoute,
   ProgressRoute: ProgressRoute,
   ReportsRoute: ReportsRoute,
   RequestsRoute: RequestsRoute,

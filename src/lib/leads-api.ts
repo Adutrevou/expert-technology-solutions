@@ -44,6 +44,58 @@ export interface DashboardResponse {
   recent_reports: unknown[];
 }
 
+export interface OpportunityService {
+  key: "cctv_security" | "managed_it" | "copiers_print";
+  label: string;
+}
+
+export interface PublicOpportunityRecord {
+  id: string;
+  tender_number: string;
+  title: string;
+  description: string;
+  buyer: string;
+  province: string;
+  delivery_location: string;
+  procurement_method: string;
+  published_at?: string | null;
+  closes_at?: string | null;
+  days_remaining?: number | null;
+  urgency: "urgent" | "soon" | "open" | "unknown";
+  services: OpportunityService[];
+  source_name: string;
+  source_url: string;
+  documents: Array<{ title: string; url: string; format?: string | null }>;
+  requires_manual_review: boolean;
+}
+
+export interface OpportunitySourceRecord {
+  key: string;
+  name: string;
+  url: string;
+  coverage: string;
+  automated: boolean;
+}
+
+export interface OpportunityWatchResponse {
+  ok: boolean;
+  client: ApiClientSummary;
+  fetched_at: string;
+  source_updated_at?: string | null;
+  lookback_days: number;
+  scanned_count: number;
+  count: number;
+  cache_status: "hit" | "miss";
+  opportunities: PublicOpportunityRecord[];
+  sources: OpportunitySourceRecord[];
+  safety: {
+    mode: "view_only";
+    automatic_enrolment: false;
+    automatic_outreach: false;
+    message: string;
+  };
+}
+
 export interface CanonicalLeadCounts {
   allLeads: number;
   totalLeadsFound: number;
@@ -1009,6 +1061,10 @@ async function apiGet<T>(path: string): Promise<T> {
 
 export function getDashboard() {
   return apiGet<unknown>(`/clients/${INTERGRAI_CLIENT_SLUG}/dashboard`).then(normalizeDashboardResponse);
+}
+
+export function getOpportunityWatch() {
+  return apiGet<OpportunityWatchResponse>(`/clients/${INTERGRAI_CLIENT_SLUG}/opportunity-watch`);
 }
 
 export function getLeads(options: {

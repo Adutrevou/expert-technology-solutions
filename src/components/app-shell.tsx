@@ -1,7 +1,29 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { useApp } from "@/lib/app-state";
-import { LayoutDashboard, Megaphone, FileBarChart, Settings, Sun, Moon, LogOut, Activity, ShieldCheck, Bot, Mail, CheckSquare, MessagesSquare, BrainCircuit, Users, ClipboardList, MessageSquareReply, Menu, GitBranch, Gauge } from "lucide-react";
+import {
+  LayoutDashboard,
+  Megaphone,
+  FileBarChart,
+  Settings,
+  Sun,
+  Moon,
+  LogOut,
+  Activity,
+  ShieldCheck,
+  Bot,
+  Mail,
+  CheckSquare,
+  MessagesSquare,
+  BrainCircuit,
+  Users,
+  ClipboardList,
+  MessageSquareReply,
+  Menu,
+  GitBranch,
+  Gauge,
+  Radar,
+} from "lucide-react";
 import logo from "@/assets/expert-technology-logo.webp";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +40,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 const BASE_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/lead-agent", label: "Expert Lead Agent", icon: Bot },
+  { to: "/opportunity-watch", label: "Opportunity Watch", icon: Radar },
   { to: "/ai-agent-status", label: "AI Agent Status", icon: Gauge },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/sequences", label: "Sequences", icon: GitBranch },
