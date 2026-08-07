@@ -247,6 +247,20 @@ export async function duplicateSequenceForExistingClients(
   return asRecord(value).followup_sequence as SequenceRecord;
 }
 
+export async function duplicateSequenceForQuotedClients(
+  sequenceId: string,
+  name?: string,
+): Promise<SequenceRecord> {
+  const value = await apiRequest<unknown>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/followup-sequences/${encodeURIComponent(sequenceId)}/duplicate-quoted-clients`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name: name?.trim() || undefined }),
+    },
+  );
+  return asRecord(value).followup_sequence as SequenceRecord;
+}
+
 export async function updateSequence(
   sequenceId: string,
   patch: Partial<

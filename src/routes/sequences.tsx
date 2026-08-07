@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock3,
   CopyPlus,
+  FileText,
   FlaskConical,
   Mail,
   MessageSquareReply,
@@ -61,7 +62,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ImportContactsDialog } from "@/components/import-contacts-dialog";
 import { useApp } from "@/lib/app-state";
-import { listContacts, type ContactRecord } from "@/lib/contacts-import-api";
+import { listContacts, type ContactRecord, type QuoteStatus } from "@/lib/contacts-import-api";
 import { getLeads, type LeadRecord } from "@/lib/leads-api";
 import {
   buildSignatureImageHtml,
@@ -86,6 +87,7 @@ import {
   useDisqualifyEnrollmentMutation,
   useDryRunSequenceMutation,
   useDuplicateExistingClientSequenceMutation,
+  useDuplicateQuotedClientSequenceMutation,
   useEnrollLeadsMutation,
   useEnrollmentsQuery,
   usePauseSequenceMutation,
@@ -100,6 +102,7 @@ import {
   useUpdateSequenceMutation,
   useUpdateSequenceStepMutation,
 } from "@/lib/sequences-api-hooks";
+import { useUpdateContactMutation } from "@/lib/contacts-import-api-hooks";
 import type {
   EnrollmentRecord,
   SequenceRecord,
@@ -173,33 +176,51 @@ function SequencesPage() {
   const [testOpen, setTestOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [audience, setAudience] = useState<"campaigns" | "existing_clients">("campaigns");
+  const [audience, setAudience] = useState<"campaigns" | "existing_clients" | "quoted_clients">(
+    "campaigns",
+  );
   const enrollExistingClientsMutation = useEnrollLeadsMutation();
 
   const sequences = useMemo(() => sequencesQuery.data ?? [], [sequencesQuery.data]);
   const campaignSequences = useMemo(
-    () => sequences.filter((sequence) => sequence.metadata?.audience_type !== "existing_clients"),
+    () =>
+      sequences.filter(
+        (sequence) =>
+          !["existing_clients", "quoted_clients"].includes(
+            String(sequence.metadata?.audience_type || ""),
+          ),
+      ),
     [sequences],
   );
   const existingClientSequences = useMemo(
     () => sequences.filter((sequence) => sequence.metadata?.audience_type === "existing_clients"),
     [sequences],
   );
+  const quotedClientSequences = useMemo(
+    () => sequences.filter((sequence) => sequence.metadata?.audience_type === "quoted_clients"),
+    [sequences],
+  );
   const visibleSequences =
-    audience === "existing_clients" ? existingClientSequences : campaignSequences;
+    audience === "existing_clients"
+      ? existingClientSequences
+      : audience === "quoted_clients"
+        ? quotedClientSequences
+        : campaignSequences;
   const testRuns = testRunsQuery.data ?? [];
   const existingContactsQuery = useQuery({
-    queryKey: ["intergrai", "existing-client-contacts"],
-    queryFn: () => listContacts({ audienceType: "existing_clients", limit: 200 }),
-    enabled: audience === "existing_clients",
+    queryKey: ["intergrai", "audience-contacts", audience],
+    queryFn: () =>
+      listContacts({
+        audienceType: audience === "quoted_clients" ? "quoted_clients" : "existing_clients",
+        limit: 200,
+      }),
+    enabled: audience !== "campaigns",
     retry: 1,
   });
   const selectedExistingEnrollmentsQuery = useEnrollmentsQuery(
-    audience === "existing_clients" ? selectedId || undefined : undefined,
+    audience !== "campaigns" ? selectedId || undefined : undefined,
   );
-  const selectedExistingSequence = existingClientSequences.find(
-    (sequence) => sequence.id === selectedId,
-  );
+  const selectedExistingSequence = visibleSequences.find((sequence) => sequence.id === selectedId);
   const selectedEnrollmentLeadIds = new Set(
     (selectedExistingEnrollmentsQuery.data ?? [])
       .map((enrollment) => enrollment.lead_id)
@@ -285,7 +306,14 @@ function SequencesPage() {
           >
             <Users2 className="h-4 w-4" /> Existing clients
           </Button>
-          {audience === "existing_clients" ? (
+          <Button
+            onClick={() => setAudience("quoted_clients")}
+            variant={audience === "quoted_clients" ? "secondary" : "outline"}
+            className="gap-2"
+          >
+            <FileText className="h-4 w-4" /> Quoted clients
+          </Button>
+          {audience !== "campaigns" ? (
             <Button onClick={() => setDuplicateOpen(true)} className="gap-2">
               <CopyPlus className="h-4 w-4" /> Duplicate sequence
             </Button>
@@ -310,19 +338,25 @@ function SequencesPage() {
       ) : (
         <Card className="flex flex-col gap-4 border-sky-500/30 bg-sky-500/5 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold">Existing client sequences</h2>
+            <h2 className="font-semibold">
+              {audience === "quoted_clients"
+                ? "Quoted client sequences"
+                : "Existing client sequences"}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Duplicate a sequence, adjust its dates, then upload the client database. Its sends,
-              replies, and metrics remain separate from campaign prospecting.
+              {audience === "quoted_clients"
+                ? "Upload clients who received quotes, track each outcome, and run dedicated follow-up sequences with separate replies and metrics."
+                : "Duplicate a sequence, adjust its dates, then upload the client database. Its sends, replies, and metrics remain separate from campaign prospecting."}
             </p>
           </div>
           <Button variant="outline" className="gap-2 shrink-0" onClick={() => setImportOpen(true)}>
-            <UploadCloud className="h-4 w-4" /> Upload client database
+            <UploadCloud className="h-4 w-4" />
+            {audience === "quoted_clients" ? "Upload quoted clients" : "Upload client database"}
           </Button>
         </Card>
       )}
 
-      {audience === "existing_clients" ? (
+      {audience !== "campaigns" ? (
         <ExistingClientsDatabase
           contacts={existingContactsQuery.data ?? []}
           isLoading={existingContactsQuery.isLoading}
@@ -331,40 +365,48 @@ function SequencesPage() {
           unassignedCount={unassignedExistingContacts.length}
           isAdding={enrollExistingClientsMutation.isPending}
           onAddToSequence={addUploadedClientsToSelectedSequence}
+          audienceType={audience}
         />
       ) : null}
 
       {visibleSequences.length === 0 ? (
         <Card className="p-10 text-center shadow-card">
           <h2 className="text-xl font-semibold">
-            {audience === "existing_clients"
-              ? "No existing-client sequences yet"
+            {audience !== "campaigns"
+              ? audience === "quoted_clients"
+                ? "No quoted-client sequences yet"
+                : "No existing-client sequences yet"
               : "No sequences yet"}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {audience === "existing_clients"
+            {audience !== "campaigns"
               ? "Duplicate one of your campaign sequences to create the first separate client run."
               : "Create your first follow-up sequence to get started."}
           </p>
           <Button
             onClick={() =>
-              audience === "existing_clients" ? setDuplicateOpen(true) : setCreateOpen(true)
+              audience !== "campaigns" ? setDuplicateOpen(true) : setCreateOpen(true)
             }
             className="mt-6 gap-2"
           >
-            {audience === "existing_clients" ? (
+            {audience !== "campaigns" ? (
               <CopyPlus className="h-4 w-4" />
             ) : (
               <Plus className="h-4 w-4" />
             )}
-            {audience === "existing_clients" ? "Duplicate sequence" : "New sequence"}
+            {audience !== "campaigns" ? "Duplicate sequence" : "New sequence"}
           </Button>
         </Card>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
           <Card className="overflow-hidden shadow-card">
             <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
-              {visibleSequences.length} {audience === "existing_clients" ? "existing-client " : ""}
+              {visibleSequences.length}{" "}
+              {audience === "existing_clients"
+                ? "existing-client "
+                : audience === "quoted_clients"
+                  ? "quoted-client "
+                  : ""}
               sequence{visibleSequences.length === 1 ? "" : "s"}
             </div>
             <div className="divide-y divide-border">
@@ -377,8 +419,10 @@ function SequencesPage() {
                   <div className="min-w-0">
                     <p className="font-medium truncate">{sequence.name}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                      {audience === "existing_clients"
-                        ? "Uploaded client database"
+                      {audience !== "campaigns"
+                        ? audience === "quoted_clients"
+                          ? "Quoted client database"
+                          : "Uploaded client database"
                         : sequence.campaign_name || "No campaign"}
                     </p>
                   </div>
@@ -436,12 +480,12 @@ function SequencesPage() {
         onOpenChange={setCreateOpen}
         onCreated={(id) => setSelectedId(id)}
       />
-      <DuplicateExistingClientSequenceDialog
+      <DuplicateAudienceSequenceDialog
         open={duplicateOpen}
         onOpenChange={setDuplicateOpen}
         sequences={campaignSequences}
+        audienceType={audience === "quoted_clients" ? "quoted_clients" : "existing_clients"}
         onCreated={(id) => {
-          setAudience("existing_clients");
           setSelectedId(id);
         }}
       />
@@ -450,7 +494,7 @@ function SequencesPage() {
         onOpenChange={setImportOpen}
         initialSequenceId={selectedId}
         lockSequence={Boolean(selectedId)}
-        audienceType="existing_clients"
+        audienceType={audience === "quoted_clients" ? "quoted_clients" : "existing_clients"}
         onImported={() => existingContactsQuery.refetch()}
       />
       <TestSequenceDialog
@@ -488,6 +532,7 @@ function ExistingClientsDatabase({
   unassignedCount,
   isAdding,
   onAddToSequence,
+  audienceType,
 }: {
   contacts: ContactRecord[];
   isLoading: boolean;
@@ -496,13 +541,31 @@ function ExistingClientsDatabase({
   unassignedCount: number;
   isAdding: boolean;
   onAddToSequence: () => void;
+  audienceType: "existing_clients" | "quoted_clients";
 }) {
+  const updateContactMutation = useUpdateContactMutation();
+  const quotedClients = audienceType === "quoted_clients";
+
+  const updateQuoteStatus = async (leadId: string, quoteStatus: QuoteStatus) => {
+    try {
+      await updateContactMutation.mutateAsync({
+        leadId,
+        patch: { quote_status: quoteStatus },
+      });
+      toast.success("Quote status updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update quote status.");
+    }
+  };
+
   return (
     <Card className="overflow-hidden shadow-card">
       <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">Uploaded existing clients</h2>
+            <h2 className="font-semibold">
+              {quotedClients ? "Uploaded quoted clients" : "Uploaded existing clients"}
+            </h2>
             <Badge variant="outline">{contacts.length}</Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -539,6 +602,7 @@ function ExistingClientsDatabase({
                 <TableHead>Email</TableHead>
                 <TableHead>Number</TableHead>
                 <TableHead>Company</TableHead>
+                {quotedClients ? <TableHead>Quote status</TableHead> : null}
                 <TableHead>Selected sequence</TableHead>
               </TableRow>
             </TableHeader>
@@ -553,6 +617,27 @@ function ExistingClientsDatabase({
                     <TableCell>{contact.email || "-"}</TableCell>
                     <TableCell>{contact.phone || "-"}</TableCell>
                     <TableCell>{contact.company_name || "-"}</TableCell>
+                    {quotedClients ? (
+                      <TableCell className="min-w-44">
+                        <Select
+                          value={contact.metadata?.quote_status || "quoted"}
+                          onValueChange={(value) =>
+                            void updateQuoteStatus(contact.id, value as QuoteStatus)
+                          }
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="quoted">Quoted</SelectItem>
+                            <SelectItem value="follow_up_needed">Follow-up needed</SelectItem>
+                            <SelectItem value="accepted">Accepted</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
+                            <SelectItem value="expired">Expired</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                    ) : null}
                     <TableCell>
                       <Badge variant={isInSelectedSequence ? "secondary" : "outline"}>
                         {isInSelectedSequence
@@ -570,7 +655,9 @@ function ExistingClientsDatabase({
         </div>
       ) : (
         <div className="p-6 text-center">
-          <p className="text-sm font-medium">No existing clients uploaded yet</p>
+          <p className="text-sm font-medium">
+            {quotedClients ? "No quoted clients uploaded yet" : "No existing clients uploaded yet"}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
             Use Upload client database above. Uploading and duplicating are now separate actions.
           </p>
@@ -816,40 +903,47 @@ function CreateSequenceDialog({
   );
 }
 
-function DuplicateExistingClientSequenceDialog({
+function DuplicateAudienceSequenceDialog({
   open,
   onOpenChange,
   sequences,
+  audienceType,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sequences: SequenceRecord[];
+  audienceType: "existing_clients" | "quoted_clients";
   onCreated: (id: string) => void;
 }) {
   const [sourceSequenceId, setSourceSequenceId] = useState("");
   const [name, setName] = useState("");
   const duplicateMutation = useDuplicateExistingClientSequenceMutation();
+  const duplicateQuotedMutation = useDuplicateQuotedClientSequenceMutation();
+  const quotedClients = audienceType === "quoted_clients";
+  const activeMutation = quotedClients ? duplicateQuotedMutation : duplicateMutation;
+  const audienceLabel = quotedClients ? "Quoted Clients" : "Existing Clients";
 
   useEffect(() => {
     if (!open) return;
     const initial = sequences[0];
     setSourceSequenceId(initial?.id || "");
-    setName(initial ? `${initial.name} - Existing Clients` : "");
+    setName(initial ? `${initial.name} - ${audienceLabel}` : "");
     duplicateMutation.reset();
+    duplicateQuotedMutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sequences]);
+  }, [open, sequences, audienceLabel]);
 
   const handleSourceChange = (sequenceId: string) => {
     const source = sequences.find((sequence) => sequence.id === sequenceId);
     setSourceSequenceId(sequenceId);
-    if (source) setName(`${source.name} - Existing Clients`);
+    if (source) setName(`${source.name} - ${audienceLabel}`);
   };
 
   const handleDuplicate = async () => {
     if (!sourceSequenceId || !name.trim()) return;
     try {
-      const sequence = await duplicateMutation.mutateAsync({
+      const sequence = await activeMutation.mutateAsync({
         sequenceId: sourceSequenceId,
         name: name.trim(),
       });
@@ -865,7 +959,9 @@ function DuplicateExistingClientSequenceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Duplicate for existing clients</DialogTitle>
+          <DialogTitle>
+            Duplicate for {quotedClients ? "quoted clients" : "existing clients"}
+          </DialogTitle>
           <DialogDescription>
             All steps, content, images, signatures, and dates are copied into a separate draft. You
             can then change its schedule without affecting the original campaign sequence.
@@ -889,9 +985,9 @@ function DuplicateExistingClientSequenceDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="existing-client-sequence-name">New sequence name</Label>
+              <Label htmlFor="audience-sequence-name">New sequence name</Label>
               <Input
-                id="existing-client-sequence-name"
+                id="audience-sequence-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
@@ -913,10 +1009,10 @@ function DuplicateExistingClientSequenceDialog({
           </Button>
           <Button
             onClick={handleDuplicate}
-            disabled={!sourceSequenceId || !name.trim() || duplicateMutation.isPending}
+            disabled={!sourceSequenceId || !name.trim() || activeMutation.isPending}
           >
             <CopyPlus className="mr-2 h-4 w-4" />
-            {duplicateMutation.isPending ? "Duplicating..." : "Duplicate sequence"}
+            {activeMutation.isPending ? "Duplicating..." : "Duplicate sequence"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1654,6 +1750,8 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
 
   const { sequence, steps } = sequenceQuery.data;
   const isExistingClientSequence = sequence.metadata?.audience_type === "existing_clients";
+  const isQuotedClientSequence = sequence.metadata?.audience_type === "quoted_clients";
+  const isSeparateAudienceSequence = isExistingClientSequence || isQuotedClientSequence;
   const enrollments = enrollmentsQuery.data ?? [];
   const outOfOfficeEnrollments = enrollments.filter((enrollment) =>
     Boolean(getOutOfOfficeInfo(enrollment)),
@@ -1703,6 +1801,11 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
             {isExistingClientSequence ? (
               <Badge variant="secondary" className="mt-2 gap-1.5">
                 <Users2 className="h-3 w-3" /> Existing clients
+              </Badge>
+            ) : null}
+            {isQuotedClientSequence ? (
+              <Badge variant="secondary" className="mt-2 gap-1.5">
+                <FileText className="h-3 w-3" /> Quoted clients
               </Badge>
             ) : null}
             <p className="mt-1 text-sm text-muted-foreground">
@@ -1776,9 +1879,11 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            {isExistingClientSequence ? (
+            {isSeparateAudienceSequence ? (
               <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
-                <p className="text-sm font-medium">Separate existing-client audience</p>
+                <p className="text-sm font-medium">
+                  Separate {isQuotedClientSequence ? "quoted-client" : "existing-client"} audience
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   This sequence is not linked to campaign lead sourcing. Only contacts uploaded to
                   this copy are enrolled, and all metrics below belong to this copy alone.

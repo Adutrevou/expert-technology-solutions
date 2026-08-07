@@ -23,8 +23,8 @@ import { usePreviewImportMutation, useCommitImportMutation } from "@/lib/contact
 import { useSequencesQuery } from "@/lib/sequences-api-hooks";
 import type { ImportPreviewResult } from "@/lib/contacts-import-api";
 
-const SAMPLE_CSV = `Client Name,Email Address,Number,Business Name,Role
-Jordan Lee,jordan.lee@example.co.za,+27 11 555 0100,Example Co,IT Manager
+const SAMPLE_CSV = `Client Name,Email Address,Number,Business Name,Role,Quote Status
+Jordan Lee,jordan.lee@example.co.za,+27 11 555 0100,Example Co,IT Manager,Quoted
 `;
 
 function downloadSampleCsv() {
@@ -61,7 +61,7 @@ export function ImportContactsDialog({
   onImported?: () => void;
   initialSequenceId?: string | null;
   lockSequence?: boolean;
-  audienceType?: "existing_clients";
+  audienceType?: "existing_clients" | "quoted_clients";
 }) {
   const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -76,7 +76,10 @@ export function ImportContactsDialog({
   const eligibleSequences = (sequencesQuery.data ?? []).filter(
     (sequence) =>
       (sequence.status === "active" ||
-        (sequence.status === "draft" && sequence.metadata?.audience_type === "existing_clients")) &&
+        (sequence.status === "draft" &&
+          ["existing_clients", "quoted_clients"].includes(
+            String(sequence.metadata?.audience_type || ""),
+          ))) &&
       (!audienceType || sequence.metadata?.audience_type === audienceType),
   );
   const selectedSequence = (sequencesQuery.data ?? []).find(
@@ -137,7 +140,7 @@ export function ImportContactsDialog({
               <div>
                 <p className="text-sm font-medium">Need the column format?</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Client Name, Email Address, Number, Business Name, Role
+                  Client Name, Email Address, Number, Business Name, Role, Quote Status
                 </p>
               </div>
               <Button
@@ -165,7 +168,9 @@ export function ImportContactsDialog({
             <div className="space-y-2">
               <Label>
                 {lockSequence
-                  ? "Existing-client sequence"
+                  ? audienceType === "quoted_clients"
+                    ? "Quoted-client sequence"
+                    : "Existing-client sequence"
                   : audienceType === "existing_clients"
                     ? "Add to existing-client sequence (optional)"
                     : "Enroll into sequence (optional)"}

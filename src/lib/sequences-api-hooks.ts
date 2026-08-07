@@ -9,6 +9,7 @@ import {
   deleteSequenceTestRun,
   disqualifyEnrollment,
   duplicateSequenceForExistingClients,
+  duplicateSequenceForQuotedClients,
   dryRunSequenceEngine,
   enrollLeadsInSequence,
   getSequence,
@@ -155,6 +156,15 @@ export function useDuplicateExistingClientSequenceMutation() {
   return useMutation({
     mutationFn: ({ sequenceId, name }: { sequenceId: string; name?: string }) =>
       duplicateSequenceForExistingClients(sequenceId, name),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY }),
+  });
+}
+
+export function useDuplicateQuotedClientSequenceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sequenceId, name }: { sequenceId: string; name?: string }) =>
+      duplicateSequenceForQuotedClients(sequenceId, name),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY }),
   });
 }

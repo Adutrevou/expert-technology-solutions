@@ -34,7 +34,7 @@ export function useCommitImportMutation() {
     }: {
       importId: string;
       sequenceId?: string;
-      audienceType?: "existing_clients";
+      audienceType?: "existing_clients" | "quoted_clients";
     }) => commitContactImport(importId, sequenceId, audienceType),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["intergrai", "leads"] });
@@ -73,7 +73,10 @@ export function useUpdateContactMutation() {
       leadId: string;
       patch: Parameters<typeof updateContact>[1];
     }) => updateContact(leadId, patch),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["intergrai", "leads"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["intergrai", "audience-contacts"] });
+    },
   });
 }
 

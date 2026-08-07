@@ -58,8 +58,15 @@ export interface ContactRecord {
   title: string | null;
   linkedin_url: string | null;
   source: string | null;
+  metadata?: {
+    audience_type?: "existing_clients" | "quoted_clients";
+    quote_status?: QuoteStatus;
+  };
   updated_at: string;
 }
+
+export type ContactAudienceType = "existing_clients" | "quoted_clients";
+export type QuoteStatus = "quoted" | "accepted" | "rejected" | "expired" | "follow_up_needed";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -104,7 +111,7 @@ export async function previewContactImport(
 export async function commitContactImport(
   importId: string,
   sequenceId?: string,
-  audienceType?: "existing_clients",
+  audienceType?: ContactAudienceType,
 ): Promise<ImportRecord> {
   const value = await apiRequest<unknown>(
     `/clients/${INTERGRAI_CLIENT_SLUG}/contacts/import/commit`,
@@ -130,7 +137,7 @@ export async function getContactImport(importId: string): Promise<ImportRecord> 
 export async function listContacts(filters?: {
   search?: string;
   source?: string;
-  audienceType?: "existing_clients";
+  audienceType?: ContactAudienceType;
   limit?: number;
 }): Promise<ContactRecord[]> {
   const params = new URLSearchParams();
@@ -150,7 +157,7 @@ export async function updateContact(
       ContactRecord,
       "company_name" | "contact_name" | "phone" | "website" | "title" | "linkedin_url"
     >
-  >,
+  > & { quote_status?: QuoteStatus },
 ): Promise<ContactRecord> {
   const value = await apiRequest<unknown>(
     `/clients/${INTERGRAI_CLIENT_SLUG}/contacts/${encodeURIComponent(leadId)}`,
