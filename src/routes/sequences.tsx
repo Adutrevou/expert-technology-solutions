@@ -659,7 +659,8 @@ function ExistingClientsDatabase({
             {quotedClients ? "No quoted clients uploaded yet" : "No existing clients uploaded yet"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Use Upload client database above. Uploading and duplicating are now separate actions.
+            Use {quotedClients ? "Upload quoted clients" : "Upload client database"} above.
+            Uploading and duplicating are separate actions.
           </p>
         </div>
       )}

@@ -171,9 +171,11 @@ export function ImportContactsDialog({
                   ? audienceType === "quoted_clients"
                     ? "Quoted-client sequence"
                     : "Existing-client sequence"
-                  : audienceType === "existing_clients"
-                    ? "Add to existing-client sequence (optional)"
-                    : "Enroll into sequence (optional)"}
+                  : audienceType === "quoted_clients"
+                    ? "Add to quoted-client sequence (optional)"
+                    : audienceType === "existing_clients"
+                      ? "Add to existing-client sequence (optional)"
+                      : "Enroll into sequence (optional)"}
               </Label>
               {lockSequence ? (
                 <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm font-medium">
