@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Brain,
   CheckCircle2,
+  Cpu,
   Gauge,
   RefreshCcw,
   ShieldAlert,
@@ -17,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-state";
 import { useAiHealthQuery } from "@/lib/ai-health-api-hooks";
+import type { AiHealthSummary } from "@/lib/ai-health-api";
 
 export const Route = createFileRoute("/ai-agent-status")({
   head: () => ({ meta: [{ title: "AI Agent Status — Expert Technology Solutions" }] }),
@@ -196,9 +198,107 @@ function AiAgentStatusPage() {
         />
       </div>
 
+      {health.worker_status ? <WorkerStatusPanel workerStatus={health.worker_status} /> : null}
+
       <p className="text-xs text-muted-foreground text-center">
         Last checked {formatDistanceToNow(new Date(health.checked_at), { addSuffix: true })}
       </p>
+    </div>
+  );
+}
+
+function WorkerStatusPanel({
+  workerStatus,
+}: {
+  workerStatus: NonNullable<AiHealthSummary["worker_status"]>;
+}) {
+  return (
+    <Card className="p-5 shadow-card">
+      <div className="flex items-center gap-2 mb-4">
+        <Cpu className="h-4 w-4 text-muted-foreground" />
+        <h2 className="font-semibold">Hybrid worker status</h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <WorkerCard label="Mac Mini" worker={workerStatus.mac_mini} />
+        <WorkerCard label="VPS fallback" worker={workerStatus.vps_fallback} />
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <BudgetStat label="Completed today" value={workerStatus.completed_today} />
+        <BudgetStat label="Failed today" value={workerStatus.failed_today} />
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Queue depth</p>
+          {workerStatus.queue_depth.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">Empty</p>
+          ) : (
+            <div className="mt-2 space-y-1">
+              {workerStatus.queue_depth.map((row) => (
+                <p key={`${row.job_type}-${row.status}`} className="text-xs text-muted-foreground">
+                  {row.job_type} · {row.status}:{" "}
+                  <span className="font-medium text-foreground">{row.count}</span>
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Avg duration</p>
+          {workerStatus.avg_job_duration_seconds.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">No completed jobs yet</p>
+          ) : (
+            <div className="mt-2 space-y-1">
+              {workerStatus.avg_job_duration_seconds.map((row) => (
+                <p key={row.job_type} className="text-xs text-muted-foreground">
+                  {row.job_type}:{" "}
+                  <span className="font-medium text-foreground">{row.avg_seconds}s</span>
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {workerStatus.last_error ? (
+        <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+          <p className="text-xs font-medium text-destructive">
+            Last job failure: {workerStatus.last_error.job_type}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{workerStatus.last_error.error}</p>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function WorkerCard({
+  label,
+  worker,
+}: {
+  label: string;
+  worker: NonNullable<AiHealthSummary["worker_status"]>["mac_mini"];
+}) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{label}</p>
+        <Badge
+          variant="outline"
+          className={
+            worker.online
+              ? "bg-success/15 text-success border-success/30"
+              : "bg-muted text-muted-foreground"
+          }
+        >
+          {worker.online ? "Online" : "Offline"}
+        </Badge>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {worker.worker_id || "Not registered yet"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {worker.last_heartbeat_at
+          ? `Last heartbeat ${formatDistanceToNow(new Date(worker.last_heartbeat_at), { addSuffix: true })}`
+          : "No heartbeat recorded"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">Active jobs: {worker.active_job_count}</p>
     </div>
   );
 }
