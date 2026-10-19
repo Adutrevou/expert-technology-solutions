@@ -203,7 +203,7 @@ function SendingControlCard() {
         </h2>
         <p className="text-sm text-muted-foreground">
           {control
-            ? `${control.prepared_enrollments} existing-client enrolments prepared; ${control.held_customer_enrollments} held for correction.`
+            ? `${control.prepared_enrollments} existing-client enrolments prepared; ${control.permission_pending_enrollments ?? 0} awaiting permission; ${control.held_customer_enrollments} held for correction.`
             : "No sending action is available until the live status is confirmed."}
         </p>
         <p className="text-xs text-muted-foreground">

@@ -10,6 +10,7 @@ export interface SequenceSendingControl {
   sending_enabled: boolean;
   connected: boolean;
   prepared_enrollments: number;
+  permission_pending_enrollments: number;
   held_customer_enrollments: number;
   approval_required: boolean;
 }
