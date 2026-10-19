@@ -79,6 +79,8 @@ import {
 } from "@/lib/leads-api-hooks";
 import {
   useArchiveSequenceMutation,
+  useSequenceSendingControlQuery,
+  useSetSequenceSendingControlMutation,
   useCreateSequenceTestRunMutation,
   useCreateSequenceMutation,
   useCreateSequenceStepMutation,
@@ -165,6 +167,95 @@ const MONTHS = [
   "November",
   "December",
 ] as const;
+
+function SendingControlCard() {
+  const { user } = useApp();
+  const query = useSequenceSendingControlQuery();
+  const mutation = useSetSequenceSendingControlMutation();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const canManage = ["client_owner", "manager", "intergrai_admin"].includes(user?.role ?? "");
+  const control = query.data;
+  async function changeSending(enabled: boolean) {
+    try {
+      await mutation.mutateAsync(enabled);
+      setConfirmOpen(false);
+      toast.success(
+        enabled
+          ? "Sending resumed. Calendar, consent and opt-out checks still apply."
+          : "All outgoing Expert emails are paused.",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update sending.");
+    }
+  }
+  return (
+    <Card className="flex flex-col gap-4 border-primary/25 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-1">
+        <h2 className="flex items-center gap-2 font-semibold">
+          {control?.sending_enabled ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          {query.isError
+            ? "Sending status unavailable"
+            : !control
+              ? "Checking sending status..."
+              : control.sending_enabled
+                ? "Automatic sending is on"
+                : "Sending paused - awaiting Jacques"}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {control
+            ? `${control.prepared_enrollments} existing-client enrolments prepared; ${control.held_customer_enrollments} held for correction.`
+            : "No sending action is available until the live status is confirmed."}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          This controls all outgoing Expert emails. Consent, opt-outs, send caps and scheduled days
+          remain enforced.
+        </p>
+      </div>
+      {canManage && (
+        <Button
+          variant={control?.sending_enabled ? "outline" : "default"}
+          disabled={
+            !control ||
+            query.isError ||
+            mutation.isPending ||
+            (!control.sending_enabled && !control.connected)
+          }
+          onClick={() =>
+            control?.sending_enabled ? void changeSending(false) : setConfirmOpen(true)
+          }
+          className="shrink-0 gap-2"
+        >
+          {control?.sending_enabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          {mutation.isPending
+            ? "Updating..."
+            : control?.sending_enabled
+              ? "Pause all sending"
+              : "Resume after approval"}
+        </Button>
+      )}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Has Jacques approved sending?</DialogTitle>
+            <DialogDescription>
+              Only confirm once Jacques has given the go-ahead. Prepared sequences resume
+              automatically at their next permitted time. Held contacts stay blocked and new leads
+              receive only a permission request.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Keep paused
+            </Button>
+            <Button disabled={mutation.isPending} onClick={() => void changeSending(true)}>
+              Jacques approved - resume
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
 
 function SequencesPage() {
   const sequencesQuery = useSequencesQuery();
@@ -325,14 +416,16 @@ function SequencesPage() {
         </div>
       </header>
 
+      <SendingControlCard />
+
       {audience === "campaigns" ? (
         <Alert className="border-emerald-500/40 bg-emerald-500/10">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertTitle>POPIA-first sequence mode is live</AlertTitle>
+          <AlertTitle>Permission-first workflow</AlertTitle>
           <AlertDescription>
-            Every 15 minutes, newly qualified contacts with verified email addresses enter their
-            campaign sequence and receive one consent request. Marketing steps remain paused until
-            they accept, then Step 1 starts seven days later.
+            Newly qualified contacts can receive one permission request only when sending is
+            enabled. Marketing steps remain paused until they accept, then Step 1 starts seven days
+            later.
           </AlertDescription>
         </Alert>
       ) : (

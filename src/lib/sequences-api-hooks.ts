@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/lib/app-state";
 import {
   archiveSequence,
+  getSequenceSendingControl,
+  setSequenceSendingControl,
   createSequenceTestRun,
   createSequence,
   createSequenceStep,
@@ -34,6 +36,27 @@ import {
 
 const isBrowser = typeof window !== "undefined";
 const SEQUENCES_KEY = ["intergrai", "sequences"] as const;
+const SENDING_CONTROL_KEY = ["intergrai", "sequence-sending-control"] as const;
+export function useSequenceSendingControlQuery() {
+  const { isAuthenticated } = useApp();
+  return useQuery({
+    queryKey: SENDING_CONTROL_KEY,
+    queryFn: getSequenceSendingControl,
+    enabled: isBrowser && isAuthenticated,
+    refetchInterval: 15_000,
+    retry: 1,
+  });
+}
+export function useSetSequenceSendingControlMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setSequenceSendingControl,
+    onSuccess: (data) => {
+      queryClient.setQueryData(SENDING_CONTROL_KEY, data);
+      void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY });
+    },
+  });
+}
 const SEQUENCE_TEST_RUNS_KEY = ["intergrai", "sequence-test-runs"] as const;
 
 export function useSequencesQuery() {

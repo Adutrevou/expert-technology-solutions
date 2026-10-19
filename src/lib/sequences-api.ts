@@ -6,6 +6,29 @@
 import { apiRequest, INTERGRAI_CLIENT_SLUG } from "@/lib/leads-api";
 
 export type SequenceStatus = "draft" | "active" | "paused" | "archived";
+export interface SequenceSendingControl {
+  sending_enabled: boolean;
+  connected: boolean;
+  prepared_enrollments: number;
+  held_customer_enrollments: number;
+  approval_required: boolean;
+}
+export async function getSequenceSendingControl(): Promise<SequenceSendingControl> {
+  const value = await apiRequest<{ sending_control: SequenceSendingControl }>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/sequence-sending-control`,
+  );
+  return value.sending_control;
+}
+export async function setSequenceSendingControl(enabled: boolean): Promise<SequenceSendingControl> {
+  const value = await apiRequest<{ sending_control: SequenceSendingControl }>(
+    `/clients/${INTERGRAI_CLIENT_SLUG}/sequence-sending-control`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ enabled, jacques_approval_confirmed: enabled }),
+    },
+  );
+  return value.sending_control;
+}
 export type SendingMode = "dry_run" | "queue_for_approval" | "auto_send_if_policy_allows";
 export type EnrollmentStatus =
   | "pending"
