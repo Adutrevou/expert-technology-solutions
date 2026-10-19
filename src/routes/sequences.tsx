@@ -1810,6 +1810,7 @@ function renderPreviewTemplate(template: string, variables: Record<string, strin
 
 function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
   const { user } = useApp();
+  const sendingControlQuery = useSequenceSendingControlQuery();
   const isAdmin = user?.role === "intergrai_admin";
   const sequenceQuery = useSequenceQuery(sequenceId);
   const metricsQuery = useSequenceMetricsQuery(sequenceId);
@@ -1910,8 +1911,16 @@ function SequenceDetailPanel({ sequenceId }: { sequenceId: string }) {
           </div>
           <div className="flex items-center gap-2">
             {sequence.status === "active" ? (
-              <Badge variant={isLive ? "default" : "secondary"}>
-                {isLive ? "Live sending" : "Ready to launch"}
+              <Badge
+                variant={
+                  isLive && sendingControlQuery.data?.sending_enabled ? "default" : "secondary"
+                }
+              >
+                {sendingControlQuery.data?.sending_enabled === false
+                  ? "Prepared - sending paused"
+                  : isLive && sendingControlQuery.data?.sending_enabled
+                    ? "Live sending"
+                    : "Ready to launch"}
               </Badge>
             ) : null}
             <Badge
