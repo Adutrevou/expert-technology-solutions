@@ -117,6 +117,7 @@ export interface EnrollmentRecord {
   status: EnrollmentStatus;
   last_sent_at: string | null;
   next_due_at: string | null;
+  batch_state?: string;
   error_reason: string | null;
   source: EnrollmentSource;
   send_attempts: number;

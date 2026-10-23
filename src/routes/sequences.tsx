@@ -3030,6 +3030,11 @@ function EnrollmentsTable({
 
       <div>
         <h3 className="mb-3 font-semibold">All enrollments</h3>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Eligible contacts run in rolling batches. Follow-ups take priority; waiting contacts stay
+          queued for their next permitted day. Unsent steps never advance. Daily and monthly limits
+          still apply.
+        </p>
         <Table>
           <TableHeader>
             <TableRow>
@@ -3054,6 +3059,19 @@ function EnrollmentsTable({
                   <Badge variant="outline" className="text-[10px] uppercase">
                     {enrollment.status}
                   </Badge>
+                  {enrollment.batch_state && enrollment.batch_state !== enrollment.status ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {enrollment.batch_state === "waiting_for_capacity"
+                        ? "Waiting for capacity"
+                        : enrollment.batch_state === "permission_pending"
+                          ? "Awaiting permission"
+                          : enrollment.batch_state === "needs_review"
+                            ? "Held for review"
+                            : enrollment.batch_state === "scheduled"
+                              ? "Scheduled / queued"
+                              : enrollment.batch_state.replaceAll("_", " ")}
+                    </p>
+                  ) : null}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {enrollment.next_due_at
