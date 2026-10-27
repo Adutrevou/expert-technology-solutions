@@ -2973,17 +2973,23 @@ function EnrollmentsTable({
     );
   }
   const completedEnrollments = enrollments.filter(
-    (enrollment) => enrollment.status === "completed",
+    (enrollment) =>
+      enrollment.status === "completed" && enrollment.handoff_contact_allowed === true,
   );
+  const heldCompletions = enrollments.filter(
+    (enrollment) =>
+      enrollment.status === "completed" && enrollment.handoff_contact_allowed !== true,
+  ).length;
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-success/30 bg-success/5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="font-semibold">Human takeover</h3>
+            <h3 className="font-semibold">Expert team follow-up</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Contacts who completed the full sequence, ready for personal follow-up.
+              Contacts appear here automatically after the final email is sent. Current permission,
+              opt-outs and reply holds are checked before marking them ready for personal follow-up.
             </p>
           </div>
           <Badge variant="outline" className="border-success/40 bg-success/10 text-success">
@@ -3009,6 +3015,14 @@ function EnrollmentsTable({
                   </Badge>
                 </div>
                 <div className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+                  <DetailLine
+                    label="Sequence completed"
+                    value={
+                      enrollment.last_sent_at
+                        ? new Date(enrollment.last_sent_at).toLocaleDateString("en-ZA")
+                        : undefined
+                    }
+                  />
                   <ContactLink label="Email" value={enrollment.email} hrefPrefix="mailto:" />
                   <ContactLink label="Phone" value={enrollment.phone} hrefPrefix="tel:" />
                   <ContactLink label="Website" value={enrollment.website} external />
@@ -3023,9 +3037,17 @@ function EnrollmentsTable({
           </div>
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">
-            No contacts have completed this sequence yet.
+            No completed contacts are ready for team follow-up yet. Keep this sequence running;
+            eligible contacts will appear here after their final step.
           </p>
         )}
+        {heldCompletions > 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            {heldCompletions} completed contact{heldCompletions === 1 ? " is" : "s are"} held from
+            marketing follow-up because permission or safety checks require review. Check Replies
+            for responses; opted-out contacts must not be marketed to.
+          </p>
+        ) : null}
       </section>
 
       <div>

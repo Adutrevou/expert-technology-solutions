@@ -161,6 +161,8 @@ export function useEnrollmentsQuery(sequenceId?: string, status?: EnrollmentStat
     queryKey: ["intergrai", "sequence-enrollments", sequenceId, status],
     queryFn: () => listEnrollments(sequenceId as string, status),
     enabled: isBrowser && isAuthenticated && Boolean(sequenceId),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: "always",
     retry: 1,
   });
 }

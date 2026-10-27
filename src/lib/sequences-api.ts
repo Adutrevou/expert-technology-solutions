@@ -118,6 +118,8 @@ export interface EnrollmentRecord {
   last_sent_at: string | null;
   next_due_at: string | null;
   batch_state?: string;
+  handoff_contact_allowed?: boolean;
+  handoff_blocked_reason?: string | null;
   error_reason: string | null;
   source: EnrollmentSource;
   send_attempts: number;
