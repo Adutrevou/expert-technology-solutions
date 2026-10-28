@@ -44,6 +44,7 @@ function Dashboard() {
   const dashboardApprovals = (data.pending_approvals || []).flatMap((row) => {
     if (!row || typeof row !== "object") return [];
     const item = row as Record<string, unknown>;
+    if (String(item.entity_type || "").includes("credit") || /^Approve contact verification/i.test(String(item.title || ""))) return [];
     if (typeof item.id !== "string" || typeof item.title !== "string") return [];
     return [{ id: item.id, title: item.title, shortContext: "Pending approval. Open the approval hub to review.", status: String(item.status || "pending"), createdAt: typeof item.created_at === "string" ? item.created_at : undefined }];
   });
@@ -125,7 +126,7 @@ function Dashboard() {
           detail="New visible leads today, in South African time. Open Leads for the complete database."
         />
         <StatCard
-          label="Enrichment Queue"
+          label="Enrichment Activity Today"
           value={metricValue(leadCounts.enrichmentQueue)}
           detail="Contacts updated today that still need enrichment."
         />
@@ -140,7 +141,7 @@ function Dashboard() {
           detail="Live summary. Open sending history for individual email records."
         />
         <StatCard
-          label="Replies Received"
+          label="Reply Status Activity Today"
           value={metricValue(leadCounts.repliesReceived)}
           detail="Lead reply-status activity today. Conversations contains the full reply history."
         />
