@@ -1015,6 +1015,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   try {
     response = await fetch(url, {
       ...init,
+      // Bound read requests so a stalled endpoint cannot leave the portal loading forever.
+      signal: init.signal ?? ((!init.method || init.method.toUpperCase() === "GET") ? AbortSignal.timeout(20_000) : undefined),
       headers: buildHeaders(init.headers, init.body !== undefined, isMultipartBody),
     });
   } catch (e: any) {

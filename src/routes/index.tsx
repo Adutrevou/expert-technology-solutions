@@ -6,7 +6,6 @@ import { buildApprovalHubItems, getActionableApprovalItems } from "@/lib/approva
 import { EmptyCard, formatPortalDate, PageIntro, SectionCard, StatCard } from "@/components/client-portal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useLeadsQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
 import {
   buildFallbackLeadRecord,
@@ -75,18 +74,20 @@ function Dashboard() {
     requestsQuery.error,
   ]);
 
-  if (dashboardQuery.isLoading || summaryQuery.isLoading || leadsQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading) {
-    return <DashboardLoadingState />;
-  }
+  const metricsLoading = dashboardQuery.isLoading && leadsQuery.isLoading;
+  const anyLoading = dashboardQuery.isLoading || summaryQuery.isLoading || leadsQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
       <PageIntro
         badge="Dashboard"
-        title="How is my lead agent performing?"
-        description="See overall pipeline progress, what is ready now, and what needs your attention next."
+        title="Your outreach at a glance"
+        description="Check campaign progress, open sent emails, and review replies without interrupting automatic sending."
         actions={(
           <>
+            <Button asChild>
+              <Link to="/conversations">View sent emails & replies</Link>
+            </Button>
             <Button asChild variant="outline">
               <Link to="/lead-agent">Open Expert Lead Agent</Link>
             </Button>
@@ -96,6 +97,13 @@ function Dashboard() {
           </>
         )}
       />
+
+      <SectionCard title="Sent emails & replies" description="See who was contacted, open the email content, and review responses. Sending history is separate from approvals and scheduled work."
+        action={<Button asChild variant="outline"><Link to="/conversations">Open sending history <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>}>
+        <p className="text-sm text-muted-foreground">In Conversations, use Sent email history for outreach and sequence emails. Open a contact to see their recipient address, message and send time. Provider acceptance does not confirm inbox delivery.</p>
+      </SectionCard>
+
+      {anyLoading ? <p role="status" className="text-sm text-muted-foreground">Refreshing live data. You can use the links above while individual sections load.</p> : null}
 
       {clientFacingMetricFailure ? (
         <Card className="rounded-[24px] border-warning/30 bg-warning/10 px-5 py-4 text-sm text-warning-foreground shadow-card">
@@ -116,32 +124,32 @@ function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="All Leads"
-          value={leadCounts.totalLeadsFound}
+          value={metricsLoading ? "Loading" : leadCounts.totalLeadsFound}
           detail={leadCounts.totalLeadsFound === 0 ? "No visible leads yet" : "Companies and contact opportunities found by the agent."}
         />
         <StatCard
           label="Enrichment Queue"
-          value={leadCounts.enrichmentQueue}
+          value={metricsLoading ? "Loading" : leadCounts.enrichmentQueue}
           detail="Company or contact opportunities still missing a usable email."
         />
         <StatCard
           label="Outreach Ready"
-          value={leadCounts.outreachReady}
+          value={metricsLoading ? "Loading" : leadCounts.outreachReady}
           detail="Leads with a usable email and enough data to send safely."
         />
         <StatCard
           label="Emails Sent Today"
-          value={leadCounts.emailsSentToday}
-          detail="First outreach and approved replies sent today."
+          value={dashboardQuery.isLoading ? "Loading" : dashboardQuery.isError ? "Unavailable" : leadCounts.emailsSentToday}
+          detail="Live summary. Open sending history for individual email records."
         />
         <StatCard
           label="Replies Received"
-          value={leadCounts.repliesReceived}
+          value={metricsLoading ? "Loading" : leadCounts.repliesReceived}
           detail="Inbound replies captured across live conversations."
         />
         <StatCard
           label="Blocked/Avoided"
-          value={leadCounts.blockedAvoided}
+          value={metricsLoading ? "Loading" : leadCounts.blockedAvoided}
           detail="Unsafe, duplicate, competitor, or bad-fit rows suppressed."
         />
       </div>
@@ -176,8 +184,8 @@ function Dashboard() {
             </div>
           ) : (
             <EmptyCard
-              title="All clear"
-              description="No approvals need your attention right now."
+              title={summaryQuery.isLoading || requestsQuery.isLoading || conversationsQuery.isLoading ? "Checking approvals" : summaryQuery.isError || requestsQuery.isError || conversationsQuery.isError ? "Approval summary unavailable" : "All clear"}
+              description="Open the approval hub to review individual items."
             />
           )}
         </SectionCard>
@@ -271,23 +279,6 @@ function hasCanonicalLeadSignal(leadCounts: ReturnType<typeof resolveDashboardLe
     || leadCounts.emailsSentToday
     || leadCounts.repliesReceived
     || leadCounts.blockedAvoided,
-  );
-}
-
-function DashboardLoadingState() {
-  return (
-    <div className="mx-auto max-w-[1240px] space-y-6">
-      <Skeleton className="h-44 rounded-[32px]" />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-32 rounded-[24px]" />
-        ))}
-      </div>
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Skeleton className="h-[360px] rounded-[28px]" />
-        <Skeleton className="h-[360px] rounded-[28px]" />
-      </div>
-    </div>
   );
 }
 

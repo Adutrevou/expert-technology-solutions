@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/app-state";
 import type { ConversationRecord } from "@/lib/leads-api";
 import {
@@ -44,17 +45,25 @@ function ConversationsPage() {
   const conversationsQuery = useConversationsQuery();
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [openedSentConversationId, setOpenedSentConversationId] = useState("");
+  const [sentSearch, setSentSearch] = useState("");
+  const [sentCampaign, setSentCampaign] = useState("");
   const conversations = conversationsQuery.data || [];
   const replyConversations = conversations.filter(hasInboundReply);
   const sentConversations = conversations.filter(hasSentEmail);
+  const sentCampaigns = [...new Set(sentConversations.map((item) => item.campaignName).filter(Boolean))].sort();
+  const matchingSent = sentConversations.filter((item) =>
+    (!sentCampaign || item.campaignName === sentCampaign) &&
+    [item.contactEmail, item.contactName, item.companyName, item.latestSubject, item.campaignName]
+      .join(" ").toLowerCase().includes(sentSearch.trim().toLowerCase()),
+  ).sort((a, b) => (Date.parse(b.lastMessageAt || b.updatedAt || "") || 0) - (Date.parse(a.lastMessageAt || a.updatedAt || "") || 0));
   const firstOutreachReplies = replyConversations.filter(
     (conversation) => !isSequenceConversation(conversation),
   );
   const sequenceReplies = replyConversations.filter(isSequenceConversation);
-  const firstOutreachSent = sentConversations.filter(
-    (conversation) => !isSequenceConversation(conversation),
+  const firstOutreachSent = matchingSent.filter(
+    (conversation) => conversation.outreachStage === "consent_request" || !isSequenceConversation(conversation),
   );
-  const sequenceSent = sentConversations.filter(isSequenceConversation);
+  const sequenceSent = matchingSent.filter((conversation) => conversation.outreachStage !== "consent_request" && isSequenceConversation(conversation));
   const hasReplies = replyConversations.length > 0;
   const hasSentConversations = sentConversations.length > 0;
   const detailQuery = useConversationDetailQuery(selectedConversationId || undefined);
@@ -164,7 +173,7 @@ function ConversationsPage() {
     <div className="mx-auto max-w-[1320px] space-y-6">
       <PageIntro
         badge="Conversations"
-        title="Who are we speaking to and what happened?"
+        title="Sent emails & replies"
         description="Review who was contacted, who replied, and what needs action in a simple mailbox view."
         actions={
           <Button variant="outline" className="gap-2" onClick={() => conversationsQuery.refetch()}>
@@ -173,6 +182,8 @@ function ConversationsPage() {
           </Button>
         }
       />
+
+      {conversationsQuery.isError ? <Card role="alert" className="p-5">Email history could not be refreshed. Please use Refresh to retry. Existing loaded records are retained.</Card> : null}
 
       {hasSentConversations ? (
         <Card className="overflow-hidden shadow-card">
@@ -188,12 +199,20 @@ function ConversationsPage() {
                 </p>
               </div>
             </div>
-            <Badge variant="outline">{sentConversations.length} sent</Badge>
+            <Badge variant="outline">{matchingSent.length} of {sentConversations.length} contacted threads</Badge>
+          </div>
+          <div className="grid gap-3 border-b border-border/70 p-5 sm:grid-cols-2">
+            <Input aria-label="Search sent emails" placeholder="Search company, recipient or subject" value={sentSearch} onChange={(event) => setSentSearch(event.target.value)} />
+            <select aria-label="Filter sent emails by campaign" className="h-10 min-w-0 rounded-md border border-input bg-background px-3 text-sm" value={sentCampaign} onChange={(event) => setSentCampaign(event.target.value)}>
+              <option value="">All campaigns</option>
+              {sentCampaigns.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground sm:col-span-2">These are contacted conversation threads, not a total email count. Open a thread for individual messages and timestamps. Sent does not guarantee inbox delivery.</p>
           </div>
           <div className="grid gap-5 p-5 lg:grid-cols-2">
             <SentEmailGroup
-              title="First outreach"
-              description="Initial campaign emails"
+              title="First outreach / permission"
+              description="Initial emails and consent requests"
               conversations={firstOutreachSent}
               onOpen={setOpenedSentConversationId}
             />
@@ -644,7 +663,7 @@ function SentEmailGroup({
                 <p className="truncate text-sm font-medium">
                   {conversation.companyName || conversation.contactEmail || "Sent email"}
                 </p>
-                {isSequenceConversation(conversation) ? (
+                {conversation.outreachStage === "consent_request" ? <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Permission request</Badge> : isSequenceConversation(conversation) ? (
                   <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
                     Step {conversation.sequenceStepNumber || "—"}
                   </Badge>
@@ -654,6 +673,7 @@ function SentEmailGroup({
                 To {conversation.contactEmail || "recipient unavailable"} ·{" "}
                 {conversation.latestSubject || "No subject"}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">{conversation.campaignName || "No campaign"} · Last activity {formatDateTime(conversation.lastMessageAt || conversation.updatedAt)}</p>
             </div>
             <Eye className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-primary" />
           </button>
@@ -899,20 +919,7 @@ function hasInboundReply(conversation: ConversationRecord) {
 }
 
 function hasSentEmail(conversation: ConversationRecord) {
-  return (
-    conversation.outboundCount > 0 ||
-    [
-      "sent",
-      "replied",
-      "positive_reply",
-      "meeting_requested",
-      "quote_requested",
-      "not_interested",
-      "bounced",
-      "unsubscribed",
-      "closed",
-    ].includes(conversation.status)
-  );
+  return conversation.outboundCount > 0;
 }
 
 function isSequenceConversation(conversation: ConversationRecord) {
