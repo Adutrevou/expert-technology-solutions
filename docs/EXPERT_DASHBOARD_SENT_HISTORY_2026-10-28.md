@@ -22,5 +22,16 @@ TypeScript before 41 / after 41 / no introduced diagnostics. Full-project lint
 and typecheck are not green. No backend, cron, contact, recipient, permission,
 suppression, budget or send schedule changed. Prior assets/uploads retained.
 
+Final verification found an additional backend read-path fault: daily metadata
+scanning exceeded seven seconds and the full canonical audit exhausted a
+bounded standalone probe. Backend8486bf9 now projects safe metadata once and
+fetches identity-only recent cards (362ms and76ms in read-only rehearsal).
+Dashboard no longer requests the full lead list or provider-audit summary;
+pending approval records, requests, replies and all existing navigation remain.
+Daily metric labels now match the daily source. Final typecheck comparison:
+41 original diagnostics /37 current /zero introduced. This supersedes the
+earlier frontend-only scope and41/41 observation above. No sending policy,
+recipient or schedule changed.
+
 Follow-up: the completed-contact CSV export requested separately still requires
 verification; this release does not claim that action works.

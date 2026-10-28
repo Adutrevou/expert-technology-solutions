@@ -932,6 +932,7 @@ function isSequenceConversation(conversation: ConversationRecord) {
 }
 
 function conversationOriginLabel(conversation: ConversationRecord) {
+  if (conversation.outreachStage === "consent_request") return "Permission request";
   if (!isSequenceConversation(conversation)) return "First outreach";
   return conversation.sequenceStepNumber
     ? `Sequence step ${conversation.sequenceStepNumber}`

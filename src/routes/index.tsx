@@ -6,7 +6,7 @@ import { buildApprovalHubItems, getActionableApprovalItems } from "@/lib/approva
 import { EmptyCard, formatPortalDate, PageIntro, SectionCard, StatCard } from "@/components/client-portal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useConversationsQuery, useDashboardQuery, useLeadAgentSummaryQuery, useLeadsQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
+import { useConversationsQuery, useDashboardQuery, useRequestsQuery } from "@/lib/leads-api-hooks";
 import {
   buildFallbackLeadRecord,
   normalizeLead,
@@ -24,34 +24,36 @@ export const Route = createFileRoute("/")({
 
 function Dashboard() {
   const dashboardQuery = useDashboardQuery();
-  const summaryQuery = useLeadAgentSummaryQuery();
-  const leadsQuery = useLeadsQuery();
   const conversationsQuery = useConversationsQuery();
   const requestsQuery = useRequestsQuery();
   const data = dashboardQuery.data ?? EMPTY_DASHBOARD;
-  const summaryData = summaryQuery.data ?? EMPTY_LEAD_AGENT_SUMMARY;
-  const normalizedLeads = safeNormalizeLeadsArray(leadsQuery.data?.records ?? leadsQuery.data?.leads);
-  const derivedLeadCounts = deriveNormalizedLeadStatusCounts(normalizedLeads);
+  const normalizedLeads = safeNormalizeLeadsArray(data.recent_leads);
   const leadCounts = resolveDashboardLeadCounts({
     dashboardLeadCounts: data.lead_counts,
-    leadsApiCounts: leadsQuery.data?.counts,
-    leadTotalCount: leadsQuery.data?.totalCount,
-    derivedLeadCounts,
+    leadsApiCounts: undefined,
+    leadTotalCount: undefined,
+    derivedLeadCounts: deriveNormalizedLeadStatusCounts([]),
   });
   const canonicalLeadSignal = hasCanonicalLeadSignal(leadCounts, normalizedLeads.length);
   const approvalItems = buildApprovalHubItems(
-    summaryData,
+    EMPTY_LEAD_AGENT_SUMMARY,
     conversationsQuery.data || [],
     requestsQuery.data?.requests || [],
   );
   const pendingApprovals = getActionableApprovalItems(approvalItems).filter((item) => item.kind !== "credit_approval");
-  const attentionItems = pendingApprovals.slice(0, 4);
-  const clientFacingMetricFailure = !canonicalLeadSignal && dashboardQuery.isError && leadsQuery.isError;
+  const dashboardApprovals = (data.pending_approvals || []).flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const item = row as Record<string, unknown>;
+    if (typeof item.id !== "string" || typeof item.title !== "string") return [];
+    return [{ id: item.id, title: item.title, shortContext: "Pending approval. Open the approval hub to review.", status: String(item.status || "pending"), createdAt: typeof item.created_at === "string" ? item.created_at : undefined }];
+  });
+  const attentionItems = [...dashboardApprovals, ...pendingApprovals.filter((item) => !dashboardApprovals.some((approval) => approval.id === item.id))].slice(0, 4);
+  const clientFacingMetricFailure = dashboardQuery.isError;
   const recentLeads = normalizedLeads.length
     ? normalizedLeads.slice(0, 4)
     : (canonicalLeadSignal && data.recent_leads?.length ? safeNormalizeLeadsArray(data.recent_leads).slice(0, 4) : []);
   const shouldWarnInConsole = (import.meta.env.DEV || Boolean(data.is_intergrai_admin))
-    && (dashboardQuery.isError || leadsQuery.isError || summaryQuery.isError || conversationsQuery.isError || requestsQuery.isError);
+    && (dashboardQuery.isError || conversationsQuery.isError || requestsQuery.isError);
 
   useEffect(() => {
     if (!shouldWarnInConsole) {
@@ -60,22 +62,19 @@ function Dashboard() {
 
     console.warn("[Expert Dashboard] non-client-facing data warning", {
       dashboardError: dashboardQuery.error instanceof Error ? dashboardQuery.error.message : null,
-      leadsError: leadsQuery.error instanceof Error ? leadsQuery.error.message : null,
-      summaryError: summaryQuery.error instanceof Error ? summaryQuery.error.message : null,
       conversationsError: conversationsQuery.error instanceof Error ? conversationsQuery.error.message : null,
       requestsError: requestsQuery.error instanceof Error ? requestsQuery.error.message : null,
     });
   }, [
     shouldWarnInConsole,
     dashboardQuery.error,
-    leadsQuery.error,
-    summaryQuery.error,
     conversationsQuery.error,
     requestsQuery.error,
   ]);
 
-  const metricsLoading = dashboardQuery.isLoading && leadsQuery.isLoading;
-  const anyLoading = dashboardQuery.isLoading || summaryQuery.isLoading || leadsQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading;
+  const metricsLoading = dashboardQuery.isLoading;
+  const metricValue = (value: number) => metricsLoading ? "Loading" : dashboardQuery.isError ? "Unavailable" : value;
+  const anyLoading = dashboardQuery.isLoading || conversationsQuery.isLoading || requestsQuery.isLoading;
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6">
@@ -110,8 +109,6 @@ function Dashboard() {
           Live dashboard metrics are temporarily unavailable. Refresh to retry the canonical lead summary.
           <Button variant="outline" size="sm" className="ml-4" onClick={() => void Promise.allSettled([
             dashboardQuery.refetch(),
-            summaryQuery.refetch(),
-            leadsQuery.refetch(),
             conversationsQuery.refetch(),
             requestsQuery.refetch(),
           ])}>
@@ -123,19 +120,19 @@ function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="All Leads"
-          value={metricsLoading ? "Loading" : leadCounts.totalLeadsFound}
-          detail={leadCounts.totalLeadsFound === 0 ? "No visible leads yet" : "Companies and contact opportunities found by the agent."}
+          label="Leads Found Today"
+          value={metricValue(leadCounts.totalLeadsFound)}
+          detail="New visible leads today, in South African time. Open Leads for the complete database."
         />
         <StatCard
           label="Enrichment Queue"
-          value={metricsLoading ? "Loading" : leadCounts.enrichmentQueue}
-          detail="Company or contact opportunities still missing a usable email."
+          value={metricValue(leadCounts.enrichmentQueue)}
+          detail="Contacts updated today that still need enrichment."
         />
         <StatCard
           label="Outreach Ready"
-          value={metricsLoading ? "Loading" : leadCounts.outreachReady}
-          detail="Leads with a usable email and enough data to send safely."
+          value={metricValue(leadCounts.outreachReady)}
+          detail="Ready-status updates today. Final consent and safety checks still apply before every send."
         />
         <StatCard
           label="Emails Sent Today"
@@ -144,12 +141,12 @@ function Dashboard() {
         />
         <StatCard
           label="Replies Received"
-          value={metricsLoading ? "Loading" : leadCounts.repliesReceived}
-          detail="Inbound replies captured across live conversations."
+          value={metricValue(leadCounts.repliesReceived)}
+          detail="Lead reply-status activity today. Conversations contains the full reply history."
         />
         <StatCard
           label="Blocked/Avoided"
-          value={metricsLoading ? "Loading" : leadCounts.blockedAvoided}
+          value={metricValue(leadCounts.blockedAvoided)}
           detail="Unsafe, duplicate, competitor, or bad-fit rows suppressed."
         />
       </div>
@@ -184,7 +181,7 @@ function Dashboard() {
             </div>
           ) : (
             <EmptyCard
-              title={summaryQuery.isLoading || requestsQuery.isLoading || conversationsQuery.isLoading ? "Checking approvals" : summaryQuery.isError || requestsQuery.isError || conversationsQuery.isError ? "Approval summary unavailable" : "All clear"}
+              title={dashboardQuery.isLoading || requestsQuery.isLoading || conversationsQuery.isLoading ? "Checking approvals" : dashboardQuery.isError || requestsQuery.isError || conversationsQuery.isError ? "Approval summary unavailable" : "No pending approval records"}
               description="Open the approval hub to review individual items."
             />
           )}
@@ -210,8 +207,8 @@ function Dashboard() {
             </div>
           ) : (
             <EmptyCard
-              title="No recent leads yet"
-              description="The dashboard is connected. Leads will appear here once qualification activity continues."
+              title={metricsLoading ? "Loading recent leads" : dashboardQuery.isError ? "Recent leads unavailable" : "No recent leads yet"}
+              description="Open Leads for the complete database."
             />
           )}
         </SectionCard>
